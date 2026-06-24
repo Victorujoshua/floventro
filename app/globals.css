@@ -1,0 +1,227 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ── Brand + semantic token mapping for Tailwind utilities ─────────────────── */
+@theme inline {
+  /* ── Floventro brand colors ──────────────────────────────────── */
+  --color-cream: var(--cream);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-border-warm: var(--border-warm);
+  --color-stat-band: var(--stat-band);
+  --color-black-deep: var(--black-deep);
+  --color-brand-violet: var(--brand-violet);
+  --color-brand-coral: var(--brand-coral);
+
+  /* ── shadcn semantic → brand tokens ─────────────────────────── */
+  --color-background: var(--cream);
+  --color-foreground: var(--ink);
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: var(--ink);
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--ink);
+  --color-primary-foreground: var(--cream);
+  --color-secondary: var(--stat-band);
+  --color-secondary-foreground: var(--ink);
+  --color-muted: var(--stat-band);
+  --color-muted-foreground: var(--ink-muted);
+  --color-accent: var(--stat-band);
+  --color-accent-foreground: var(--ink);
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-border: var(--border-warm);
+  --color-input: var(--border-warm);
+  --color-ring: var(--ink-muted);
+
+  /* ── shadcn sidebar tokens (carry-forward) ───────────────────── */
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+
+  /* ── Font families ───────────────────────────────────────────── */
+  --font-serif: var(--font-instrument-serif);
+  --font-mono: var(--font-jetbrains-mono);
+  --font-sans: var(--font-inter);
+
+  /* ── Radius (shadcn compat) ──────────────────────────────────── */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ── Static values (not referencing other CSS vars) ────────────────────────── */
+@theme {
+  --max-w-content: 1120px;
+}
+
+/* ── CSS primitives ─────────────────────────────────────────────────────────── */
+:root {
+  /* Brand color primitives */
+  --cream: #F5F1EA;
+  --ink: #151D27;
+  --ink-muted: #5C6068;
+  --border-warm: #E5E0D6;
+  --stat-band: #EBE5DA;
+  --black-deep: #0A0A0A;
+  --brand-violet: #5505E0;
+  --brand-coral: #FE5A36;
+
+  /* Motion tokens */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+
+  /* shadcn neutral tokens (mapped to brand) */
+  --background: #F5F1EA;
+  --foreground: #151D27;
+  --card: #FFFFFF;
+  --card-foreground: #151D27;
+  --popover: #FFFFFF;
+  --popover-foreground: #151D27;
+  --primary: #151D27;
+  --primary-foreground: #F5F1EA;
+  --secondary: #EBE5DA;
+  --secondary-foreground: #151D27;
+  --muted: #EBE5DA;
+  --muted-foreground: #5C6068;
+  --accent: #EBE5DA;
+  --accent-foreground: #151D27;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: #E5E0D6;
+  --input: #E5E0D6;
+  --ring: #5C6068;
+  --radius: 0.5rem;
+
+  /* shadcn sidebar (carry-forward neutrals) */
+  --sidebar: #F5F1EA;
+  --sidebar-foreground: #151D27;
+  --sidebar-primary: #151D27;
+  --sidebar-primary-foreground: #F5F1EA;
+  --sidebar-accent: #EBE5DA;
+  --sidebar-accent-foreground: #151D27;
+  --sidebar-border: #E5E0D6;
+  --sidebar-ring: #5C6068;
+}
+
+.dark {
+  --background: #0A0A0A;
+  --foreground: #F5F1EA;
+  --card: #151D27;
+  --card-foreground: #F5F1EA;
+  --popover: #151D27;
+  --popover-foreground: #F5F1EA;
+  --primary: #F5F1EA;
+  --primary-foreground: #151D27;
+  --secondary: #1E2430;
+  --secondary-foreground: #F5F1EA;
+  --muted: #1E2430;
+  --muted-foreground: #9BA0A8;
+  --accent: #1E2430;
+  --accent-foreground: #F5F1EA;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: #9BA0A8;
+  --sidebar: #151D27;
+  --sidebar-foreground: #F5F1EA;
+  --sidebar-primary: #F5F1EA;
+  --sidebar-primary-foreground: #151D27;
+  --sidebar-accent: #1E2430;
+  --sidebar-accent-foreground: #F5F1EA;
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: #9BA0A8;
+}
+
+/* ── Type scale ─────────────────────────────────────────────────────────────── */
+/* Desktop values. Use responsive prefixes (e.g. text-[3.5rem] md:text-display-1) for mobile. */
+
+@utility text-display-1 {
+  font-size: 5rem;       /* 80px */
+  line-height: 1.0;
+  letter-spacing: -0.02em;
+}
+
+@utility text-display-2 {
+  font-size: 3.5rem;     /* 56px */
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+@utility text-display-3 {
+  font-size: 2.25rem;    /* 36px */
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+@utility text-mono-eyebrow {
+  font-size: 0.8125rem;  /* 13px */
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+@utility text-mono-tag {
+  font-size: 0.75rem;    /* 12px */
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+@utility text-body-lg {
+  font-size: 1.0625rem;  /* 17px */
+  line-height: 1.6;
+}
+
+@utility text-body {
+  font-size: 0.9375rem;  /* 15px */
+  line-height: 1.6;
+}
+
+@utility text-body-sm {
+  font-size: 0.8125rem;  /* 13px */
+  line-height: 1.5;
+}
+
+/* ── Cursor blink (used in hero terminal eyebrow) ───────────────────────────── */
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+.cursor {
+  animation: blink 1s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor {
+    animation: none;
+  }
+}
+
+/* ── Base layer ─────────────────────────────────────────────────────────────── */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    font-family: var(--font-inter), system-ui, sans-serif;
+    color: var(--ink);
+    background-color: var(--cream);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}

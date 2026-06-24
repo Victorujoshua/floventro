@@ -1,0 +1,6 @@
+OG image spec — 1200×630px
+Background: #F5F1EA (cream)
+Centered: Floventro logo (from /public/asset/logo.svg) at ~400px wide
+Below logo: "Inventory that moves with your business" in Instrument Serif, ~48px, #151D27
+No gradients, no other elements.
+Export as PNG and replace this file with og-image.png before go-live.
