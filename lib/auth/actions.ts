@@ -1,0 +1,105 @@
+"use server"
+
+import { redirect } from "next/navigation"
+import { createAppServerClient } from "@/lib/supabase/app-server"
+import {
+  signUpSchema,
+  signInSchema,
+  type SignUpInput,
+  type SignInInput,
+} from "@/lib/validation/auth"
+import {
+  createOrgSchema,
+  type CreateOrgInput,
+} from "@/lib/validation/onboarding"
+
+type ActionResult<T = void> =
+  | { ok: true; data?: T }
+  | { ok: false; error: string; code?: string }
+
+export async function signUpAction(input: SignUpInput): Promise<ActionResult> {
+  const parsed = signUpSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: "invalid", code: "validation" }
+  }
+
+  const supabase = await createAppServerClient()
+
+  const { error } = await supabase.auth.signUp({
+    email: parsed.data.email,
+    password: parsed.data.password,
+    options: {
+      data: {
+        full_name: parsed.data.fullName,
+      },
+    },
+  })
+
+  if (error) {
+    if (
+      error.message.toLowerCase().includes("already") ||
+      error.code === "user_already_exists"
+    ) {
+      return { ok: false, error: "account_exists", code: "account_exists" }
+    }
+    console.error("signUpAction failed:", error)
+    return { ok: false, error: "server", code: "server" }
+  }
+
+  return { ok: true }
+}
+
+export async function signInAction(input: SignInInput): Promise<ActionResult> {
+  const parsed = signInSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: "invalid", code: "validation" }
+  }
+
+  const supabase = await createAppServerClient()
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email: parsed.data.email,
+    password: parsed.data.password,
+  })
+
+  if (error) {
+    if (error.message.toLowerCase().includes("invalid") || error.status === 400) {
+      return { ok: false, error: "invalid_credentials", code: "invalid_credentials" }
+    }
+    console.error("signInAction failed:", error)
+    return { ok: false, error: "server", code: "server" }
+  }
+
+  redirect("/dashboard")
+}
+
+export async function signOutAction(): Promise<void> {
+  const supabase = await createAppServerClient()
+  await supabase.auth.signOut()
+  redirect("/login")
+}
+
+export async function createOrgAction(
+  input: CreateOrgInput,
+): Promise<ActionResult> {
+  const parsed = createOrgSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: "invalid", code: "validation" }
+  }
+
+  const supabase = await createAppServerClient()
+
+  const { data: newOrgId, error } = await supabase.rpc("create_organisation", {
+    org_name: parsed.data.name,
+    country_code: parsed.data.countryCode,
+    currency: parsed.data.currency,
+    timezone: parsed.data.timezone,
+  })
+
+  if (error) {
+    console.error("createOrgAction failed:", error)
+    return { ok: false, error: "server", code: "server" }
+  }
+
+  redirect("/dashboard")
+}

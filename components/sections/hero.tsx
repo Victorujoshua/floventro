@@ -1,7 +1,6 @@
 import { Container } from "@/components/ui/container"
 import WaitlistButton from "@/components/marketing/waitlist-button"
 import HeroPlayer from "@/components/ui/hero-player"
-import { CyclingWord } from "@/components/marketing/cycling-word"
 
 const TAGS = [
   { label: "Aesthetics" },
@@ -21,14 +20,15 @@ export default function Hero() {
           <div>
             {/* Terminal eyebrow */}
             <div className="font-mono text-mono-eyebrow text-ink-muted leading-relaxed">
-              <p>
-                &gt;Pre-launch&nbsp;·&nbsp;
-              </p>
+              <p>&gt;Floventro by {/* TODO(copy) company name */}[Company], Inc.</p>
+              <p>&gt;Pre-launch&nbsp;·&nbsp;early 2026<span className="cursor">█</span></p>
             </div>
 
             {/* H1 */}
-            <h1 className="mt-10 font-sans font-bold text-[42px] md:text-[52px] text-ink leading-[1.1] tracking-[-0.02em]">
-              We help you move stock, <br></br> <CyclingWord />
+            <h1 className="mt-10 font-serif text-display-1 text-ink leading-[1.0] tracking-[-0.02em]">
+              We help you move stock,
+              <br />
+              <em className="italic">everywhere.</em>
               {/* TODO(copy) */}
             </h1>
 

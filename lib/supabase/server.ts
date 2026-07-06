@@ -1,11 +1,11 @@
 import { createClient } from "@supabase/supabase-js"
 import { createServerClient as _createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
-import type { Database } from "@/types/supabase"
 
-// Admin client — uses service role key, bypasses RLS. Server-only.
+// Landing page waitlist DB — untyped intentionally.
+// types/supabase.ts now belongs to the app DB; the waitlist DB is a separate project.
 export function createServerSupabase() {
-  return createClient<Database>(
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )

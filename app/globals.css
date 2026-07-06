@@ -16,6 +16,13 @@
   --color-brand-violet: var(--brand-violet);
   --color-brand-coral: var(--brand-coral);
 
+  /* ── App UI tokens (product dashboard) ──────────────────────────── */
+  --color-violet: #4A02C8;
+  --color-coral: #F95F3D;
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+
   /* ── shadcn semantic → brand tokens ─────────────────────────── */
   --color-background: var(--cream);
   --color-foreground: var(--ink);
