@@ -1,5 +1,5 @@
 import { Container } from "@/components/ui/container"
-import WaitlistButton from "@/components/marketing/waitlist-button"
+import { GetStartedButton } from "@/components/marketing/get-started-button"
 import HeroPlayer from "@/components/ui/hero-player"
 
 const TAGS = [
@@ -41,7 +41,7 @@ export default function Hero() {
 
             {/* CTA */}
             <div className="mt-10">
-              <WaitlistButton variant="primary">Join Waitlist →</WaitlistButton>
+              <GetStartedButton>Get started →</GetStartedButton>
             </div>
 
             {/* Category tag pills */}

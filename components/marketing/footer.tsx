@@ -1,6 +1,6 @@
 import Image from "next/image"
 import { Container } from "@/components/ui/container"
-import WaitlistButton from "@/components/marketing/waitlist-button"
+import { GetStartedButton } from "@/components/marketing/get-started-button"
 import { LiveTime } from "@/components/marketing/live-time"
 
 export default function Footer() {
@@ -39,7 +39,7 @@ export default function Footer() {
 
         {/* CTA */}
         <div className="mt-16 flex justify-center">
-          <WaitlistButton variant="primary">Join Waitlist →</WaitlistButton>
+          <GetStartedButton>Get started →</GetStartedButton>
         </div>
 
         {/* Legal */}

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { Container } from "@/components/ui/container"
-import WaitlistButton from "@/components/marketing/waitlist-button"
+import { GetStartedButton } from "@/components/marketing/get-started-button"
 
 export default function Nav() {
   const [scrolled, setScrolled] = useState(false)
@@ -32,7 +32,7 @@ export default function Nav() {
           unoptimized
           priority
         />
-        <WaitlistButton variant="primary">Join Waitlist →</WaitlistButton>
+        <GetStartedButton>Get started →</GetStartedButton>
       </Container>
     </header>
   )

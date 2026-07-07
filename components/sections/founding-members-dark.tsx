@@ -1,7 +1,7 @@
 import { Container } from "@/components/ui/container"
 import { Reveal } from "@/components/ui/reveal"
 import FoundingPlayer from "@/components/ui/founding-player"
-import WaitlistButton from "@/components/marketing/waitlist-button"
+import { GetStartedButton } from "@/components/marketing/get-started-button"
 
 export default function FoundingMembersDark() {
   return (
@@ -39,7 +39,7 @@ export default function FoundingMembersDark() {
             </Reveal>
 
             <div className="mt-10">
-              <WaitlistButton variant="primary-on-dark">Join Waitlist →</WaitlistButton>
+              <GetStartedButton variant="primary-on-dark">Get started →</GetStartedButton>
             </div>
           </div>
 
