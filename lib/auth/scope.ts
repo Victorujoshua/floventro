@@ -31,14 +31,17 @@ export async function getCurrentScope(): Promise<Scope | null> {
 
   const {
     data: { user },
+    error: userError,
   } = await supabase.auth.getUser()
+  console.log('[scope] getUser:', user ? `user ${user.id.slice(0, 8)}` : 'NULL', userError ? `error: ${userError.message}` : '')
   if (!user) return null
 
-  const { data: memberships } = await supabase
+  const { data: memberships, error: memError } = await supabase
     .from("memberships")
     .select("organisation_id, branch_id, role")
     .eq("user_id", user.id)
     .is("deleted_at", null)
+  console.log('[scope] memberships query:', memberships?.length ?? 'null', memError ? `error: ${memError.message}` : '')
 
   if (!memberships || memberships.length === 0) return null
 
@@ -46,6 +49,7 @@ export async function getCurrentScope(): Promise<Scope | null> {
   const requestedOrg = cookieStore.get(COOKIE_ORG)?.value
   const requestedBranch = cookieStore.get(COOKIE_BRANCH)?.value ?? null
   const requestedRole = cookieStore.get(COOKIE_ROLE)?.value
+  console.log('[scope] cookies:', { requestedOrg, requestedBranch, requestedRole })
 
   // Try to match the requested scope from cookies against actual memberships.
   if (requestedOrg && requestedRole) {
