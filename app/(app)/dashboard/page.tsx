@@ -4,7 +4,7 @@ export default async function DashboardPage() {
   const scope = await requireScope()
 
   return (
-    <div className="p-8">
+    <div>
       <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
       <p className="text-sm text-neutral-500 mt-1">
         Scope debug: organisation {scope.organisationId}, role {scope.role},{" "}
