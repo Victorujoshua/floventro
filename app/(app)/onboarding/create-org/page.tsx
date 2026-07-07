@@ -18,9 +18,6 @@ export default async function CreateOrgPage() {
     .eq("user_id", user.id)
     .limit(1)
 
-  console.log('[create-org page] user:', user ? user.id.slice(0, 8) : 'NULL')
-  console.log('[create-org page] memberships found:', memberships?.length ?? 'null')
-
   if (memberships && memberships.length > 0) {
     redirect("/dashboard")
   }
