@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { VendorForm } from "@/components/app/forms/vendor-form"
 import { deleteVendorAction } from "@/lib/db/actions/vendors"
+import { formatNaira } from "@/lib/format/money"
 
 type Branch = {
   id: string
@@ -44,6 +45,7 @@ type Vendor = {
   tin: string | null
   cac_registration: string | null
   notes: string | null
+  outstanding_cents: number
   created_at: string
   updated_at: string
 }
@@ -154,6 +156,9 @@ export function VendorsClient({ vendors, branches }: Props) {
                   <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
                     TIN
                   </TableHead>
+                  <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
+                    Outstanding
+                  </TableHead>
                   {showBranchColumn && (
                     <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
                       Branch
@@ -166,7 +171,7 @@ export function VendorsClient({ vendors, branches }: Props) {
                 {filtered.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={showBranchColumn ? 6 : 5}
+                      colSpan={showBranchColumn ? 7 : 6}
                       className="py-12 text-center text-sm text-neutral-500"
                     >
                       No vendors match your search.
@@ -186,6 +191,9 @@ export function VendorsClient({ vendors, branches }: Props) {
                       </TableCell>
                       <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3">
                         {vendor.tin ?? <span className="text-neutral-400 font-sans">—</span>}
+                      </TableCell>
+                      <TableCell className="text-sm font-mono tabular-nums py-3 text-neutral-700">
+                        <span className="font-inter">₦</span>{formatNaira(vendor.outstanding_cents)}
                       </TableCell>
                       {showBranchColumn && (
                         <TableCell className="text-sm text-neutral-700 py-3">

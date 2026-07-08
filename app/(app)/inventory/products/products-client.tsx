@@ -36,6 +36,7 @@ type Product = {
   description: string | null
   reorder_point: number
   unit_cost_cents: number | null
+  stock: number
   created_at: string
   updated_at: string
 }
@@ -138,13 +139,16 @@ export function ProductsClient({ products }: Props) {
                   <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
                     Reorder point
                   </TableHead>
+                  <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
+                    Stock
+                  </TableHead>
                   <TableHead className="w-12" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="py-12 text-center text-sm text-neutral-500">
+                    <TableCell colSpan={5} className="py-12 text-center text-sm text-neutral-500">
                       No products match your search.
                     </TableCell>
                   </TableRow>
@@ -159,6 +163,15 @@ export function ProductsClient({ products }: Props) {
                       </TableCell>
                       <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3">
                         {product.reorder_point}
+                      </TableCell>
+                      <TableCell className={`text-sm font-mono tabular-nums py-3 ${
+                        product.stock === 0
+                          ? "text-red-500"
+                          : product.reorder_point > 0 && product.stock <= product.reorder_point
+                          ? "text-amber-500"
+                          : "text-neutral-700"
+                      }`}>
+                        {product.stock}
                       </TableCell>
                       <TableCell className="py-3">
                         <DropdownMenu>

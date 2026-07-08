@@ -20,3 +20,22 @@ export async function getVendorsForBranch(branchId: string) {
   if (error) return []
   return data
 }
+
+export async function getInvoices() {
+  const scope = await getCurrentScope()
+  if (!scope) return []
+
+  const supabase = await createAppServerClient()
+
+  const { data, error } = await supabase
+    .from("vendor_invoices")
+    .select(
+      "id, invoice_number, invoice_date, due_date, total_cents, amount_paid_cents, status, created_at, vendors(name)",
+    )
+    .eq("organisation_id", scope.organisationId)
+    .is("deleted_at", null)
+    .order("invoice_date", { ascending: false })
+
+  if (error) return []
+  return data
+}
