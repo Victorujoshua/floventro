@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Package,
   Truck,
+  FileText,
   Users,
   Settings as SettingsIcon,
 } from "lucide-react"
@@ -24,6 +25,7 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { label: "Products", href: "/inventory/products", icon: Package },
     { label: "Vendors", href: "/inventory/vendors", icon: Truck },
+    { label: "Invoices", href: "/inventory/invoices/new", icon: FileText },
     { label: "Team", href: "/admin/team", icon: Users },
     { label: "Settings", href: "/admin/settings", icon: SettingsIcon },
   ],
@@ -31,6 +33,7 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { label: "Products", href: "/inventory/products", icon: Package },
     { label: "Vendors", href: "/inventory/vendors", icon: Truck },
+    { label: "Invoices", href: "/inventory/invoices/new", icon: FileText },
   ],
   sales: [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
