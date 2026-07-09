@@ -19,7 +19,7 @@ export default function Hero() {
           {/* ── Left column ── */}
           <div>
             {/* Terminal eyebrow */}
-            
+            <div className="font-mono text-mono-eyebrow text-ink-muted leading-relaxed">
               <p>&gt;Pre-launch&nbsp;·&nbsp;early 2026<span className="cursor">█</span></p>
             </div>
 
