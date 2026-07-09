@@ -78,6 +78,40 @@ export async function getRecentInvoices(limit = 5) {
   return data
 }
 
+export async function getStockReceivedSeries() {
+  const scope = await getCurrentScope()
+  if (!scope) return [] as { date: string; units: number }[]
+
+  const supabase = await createAppServerClient()
+
+  // Build 30-day date list (oldest first)
+  const today = new Date()
+  const dates: string[] = []
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(today)
+    d.setDate(d.getDate() - i)
+    dates.push(d.toISOString().split("T")[0])
+  }
+  const since = dates[0] + "T00:00:00.000Z"
+
+  const { data, error } = await supabase
+    .from("stock_ledger")
+    .select("quantity_delta, created_at")
+    .eq("reason", "vendor_invoice")
+    .gt("quantity_delta", 0)
+    .gte("created_at", since)
+
+  if (error || !data) return dates.map((date) => ({ date, units: 0 }))
+
+  const byDate = new Map<string, number>()
+  for (const row of data) {
+    const date = (row.created_at as string).split("T")[0]
+    byDate.set(date, (byDate.get(date) ?? 0) + (row.quantity_delta as number))
+  }
+
+  return dates.map((date) => ({ date, units: byDate.get(date) ?? 0 }))
+}
+
 export async function getLowStockProducts(limit = 5) {
   const scope = await getCurrentScope()
   if (!scope) return []

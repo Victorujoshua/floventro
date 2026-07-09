@@ -1,19 +1,21 @@
 import Link from "next/link"
-import { Check } from "lucide-react"
+import { ArrowUpRight, Check, TrendingUp } from "lucide-react"
 import { requireScope } from "@/lib/auth/guards"
 import {
   getStockSummary,
   getPayablesSummary,
   getRecentInvoices,
   getLowStockProducts,
+  getStockReceivedSeries,
 } from "@/lib/db/queries/dashboard"
 import { formatNaira } from "@/lib/format/money"
+import { StockChart } from "./stock-chart"
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
-    unpaid:  { label: "Unpaid",  className: "bg-amber-50 text-amber-700 border border-amber-200" },
-    partial: { label: "Partial", className: "bg-amber-100 text-amber-800 border border-amber-300" },
-    paid:    { label: "Paid",    className: "bg-green-50 text-green-700 border border-green-200" },
+    unpaid:  { label: "Unpaid",  className: "bg-neutral-100 text-neutral-600" },
+    partial: { label: "Partial", className: "bg-tint-amber text-amber-700" },
+    paid:    { label: "Paid",    className: "bg-tint-success text-green-700" },
   }
   const entry = map[status] ?? map.unpaid
   return (
@@ -33,84 +35,135 @@ export default async function DashboardPage() {
   const scope = await requireScope()
   const isInventoryUser = scope.role === "owner" || scope.role === "inventory"
 
-  const [stock, payables, recentInvoices, lowStockProducts] = await Promise.all([
+  const [stock, payables, recentInvoices, lowStockProducts, stockSeries] = await Promise.all([
     getStockSummary(),
     isInventoryUser ? getPayablesSummary() : Promise.resolve(null),
     isInventoryUser ? getRecentInvoices(5) : Promise.resolve([]),
     isInventoryUser ? getLowStockProducts(5) : Promise.resolve([]),
+    isInventoryUser ? getStockReceivedSeries() : Promise.resolve([]),
   ])
 
   return (
-    <div>
+    <div className="space-y-6">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Dashboard</h1>
-        <p className="text-sm text-neutral-500 mt-1">Welcome back</p>
+      <div>
+        <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Welcome back</h1>
+        <p className="text-sm text-neutral-500 mt-1">Here&apos;s your inventory at a glance</p>
       </div>
 
       {/* Metric cards */}
-      <div className={`grid gap-4 mb-6 ${isInventoryUser ? "sm:grid-cols-3" : "max-w-xs"}`}>
-        {/* Stock on hand */}
-        <div className="bg-white rounded-lg border border-neutral-200 p-6">
-          <p className="text-xs uppercase tracking-wide text-neutral-500 mb-2">Stock on hand</p>
-          <p className="text-3xl font-semibold text-neutral-950 tabular-nums">
-            {stock.totalUnits.toLocaleString()}
-          </p>
-          <p className="text-sm text-neutral-500 mt-1">{stock.productsWithStock} products</p>
-        </div>
-
-        {/* Outstanding payables */}
-        {isInventoryUser && payables && (
-          <div className="bg-white rounded-lg border border-neutral-200 p-6">
-            <p className="text-xs uppercase tracking-wide text-neutral-500 mb-2">Outstanding payables</p>
-            <p className="text-3xl font-semibold text-neutral-950 tabular-nums">
-              <span className="font-inter">₦</span>{formatNaira(payables.outstandingCents)}
-            </p>
-            <div className="mt-1 flex items-center gap-2 flex-wrap">
-              <p className="text-sm text-neutral-500">
-                {payables.unpaidCount} unpaid invoice{payables.unpaidCount !== 1 ? "s" : ""}
-              </p>
-              {payables.pastDueCount > 0 && (
-                <span className="text-xs font-medium text-red-600">
-                  {payables.pastDueCount} past due
-                </span>
-              )}
+      {isInventoryUser ? (
+        <div className="grid sm:grid-cols-3 gap-5">
+          {/* Stock on hand */}
+          <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
+            <div className="flex items-start justify-between">
+              <p className="text-xs uppercase tracking-wide text-neutral-500">Stock on hand</p>
+              <Link
+                href="/inventory/products"
+                className="rounded-full bg-white/60 p-1.5 hover:bg-white transition-colors"
+              >
+                <ArrowUpRight className="h-4 w-4 text-neutral-600" />
+              </Link>
             </div>
+            <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
+              {stock.totalUnits.toLocaleString()}
+            </p>
+            <p className="text-sm text-neutral-500 mt-1">{stock.productsWithStock} products</p>
           </div>
-        )}
 
-        {/* Low stock */}
-        {isInventoryUser && (
-          <div className="bg-white rounded-lg border border-neutral-200 p-6">
-            <p className="text-xs uppercase tracking-wide text-neutral-500 mb-2">Low stock</p>
+          {/* Outstanding payables */}
+          {payables && (
+            <div className="bg-tint-coral rounded-2xl border border-neutral-200/60 p-6">
+              <div className="flex items-start justify-between">
+                <p className="text-xs uppercase tracking-wide text-neutral-500">Outstanding payables</p>
+                <Link
+                  href="/inventory/invoices"
+                  className="rounded-full bg-white/60 p-1.5 hover:bg-white transition-colors"
+                >
+                  <ArrowUpRight className="h-4 w-4 text-neutral-600" />
+                </Link>
+              </div>
+              <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
+                <span className="font-inter">₦</span>{formatNaira(payables.outstandingCents)}
+              </p>
+              <div className="mt-1 flex items-center gap-2 flex-wrap">
+                <p className="text-sm text-neutral-500">
+                  {payables.unpaidCount} unpaid invoice{payables.unpaidCount !== 1 ? "s" : ""}
+                </p>
+                {payables.pastDueCount > 0 && (
+                  <span className="text-xs font-medium text-red-600">
+                    {payables.pastDueCount} past due
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Low stock */}
+          <div
+            className={`${
+              stock.lowStockCount === 0 ? "bg-tint-success" : "bg-tint-amber"
+            } rounded-2xl border border-neutral-200/60 p-6`}
+          >
+            <div className="flex items-start justify-between">
+              <p className="text-xs uppercase tracking-wide text-neutral-500">Low stock</p>
+              <Link
+                href="/inventory/products"
+                className="rounded-full bg-white/60 p-1.5 hover:bg-white transition-colors"
+              >
+                <ArrowUpRight className="h-4 w-4 text-neutral-600" />
+              </Link>
+            </div>
             {stock.lowStockCount === 0 ? (
               <>
-                <p className="text-3xl font-semibold text-green-600 tabular-nums">0</p>
-                <p className="text-sm text-green-600 mt-1">All stocked</p>
+                <p className="text-3xl font-semibold text-green-700 tabular-nums mt-3">0</p>
+                <p className="text-sm text-green-700 mt-1">All stocked</p>
               </>
             ) : (
               <>
-                <p className="text-3xl font-semibold text-amber-600 tabular-nums">
+                <p className="text-3xl font-semibold text-amber-700 tabular-nums mt-3">
                   {stock.lowStockCount}
                 </p>
-                <p className="text-sm text-neutral-500 mt-1">at or below reorder point</p>
+                <p className="text-sm text-neutral-500 mt-1">need reordering</p>
               </>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        /* sales / internal_use: stock card only */
+        <div className="max-w-xs">
+          <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
+            <p className="text-xs uppercase tracking-wide text-neutral-500 mb-3">Stock on hand</p>
+            <p className="text-3xl font-semibold text-neutral-950 tabular-nums">
+              {stock.totalUnits.toLocaleString()}
+            </p>
+            <p className="text-sm text-neutral-500 mt-1">{stock.productsWithStock} products</p>
+          </div>
+        </div>
+      )}
 
-      {/* Detail panels — owner / inventory only */}
+      {/* Stock received chart */}
       {isInventoryUser && (
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-base font-semibold text-neutral-950">Stock received</h2>
+              <p className="text-xs text-neutral-500 mt-0.5">Units received via vendor invoices — last 30 days</p>
+            </div>
+            <TrendingUp className="h-4 w-4 text-violet-400" />
+          </div>
+          <StockChart series={stockSeries} />
+        </div>
+      )}
+
+      {/* Two-column panels */}
+      {isInventoryUser && (
+        <div className="grid md:grid-cols-2 gap-5">
           {/* Recent invoices */}
-          <div className="bg-white rounded-lg border border-neutral-200 p-6">
+          <div className="bg-white rounded-2xl border border-neutral-200/60 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-neutral-950">Recent invoices</h2>
-              <Link
-                href="/inventory/invoices"
-                className="text-xs text-violet-700 hover:underline"
-              >
+              <Link href="/inventory/invoices" className="text-xs text-violet-700 hover:underline">
                 View all →
               </Link>
             </div>
@@ -141,13 +194,10 @@ export default async function DashboardPage() {
           </div>
 
           {/* Low stock alerts */}
-          <div className="bg-white rounded-lg border border-neutral-200 p-6">
+          <div className="bg-white rounded-2xl border border-neutral-200/60 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-neutral-950">Low stock alerts</h2>
-              <Link
-                href="/inventory/products"
-                className="text-xs text-violet-700 hover:underline"
-              >
+              <Link href="/inventory/products" className="text-xs text-violet-700 hover:underline">
                 View products →
               </Link>
             </div>

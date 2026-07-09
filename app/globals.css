@@ -23,6 +23,12 @@
   --color-warning: #F59E0B;
   --color-danger: #EF4444;
 
+  /* ── App tint surfaces (soft pastel card backgrounds) ────────────── */
+  --color-tint-violet: #F4F0FC;
+  --color-tint-coral: #FDEFEB;
+  --color-tint-success: #ECF6F0;
+  --color-tint-amber: #FCF4E4;
+
   /* ── shadcn semantic → brand tokens ─────────────────────────── */
   --color-background: var(--cream);
   --color-foreground: var(--ink);
