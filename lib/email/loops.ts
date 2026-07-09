@@ -48,6 +48,53 @@ export async function addWaitlistContact(payload: LoopsContactPayload) {
   }
 }
 
+export async function sendInviteEmail(params: {
+  email: string
+  inviterName: string
+  organisationName: string
+  role: string
+  acceptUrl: string
+}) {
+  const apiKey = process.env.LOOPS_API_KEY
+  const transactionalId = process.env.LOOPS_INVITE_TRANSACTIONAL_ID
+
+  if (!apiKey || !transactionalId) {
+    console.error("[loops] LOOPS_API_KEY or LOOPS_INVITE_TRANSACTIONAL_ID not set")
+    return { ok: false as const }
+  }
+
+  try {
+    const res = await fetch("https://app.loops.so/api/v1/transactional", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        transactionalId,
+        email: params.email,
+        dataVariables: {
+          inviterName: params.inviterName,
+          organisationName: params.organisationName,
+          role: params.role,
+          acceptUrl: params.acceptUrl,
+        },
+      }),
+    })
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "(unreadable)")
+      console.error("[loops] invite send failed:", res.status, body)
+      return { ok: false as const }
+    }
+
+    return { ok: true as const }
+  } catch (err) {
+    console.error("[loops] invite send error:", err)
+    return { ok: false as const }
+  }
+}
+
 export async function sendWaitlistConfirmation(email: string, firstName?: string) {
   const apiKey = process.env.LOOPS_API_KEY
   const transactionalId = process.env.LOOPS_WAITLIST_TRANSACTIONAL_ID

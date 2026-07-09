@@ -1,0 +1,125 @@
+<mjml>
+  <mj-head>
+    <mj-title>You're invited to join {{organisationName}} on Floventro</mj-title>
+    <mj-preview>{{inviterName}} has invited you to join {{organisationName}} as {{role}}.</mj-preview>
+
+    <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" />
+
+    <mj-attributes>
+      <mj-all font-family="Inter, Arial, sans-serif" />
+      <mj-text font-size="15px" line-height="1.6" color="#151D27" />
+      <mj-section background-color="#F5F1EA" padding="0" />
+    </mj-attributes>
+  </mj-head>
+
+  <mj-body background-color="#F5F1EA">
+
+    <!-- Top spacer -->
+    <mj-section padding="32px 0 0 0">
+      <mj-column>
+        <mj-text> </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Logo -->
+    <mj-section padding="0 24px">
+      <mj-column>
+        <mj-image
+          src="https://i.ibb.co/sdFSCTnS/Frame-1-4.png"
+          alt="Floventro"
+          width="140px"
+          align="left"
+          padding="0"
+        />
+      </mj-column>
+    </mj-section>
+
+    <!-- Divider -->
+    <mj-section padding="24px 24px 0 24px">
+      <mj-column>
+        <mj-divider border-color="#E5E0D6" border-width="1px" padding="0" />
+      </mj-column>
+    </mj-section>
+
+    <!-- Main card -->
+    <mj-section background-color="#FFFFFF" padding="40px 40px 32px 40px" border-radius="12px" css-class="card">
+      <mj-column>
+
+        <!-- Headline -->
+        <mj-text
+          font-size="24px"
+          font-weight="600"
+          line-height="1.2"
+          color="#151D27"
+          padding-bottom="16px"
+        >
+          You're invited to {{organisationName}}
+        </mj-text>
+
+        <!-- Body -->
+        <mj-text color="#5C6068" padding-bottom="8px">
+          Hi there,
+        </mj-text>
+
+        <mj-text color="#5C6068" padding-bottom="24px">
+          <strong style="color:#151D27;">{{inviterName}}</strong> has invited you to join
+          <strong style="color:#151D27;">{{organisationName}}</strong> on Floventro as
+          <strong style="color:#151D27;">{{role}}</strong>.
+        </mj-text>
+
+        <!-- CTA button -->
+        <mj-button
+          href="{{acceptUrl}}"
+          background-color="#4A02C8"
+          color="#FFFFFF"
+          font-size="14px"
+          font-weight="500"
+          border-radius="8px"
+          padding="12px 24px"
+          align="left"
+          inner-padding="0"
+        >
+          Accept invitation →
+        </mj-button>
+
+        <!-- Expiry note -->
+        <mj-text
+          color="#9BA0A8"
+          font-size="13px"
+          padding-top="24px"
+          padding-bottom="0"
+        >
+          This invite expires in 7 days. If you weren't expecting this, you can safely ignore this email — no account will be created without your action.
+        </mj-text>
+
+      </mj-column>
+    </mj-section>
+
+    <!-- Sign-off -->
+    <mj-section padding="32px 24px 0 24px">
+      <mj-column>
+        <mj-text color="#5C6068" font-size="14px">
+          — The Floventro Team
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Divider -->
+    <mj-section padding="24px 24px 0 24px">
+      <mj-column>
+        <mj-divider border-color="#E5E0D6" border-width="1px" padding="0" />
+      </mj-column>
+    </mj-section>
+
+    <!-- Footer -->
+    <mj-section padding="20px 24px 40px 24px">
+      <mj-column>
+        <mj-text color="#9BA0A8" font-size="12px" line-height="1.5">
+          Floventro · hello@floventro.com<br />
+          You received this email because someone invited you to join their workspace.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+  </mj-body>
+</mjml>
