@@ -1,5 +1,6 @@
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { getCurrentScope } from "@/lib/auth/scope"
+import { formatNaira } from "@/lib/format/money"
 
 export async function getStockSummary() {
   const scope = await getCurrentScope()
@@ -110,6 +111,73 @@ export async function getStockReceivedSeries() {
   }
 
   return dates.map((date) => ({ date, units: byDate.get(date) ?? 0 }))
+}
+
+export type NotificationItem = {
+  id: string
+  kind: "past_due" | "low_stock"
+  title: string
+  detail: string
+}
+
+export async function getNotifications(): Promise<NotificationItem[]> {
+  const scope = await getCurrentScope()
+  if (!scope) return []
+
+  const supabase = await createAppServerClient()
+  const today = new Date().toISOString().split("T")[0]
+
+  const [invoiceRes, productRes] = await Promise.all([
+    supabase
+      .from("vendor_invoices")
+      .select("id, invoice_number, total_cents, due_date, vendors(name)")
+      .eq("organisation_id", scope.organisationId)
+      .is("deleted_at", null)
+      .in("status", ["unpaid", "partial"])
+      .lt("due_date", today)
+      .order("due_date", { ascending: true })
+      .limit(10),
+    supabase
+      .from("products")
+      .select("id, sku, name, reorder_point, product_stock(quantity)")
+      .eq("organisation_id", scope.organisationId)
+      .is("deleted_at", null)
+      .gt("reorder_point", 0),
+  ])
+
+  const items: NotificationItem[] = []
+
+  for (const inv of invoiceRes.data ?? []) {
+    if (!inv.due_date) continue
+    const daysOverdue = Math.floor(
+      (Date.now() - new Date(inv.due_date + "T00:00:00").getTime()) / 86_400_000,
+    )
+    const vName = Array.isArray(inv.vendors)
+      ? (inv.vendors[0] as { name?: string })?.name
+      : (inv.vendors as { name?: string } | null)?.name
+    items.push({
+      id: inv.id,
+      kind: "past_due",
+      title: `${inv.invoice_number ?? "Invoice"} to ${vName ?? "vendor"}`,
+      detail: `₦${formatNaira(inv.total_cents)} · ${daysOverdue} day${daysOverdue !== 1 ? "s" : ""} overdue`,
+    })
+  }
+
+  for (const p of productRes.data ?? []) {
+    const qty = (p.product_stock as { quantity: number }[] ?? []).reduce(
+      (s, r) => s + r.quantity,
+      0,
+    )
+    if (qty > p.reorder_point) continue
+    items.push({
+      id: p.id,
+      kind: "low_stock",
+      title: p.sku ?? p.name,
+      detail: `${qty} / ${p.reorder_point} units`,
+    })
+  }
+
+  return items
 }
 
 export async function getLowStockProducts(limit = 5) {
