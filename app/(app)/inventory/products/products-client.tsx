@@ -88,13 +88,13 @@ export function ProductsClient({ products }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Products</h1>
-        <Button
+        <button
           onClick={() => setDialogState({ type: "create" })}
-          className="bg-violet-700 hover:bg-violet-800 text-white rounded-md"
+          className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
         >
-          <Plus className="h-4 w-4 mr-2" />
+          <Plus className="h-4 w-4" />
           New product
-        </Button>
+        </button>
       </div>
 
       {/* Empty state */}
@@ -105,13 +105,13 @@ export function ProductsClient({ products }: Props) {
           <p className="text-sm text-neutral-500 mt-1">
             Add your first product to build your catalogue.
           </p>
-          <Button
+          <button
             onClick={() => setDialogState({ type: "create" })}
-            className="mt-4 bg-violet-700 hover:bg-violet-800 text-white rounded-md"
+            className="mt-4 inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
           >
-            <Plus className="h-4 w-4 mr-2" />
+            <Plus className="h-4 w-4" />
             New product
-          </Button>
+          </button>
         </div>
       ) : (
         <>
