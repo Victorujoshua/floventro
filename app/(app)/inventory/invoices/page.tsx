@@ -15,9 +15,9 @@ import { FileText, Plus } from "lucide-react"
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
-    unpaid:  { label: "Unpaid",  className: "bg-amber-50 text-amber-700 border border-amber-200" },
-    partial: { label: "Partial", className: "bg-amber-100 text-amber-800 border border-amber-300" },
-    paid:    { label: "Paid",    className: "bg-green-50 text-green-700 border border-green-200" },
+    unpaid:  { label: "Unpaid",  className: "bg-neutral-100 text-neutral-600" },
+    partial: { label: "Partial", className: "bg-tint-amber text-amber-700" },
+    paid:    { label: "Paid",    className: "bg-tint-success text-green-700" },
   }
   const entry = map[status] ?? map.unpaid
   return (
@@ -41,7 +41,10 @@ export default async function InvoicesPage() {
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Invoices</h1>
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Invoices</h1>
+          <p className="text-sm text-neutral-500 mt-1">Vendor invoices and stock received</p>
+        </div>
         <Link
           href="/inventory/invoices/new"
           className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
@@ -53,7 +56,7 @@ export default async function InvoicesPage() {
 
       {/* Empty state */}
       {invoices.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
+        <div className="bg-white rounded-2xl border border-neutral-200/60 flex flex-col items-center justify-center py-16 text-center">
           <FileText className="h-10 w-10 text-neutral-300 mb-4" />
           <p className="text-sm font-medium text-neutral-950">No invoices yet</p>
           <p className="text-sm text-neutral-500 mt-1">
@@ -68,7 +71,7 @@ export default async function InvoicesPage() {
           </Link>
         </div>
       ) : (
-        <div className="rounded-lg border border-neutral-200 bg-white overflow-hidden">
+        <div className="rounded-2xl border border-neutral-200/60 bg-white overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow className="bg-neutral-50">
@@ -94,23 +97,23 @@ export default async function InvoicesPage() {
             </TableHeader>
             <TableBody>
               {invoices.map((inv) => (
-                <TableRow key={inv.id} className="py-3">
-                  <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3">
+                <TableRow key={inv.id} className="hover:bg-neutral-50/60 transition-colors">
+                  <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3.5">
                     {inv.invoice_number ?? <span className="text-neutral-400">—</span>}
                   </TableCell>
-                  <TableCell className="text-sm text-neutral-950 py-3">
+                  <TableCell className="text-sm text-neutral-950 py-3.5">
                     {vendorName(inv.vendors)}
                   </TableCell>
-                  <TableCell className="text-sm text-neutral-700 py-3">
+                  <TableCell className="text-sm text-neutral-700 py-3.5">
                     {inv.invoice_date}
                   </TableCell>
-                  <TableCell className="text-sm text-neutral-700 py-3">
+                  <TableCell className="text-sm text-neutral-700 py-3.5">
                     {inv.due_date ?? <span className="text-neutral-400">—</span>}
                   </TableCell>
-                  <TableCell className="text-sm font-mono tabular-nums text-neutral-950 py-3 text-right">
+                  <TableCell className="text-sm font-mono tabular-nums text-neutral-950 py-3.5 text-right">
                     <span className="font-inter">₦</span>{formatNaira(inv.total_cents)}
                   </TableCell>
-                  <TableCell className="py-3">
+                  <TableCell className="py-3.5">
                     <StatusBadge status={inv.status} />
                   </TableCell>
                 </TableRow>

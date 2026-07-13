@@ -101,7 +101,10 @@ export function VendorsClient({ vendors, branches }: Props) {
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Vendors</h1>
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Vendors</h1>
+          <p className="text-sm text-neutral-500 mt-1">Suppliers you buy from</p>
+        </div>
         <button
           onClick={() => setDialogState({ type: "create" })}
           className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
@@ -113,7 +116,7 @@ export function VendorsClient({ vendors, branches }: Props) {
 
       {/* Empty state */}
       {vendors.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
+        <div className="bg-white rounded-2xl border border-neutral-200/60 flex flex-col items-center justify-center py-16 text-center">
           <Store className="h-10 w-10 text-neutral-300 mb-4" />
           <p className="text-sm font-medium text-neutral-950">No vendors yet</p>
           <p className="text-sm text-neutral-500 mt-1">
@@ -135,12 +138,12 @@ export function VendorsClient({ vendors, branches }: Props) {
               placeholder="Search by name or contact person…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="max-w-sm rounded-md"
+              className="max-w-sm rounded-lg"
             />
           </div>
 
           {/* Table */}
-          <div className="rounded-lg border border-neutral-200 bg-white overflow-hidden">
+          <div className="rounded-2xl border border-neutral-200/60 bg-white overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow className="bg-neutral-50">
@@ -179,28 +182,28 @@ export function VendorsClient({ vendors, branches }: Props) {
                   </TableRow>
                 ) : (
                   filtered.map((vendor) => (
-                    <TableRow key={vendor.id} className="py-3">
-                      <TableCell className="text-sm font-medium text-neutral-950 py-3">
+                    <TableRow key={vendor.id} className="hover:bg-neutral-50/60 transition-colors">
+                      <TableCell className="text-sm font-medium text-neutral-950 py-3.5">
                         {vendor.name}
                       </TableCell>
-                      <TableCell className="text-sm text-neutral-700 py-3">
+                      <TableCell className="text-sm text-neutral-700 py-3.5">
                         {vendor.contact_person ?? <span className="text-neutral-400">—</span>}
                       </TableCell>
-                      <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3">
+                      <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3.5">
                         {vendor.phone ?? <span className="text-neutral-400 font-sans">—</span>}
                       </TableCell>
-                      <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3">
+                      <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3.5">
                         {vendor.tin ?? <span className="text-neutral-400 font-sans">—</span>}
                       </TableCell>
-                      <TableCell className="text-sm font-mono tabular-nums py-3 text-neutral-700">
+                      <TableCell className="text-sm font-mono tabular-nums py-3.5 text-neutral-700">
                         <span className="font-inter">₦</span>{formatNaira(vendor.outstanding_cents)}
                       </TableCell>
                       {showBranchColumn && (
-                        <TableCell className="text-sm text-neutral-700 py-3">
+                        <TableCell className="text-sm text-neutral-700 py-3.5">
                           {branches.find((b) => b.id === vendor.branch_id)?.name ?? "—"}
                         </TableCell>
                       )}
-                      <TableCell className="py-3">
+                      <TableCell className="py-3.5">
                         <DropdownMenu>
                           <DropdownMenuTrigger className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700">
                             <MoreHorizontal className="h-4 w-4" />

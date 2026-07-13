@@ -87,7 +87,10 @@ export function ProductsClient({ products }: Props) {
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Products</h1>
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Products</h1>
+          <p className="text-sm text-neutral-500 mt-1">Your product catalogue</p>
+        </div>
         <button
           onClick={() => setDialogState({ type: "create" })}
           className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
@@ -99,7 +102,7 @@ export function ProductsClient({ products }: Props) {
 
       {/* Empty state */}
       {products.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
+        <div className="bg-white rounded-2xl border border-neutral-200/60 flex flex-col items-center justify-center py-16 text-center">
           <Package className="h-10 w-10 text-neutral-300 mb-4" />
           <p className="text-sm font-medium text-neutral-950">No products yet</p>
           <p className="text-sm text-neutral-500 mt-1">
@@ -121,12 +124,12 @@ export function ProductsClient({ products }: Props) {
               placeholder="Search by SKU or name…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="max-w-sm rounded-md"
+              className="max-w-sm rounded-lg"
             />
           </div>
 
           {/* Table */}
-          <div className="rounded-lg border border-neutral-200 bg-white overflow-hidden">
+          <div className="rounded-2xl border border-neutral-200/60 bg-white overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow className="bg-neutral-50">
@@ -154,26 +157,26 @@ export function ProductsClient({ products }: Props) {
                   </TableRow>
                 ) : (
                   filtered.map((product) => (
-                    <TableRow key={product.id} className="py-3">
-                      <TableCell className="font-mono text-sm tabular-nums text-neutral-700 py-3">
+                    <TableRow key={product.id} className="hover:bg-neutral-50/60 transition-colors">
+                      <TableCell className="font-mono text-sm tabular-nums text-neutral-700 py-3.5">
                         {product.sku}
                       </TableCell>
-                      <TableCell className="text-sm text-neutral-950 py-3">
+                      <TableCell className="text-sm text-neutral-950 py-3.5">
                         {product.name}
                       </TableCell>
-                      <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3">
+                      <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3.5">
                         {product.reorder_point}
                       </TableCell>
-                      <TableCell className={`text-sm font-mono tabular-nums py-3 ${
+                      <TableCell className={`text-sm font-mono tabular-nums py-3.5 ${
                         product.stock === 0
-                          ? "text-red-500"
+                          ? "text-red-600"
                           : product.reorder_point > 0 && product.stock <= product.reorder_point
-                          ? "text-amber-500"
+                          ? "text-amber-600"
                           : "text-neutral-700"
                       }`}>
                         {product.stock}
                       </TableCell>
-                      <TableCell className="py-3">
+                      <TableCell className="py-3.5">
                         <DropdownMenu>
                           <DropdownMenuTrigger className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700">
                             <MoreHorizontal className="h-4 w-4" />
