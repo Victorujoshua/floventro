@@ -3,7 +3,7 @@
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { requireOwner } from "@/lib/auth/guards"
 import { inviteSchema, type InviteInput } from "@/lib/validation/invites"
-import { sendInviteEmail } from "@/lib/email/loops"
+import { sendInviteEmail } from "@/lib/email/zeptomail"
 
 type ActionResult<T = null> =
   | { ok: true; data: T }
