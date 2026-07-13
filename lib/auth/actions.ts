@@ -49,7 +49,15 @@ export async function signUpAction(input: SignUpInput): Promise<ActionResult> {
   return { ok: true }
 }
 
-export async function signInAction(input: SignInInput): Promise<ActionResult> {
+function safeNext(next?: string): string | null {
+  if (!next) return null
+  if (!next.startsWith("/")) return null
+  if (next.startsWith("//")) return null
+  if (next.includes("://")) return null
+  return next
+}
+
+export async function signInAction(input: SignInInput, next?: string): Promise<ActionResult> {
   const parsed = signInSchema.safeParse(input)
   if (!parsed.success) {
     return { ok: false, error: "invalid", code: "validation" }
@@ -70,7 +78,7 @@ export async function signInAction(input: SignInInput): Promise<ActionResult> {
     return { ok: false, error: "server", code: "server" }
   }
 
-  redirect("/dashboard")
+  redirect(safeNext(next) ?? "/dashboard")
 }
 
 export async function signOutAction(): Promise<void> {
