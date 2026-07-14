@@ -53,17 +53,17 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex h-full w-full max-w-[440px] flex-col",
+          "fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-[440px] flex-col",
           "bg-popover text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/10",
           "duration-200 outline-none",
-          "data-open:animate-in data-open:slide-in-from-left",
-          "data-closed:animate-out data-closed:slide-out-to-left",
+          "data-open:animate-in data-open:slide-in-from-right",
+          "data-closed:animate-out data-closed:slide-out-to-right",
           className
         )}
         {...props}
       >
         {/* Scrollable body — close button is outside this div so it never scrolls away */}
-        <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6 pr-12">
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6 pl-12">
           {children}
         </div>
         {showCloseButton && (
@@ -72,7 +72,7 @@ function DialogContent({
             render={
               <Button
                 variant="ghost"
-                className="absolute top-4 right-4"
+                className="absolute top-4 left-4"
                 size="icon-sm"
               />
             }
