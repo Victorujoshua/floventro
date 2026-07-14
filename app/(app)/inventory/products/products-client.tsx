@@ -22,12 +22,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ProductForm } from "@/components/app/forms/product-form"
 import { deleteProductAction } from "@/lib/db/actions/products"
+import { AdjustDialog } from "./adjust-dialog"
 
 type Product = {
   id: string
@@ -37,21 +39,27 @@ type Product = {
   reorder_point: number
   unit_cost_cents: number | null
   stock: number
+  hasHistory: boolean
   created_at: string
   updated_at: string
 }
 
+type Branch = { id: string; name: string }
+
 type Props = {
   products: Product[]
+  resolvedBranchId: string | null
+  branches: Branch[]
 }
 
-export function ProductsClient({ products }: Props) {
+export function ProductsClient({ products, resolvedBranchId, branches }: Props) {
   const router = useRouter()
   const [search, setSearch] = useState("")
   const [dialogState, setDialogState] = useState<
     | { type: "create" }
     | { type: "edit"; product: Product }
     | { type: "delete"; product: Product }
+    | { type: "adjust"; product: Product }
     | null
   >(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -167,13 +175,15 @@ export function ProductsClient({ products }: Props) {
                       <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3.5">
                         {product.reorder_point}
                       </TableCell>
-                      <TableCell className={`text-sm font-mono tabular-nums py-3.5 ${
-                        product.stock === 0
-                          ? "text-red-600"
-                          : product.reorder_point > 0 && product.stock <= product.reorder_point
-                          ? "text-amber-600"
-                          : "text-neutral-700"
-                      }`}>
+                      <TableCell
+                        className={`text-sm font-mono tabular-nums py-3.5 ${
+                          product.stock === 0
+                            ? "text-red-600"
+                            : product.reorder_point > 0 && product.stock <= product.reorder_point
+                              ? "text-amber-600"
+                              : "text-neutral-700"
+                        }`}
+                      >
                         {product.stock}
                       </TableCell>
                       <TableCell className="py-3.5">
@@ -183,17 +193,24 @@ export function ProductsClient({ products }: Props) {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
-                              onClick={() =>
-                                setDialogState({ type: "edit", product })
-                              }
+                              onClick={() => setDialogState({ type: "edit", product })}
                             >
                               Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem
+                              onClick={() => setDialogState({ type: "adjust", product })}
+                            >
+                              Adjust stock
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => router.push(`/inventory/products/${product.id}/history`)}
+                            >
+                              History
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
                               className="text-red-600 focus:text-red-600"
-                              onClick={() =>
-                                setDialogState({ type: "delete", product })
-                              }
+                              onClick={() => setDialogState({ type: "delete", product })}
                             >
                               Delete
                             </DropdownMenuItem>
@@ -272,6 +289,19 @@ export function ProductsClient({ products }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Adjust stock dialog */}
+      <AdjustDialog
+        product={dialogState?.type === "adjust" ? dialogState.product : null}
+        resolvedBranchId={resolvedBranchId}
+        branches={branches}
+        open={dialogState?.type === "adjust"}
+        onClose={() => setDialogState(null)}
+        onSuccess={() => {
+          setDialogState(null)
+          router.refresh()
+        }}
+      />
     </div>
   )
 }
