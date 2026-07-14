@@ -134,22 +134,22 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="mt-4 space-y-4">
       {/* Invoice summary strip */}
-      <div className="rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-3 grid grid-cols-3 gap-4 text-center">
-        <div>
+      <div className="rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-3 flex flex-col divide-y divide-neutral-100">
+        <div className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
           <p className="text-xs text-neutral-500">Total</p>
-          <p className="mt-0.5 text-sm font-semibold tabular-nums text-neutral-950">
+          <p className="text-sm font-semibold tabular-nums text-neutral-950">
             <span className="font-inter">₦</span>{formatNaira(invoice.total_cents)}
           </p>
         </div>
-        <div>
+        <div className="flex items-center justify-between py-2">
           <p className="text-xs text-neutral-500">Paid</p>
-          <p className="mt-0.5 text-sm font-semibold tabular-nums text-neutral-950">
+          <p className="text-sm font-semibold tabular-nums text-neutral-950">
             <span className="font-inter">₦</span>{formatNaira(invoice.amount_paid_cents)}
           </p>
         </div>
-        <div>
+        <div className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
           <p className="text-xs text-neutral-500">Outstanding</p>
-          <p className="mt-0.5 text-sm font-semibold tabular-nums text-red-600">
+          <p className="text-sm font-semibold tabular-nums text-red-600">
             <span className="font-inter">₦</span>{formatNaira(outstanding)}
           </p>
         </div>
