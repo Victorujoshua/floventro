@@ -11,6 +11,8 @@ import {
   Users,
   Settings as SettingsIcon,
   LogOut,
+  ClipboardList,
+  ClipboardCheck,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Role } from "@/lib/auth/scope"
@@ -24,19 +26,29 @@ type NavItem = {
 
 const MAIN_MENU: Record<Role, NavItem[]> = {
   owner: [
-    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { label: "Products", href: "/inventory/products", icon: Package },
-    { label: "Vendors", href: "/inventory/vendors", icon: Truck },
-    { label: "Invoices", href: "/inventory/invoices", icon: FileText },
+    { label: "Dashboard",       href: "/dashboard",              icon: LayoutDashboard },
+    { label: "Products",        href: "/inventory/products",     icon: Package },
+    { label: "Vendors",         href: "/inventory/vendors",      icon: Truck },
+    { label: "Invoices",        href: "/inventory/invoices",     icon: FileText },
+    { label: "Requests",        href: "/requests",               icon: ClipboardList },
+    { label: "Stock requests",  href: "/inventory/requests",     icon: ClipboardCheck },
   ],
   inventory: [
-    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { label: "Products", href: "/inventory/products", icon: Package },
-    { label: "Vendors", href: "/inventory/vendors", icon: Truck },
-    { label: "Invoices", href: "/inventory/invoices", icon: FileText },
+    { label: "Dashboard",       href: "/dashboard",              icon: LayoutDashboard },
+    { label: "Products",        href: "/inventory/products",     icon: Package },
+    { label: "Vendors",         href: "/inventory/vendors",      icon: Truck },
+    { label: "Invoices",        href: "/inventory/invoices",     icon: FileText },
+    { label: "Requests",        href: "/requests",               icon: ClipboardList },
+    { label: "Stock requests",  href: "/inventory/requests",     icon: ClipboardCheck },
   ],
-  sales: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboard }],
-  internal_use: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboard }],
+  sales:        [
+    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    { label: "Requests",  href: "/requests",  icon: ClipboardList },
+  ],
+  internal_use: [
+    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    { label: "Requests",  href: "/requests",  icon: ClipboardList },
+  ],
 }
 
 const MANAGEMENT_MENU: NavItem[] = [
@@ -83,14 +95,17 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 type Props = {
   role: Role
   pastDueCount: number
+  pendingRequestsCount: number
 }
 
-export function Sidebar({ role, pastDueCount }: Props) {
+export function Sidebar({ role, pastDueCount, pendingRequestsCount }: Props) {
   const pathname = usePathname()
 
-  const mainItems = (MAIN_MENU[role] ?? MAIN_MENU.owner).map((item) =>
-    item.href === "/inventory/invoices" ? { ...item, badge: pastDueCount } : item,
-  )
+  const mainItems = (MAIN_MENU[role] ?? MAIN_MENU.owner).map((item) => {
+    if (item.href === "/inventory/invoices") return { ...item, badge: pastDueCount }
+    if (item.href === "/inventory/requests") return { ...item, badge: pendingRequestsCount }
+    return item
+  })
   const showManagement = role === "owner"
 
   return (

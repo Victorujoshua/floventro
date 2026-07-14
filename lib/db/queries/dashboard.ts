@@ -1,6 +1,7 @@
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { getCurrentScope } from "@/lib/auth/scope"
 import { formatNaira } from "@/lib/format/money"
+import { getPendingRequestCount } from "./requests"
 
 export async function getStockSummary() {
   const scope = await getCurrentScope()
@@ -115,9 +116,10 @@ export async function getStockReceivedSeries() {
 
 export type NotificationItem = {
   id: string
-  kind: "past_due" | "low_stock"
+  kind: "past_due" | "low_stock" | "pending_requests"
   title: string
   detail: string
+  href?: string
 }
 
 export async function getNotifications(): Promise<NotificationItem[]> {
@@ -127,7 +129,7 @@ export async function getNotifications(): Promise<NotificationItem[]> {
   const supabase = await createAppServerClient()
   const today = new Date().toISOString().split("T")[0]
 
-  const [invoiceRes, productRes] = await Promise.all([
+  const [invoiceRes, productRes, pendingCount] = await Promise.all([
     supabase
       .from("vendor_invoices")
       .select("id, invoice_number, total_cents, due_date, vendors(name)")
@@ -143,6 +145,7 @@ export async function getNotifications(): Promise<NotificationItem[]> {
       .eq("organisation_id", scope.organisationId)
       .is("deleted_at", null)
       .gt("reorder_point", 0),
+    getPendingRequestCount(),
   ])
 
   const items: NotificationItem[] = []
@@ -174,6 +177,16 @@ export async function getNotifications(): Promise<NotificationItem[]> {
       kind: "low_stock",
       title: p.sku ?? p.name,
       detail: `${qty} / ${p.reorder_point} units`,
+    })
+  }
+
+  if (pendingCount > 0) {
+    items.push({
+      id: "pending-requests",
+      kind: "pending_requests",
+      title: `${pendingCount} stock request${pendingCount !== 1 ? "s" : ""} awaiting review`,
+      detail: "Tap to review",
+      href: "/inventory/requests",
     })
   }
 

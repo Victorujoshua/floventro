@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/app/sidebar/sidebar"
 import { AppHeader } from "@/components/app/header/app-header"
 import type { WorkspaceMembership } from "@/components/app/header/app-header"
 import { getNotifications } from "@/lib/db/queries/dashboard"
+import { getPendingRequestCount } from "@/lib/db/queries/requests"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const scope = await getCurrentScope()
@@ -14,12 +15,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const supabase = await createAppServerClient()
 
-  const [orgResult, userResult, notifications, rawMemberships] = await Promise.all([
-    supabase.from("organisations").select("name").eq("id", scope.organisationId).maybeSingle(),
-    supabase.auth.getUser(),
-    getNotifications(),
-    getUserMemberships(),
-  ])
+  const [orgResult, userResult, notifications, rawMemberships, pendingRequestsCount] =
+    await Promise.all([
+      supabase.from("organisations").select("name").eq("id", scope.organisationId).maybeSingle(),
+      supabase.auth.getUser(),
+      getNotifications(),
+      getUserMemberships(),
+      getPendingRequestCount(),
+    ])
 
   const user = userResult.data.user
   const userName = (user?.user_metadata?.full_name as string | undefined) ?? ""
@@ -51,7 +54,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-neutral-50">
-      <Sidebar role={scope.role} pastDueCount={pastDueCount} />
+      <Sidebar role={scope.role} pastDueCount={pastDueCount} pendingRequestsCount={pendingRequestsCount} />
       <div className="ml-60 flex flex-1 flex-col min-w-0">
         <AppHeader
           orgName={orgResult.data?.name ?? ""}

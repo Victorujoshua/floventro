@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Bell, ChevronDown, LogOut, Settings } from "lucide-react"
+import { Bell, ChevronDown, LogOut, Settings, ExternalLink } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,9 +13,10 @@ import { setScopeAction } from "@/lib/db/actions/scope"
 
 export type NotificationItem = {
   id: string
-  kind: "past_due" | "low_stock"
+  kind: "past_due" | "low_stock" | "pending_requests"
   title: string
   detail: string
+  href?: string
 }
 
 export type WorkspaceMembership = {
@@ -83,17 +84,33 @@ export function AppHeader({
               </div>
             ) : (
               <div>
-                {notifications.map((n) => (
-                  <div
-                    key={n.id}
-                    className="flex flex-col gap-0.5 px-3 py-2.5 border-b border-neutral-50 last:border-0 hover:bg-neutral-50 transition-colors"
-                  >
-                    <span className="text-sm font-medium text-neutral-900 leading-snug">
-                      {n.title}
-                    </span>
-                    <span className="text-xs text-neutral-500">{n.detail}</span>
-                  </div>
-                ))}
+                {notifications.map((n) =>
+                  n.href ? (
+                    <Link
+                      key={n.id}
+                      href={n.href}
+                      className="flex items-start justify-between gap-2 px-3 py-2.5 border-b border-neutral-50 last:border-0 hover:bg-neutral-50 transition-colors"
+                    >
+                      <span className="flex flex-col gap-0.5 min-w-0">
+                        <span className="text-sm font-medium text-neutral-900 leading-snug">
+                          {n.title}
+                        </span>
+                        <span className="text-xs text-neutral-500">{n.detail}</span>
+                      </span>
+                      <ExternalLink className="h-3.5 w-3.5 text-neutral-400 shrink-0 mt-0.5" />
+                    </Link>
+                  ) : (
+                    <div
+                      key={n.id}
+                      className="flex flex-col gap-0.5 px-3 py-2.5 border-b border-neutral-50 last:border-0 hover:bg-neutral-50 transition-colors"
+                    >
+                      <span className="text-sm font-medium text-neutral-900 leading-snug">
+                        {n.title}
+                      </span>
+                      <span className="text-xs text-neutral-500">{n.detail}</span>
+                    </div>
+                  ),
+                )}
               </div>
             )}
           </DropdownMenuContent>
