@@ -108,13 +108,47 @@ export async function reviewRequestAction(
   })
 
   if (error) {
-    const msg = error.message.toLowerCase()
-    if (msg.includes("insufficient stock")) {
-      return { ok: false, error: "insufficient_stock", message: error.message }
+    const msg = error.message
+    const lower = msg.toLowerCase()
+
+    if (lower.includes("insufficient stock")) {
+      const productMatch = msg.match(/insufficient stock for product ([0-9a-f-]{36})/i)
+      const numbersMatch = msg.match(/\(on hand: (\d+), requested: (\d+)\)/i)
+
+      if (productMatch && numbersMatch) {
+        const productId = productMatch[1]
+        const onHand = parseInt(numbersMatch[1], 10)
+        const requested = parseInt(numbersMatch[2], 10)
+        const fmt = (n: number) => new Intl.NumberFormat("en-US").format(n)
+
+        const { data: product } = await supabase
+          .from("products")
+          .select("name, sku")
+          .eq("id", productId)
+          .single()
+
+        if (product) {
+          return {
+            ok: false,
+            error: "insufficient_stock",
+            message: `Not enough ${product.name} (${product.sku}) in stock — ${fmt(onHand)} on hand, ${fmt(requested)} requested.`,
+          }
+        }
+      }
+
+      return { ok: false, error: "insufficient_stock", message: "Not enough stock to fulfil this request." }
     }
-    if (msg.includes("not authorised")) return { ok: false, error: "not_allowed" }
-    if (msg.includes("already reviewed")) return { ok: false, error: "already_reviewed" }
-    return { ok: false, error: "server", message: error.message }
+
+    if (lower.includes("not authorised")) return { ok: false, error: "not_allowed" }
+    if (lower.includes("already reviewed")) return { ok: false, error: "already_reviewed" }
+    if (lower.includes("is not part of this request"))
+      return { ok: false, error: "server", message: "One or more lines are not part of this request." }
+    if (lower.includes("approved quantity for line"))
+      return { ok: false, error: "server", message: "Invalid approved quantity on one or more lines." }
+    if (lower.includes("cannot approve more than requested for line"))
+      return { ok: false, error: "server", message: "Cannot approve more than the requested quantity." }
+
+    return { ok: false, error: "server", message: "Something went wrong. Please try again." }
   }
 
   return { ok: true, data: { status: data as string } }
