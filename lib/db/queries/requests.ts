@@ -19,6 +19,7 @@ type RawRequest = {
   status: string
   created_at: string
   requested_by: string
+  reviewed_by: string | null
   reviewed_at: string | null
   review_note: string | null
   stock_request_lines: RawLine[]
@@ -46,6 +47,9 @@ export type MyRequest = {
   purpose: string | null
   status: string
   createdAt: string
+  reviewedAt: string | null
+  reviewNote: string | null
+  reviewerLabel: string
   lines: RequestLine[]
 }
 
@@ -67,6 +71,7 @@ export type ReviewedRequest = {
   reviewedAt: string | null
   reviewNote: string | null
   requesterLabel: string
+  reviewerLabel: string
   lines: RequestLine[]
 }
 
@@ -102,7 +107,7 @@ export async function getMyRequests(): Promise<MyRequest[]> {
   const { data, error } = await supabase
     .from("stock_requests")
     .select(
-      "id, purpose, status, created_at, requested_by, stock_request_lines(id, quantity_requested, quantity_approved, products(id, sku, name))",
+      "id, purpose, status, created_at, requested_by, reviewed_by, reviewed_at, review_note, stock_request_lines(id, quantity_requested, quantity_approved, products(id, sku, name))",
     )
     .eq("requested_by", user.id)
     .is("deleted_at", null)
@@ -110,23 +115,37 @@ export async function getMyRequests(): Promise<MyRequest[]> {
 
   if (error || !data) return []
 
-  return (data as unknown as RawRequest[]).map((req) => ({
-    id: req.id,
-    purpose: req.purpose,
-    status: req.status,
-    createdAt: req.created_at,
-    lines: req.stock_request_lines.map((l) => {
-      const prod = resolveProduct(l.products)
-      return {
-        id: l.id,
-        productId: prod?.id ?? "",
-        productSku: prod?.sku ?? "",
-        productName: prod?.name ?? "Unknown product",
-        quantityRequested: l.quantity_requested,
-        quantityApproved: l.quantity_approved,
-      }
-    }),
-  }))
+  const requests = data as unknown as RawRequest[]
+
+  // Resolve reviewer names for reviewed requests
+  const reviewerIds = [
+    ...new Set(requests.map((r) => r.reviewed_by).filter(Boolean) as string[]),
+  ]
+  const reviewerMap = reviewerIds.length > 0 ? await fetchUserMap(reviewerIds) : new Map()
+
+  return requests.map((req) => {
+    const reviewer = req.reviewed_by ? reviewerMap.get(req.reviewed_by) : null
+    return {
+      id: req.id,
+      purpose: req.purpose,
+      status: req.status,
+      createdAt: req.created_at,
+      reviewedAt: req.reviewed_at,
+      reviewNote: req.review_note,
+      reviewerLabel: reviewer?.name || reviewer?.email || "",
+      lines: req.stock_request_lines.map((l) => {
+        const prod = resolveProduct(l.products)
+        return {
+          id: l.id,
+          productId: prod?.id ?? "",
+          productSku: prod?.sku ?? "",
+          productName: prod?.name ?? "Unknown product",
+          quantityRequested: l.quantity_requested,
+          quantityApproved: l.quantity_approved,
+        }
+      }),
+    }
+  })
 }
 
 export async function getPendingRequests(): Promise<PendingRequest[]> {
@@ -146,7 +165,7 @@ export async function getPendingRequests(): Promise<PendingRequest[]> {
 
   if (error || !data) return []
 
-  const requests = data as unknown as (Omit<RawRequest, "quantity_approved" | "reviewed_at" | "review_note" | "status"> & {
+  const requests = data as unknown as (Omit<RawRequest, "quantity_approved" | "reviewed_at" | "review_note" | "reviewed_by" | "status"> & {
     stock_request_lines: Omit<RawLine, "quantity_approved">[]
   })[]
 
@@ -210,7 +229,7 @@ export async function getReviewedRequests(limit = 30): Promise<ReviewedRequest[]
   const { data, error } = await supabase
     .from("stock_requests")
     .select(
-      "id, purpose, status, created_at, reviewed_at, review_note, requested_by, stock_request_lines(id, quantity_requested, quantity_approved, products(id, sku, name))",
+      "id, purpose, status, created_at, reviewed_at, review_note, requested_by, reviewed_by, stock_request_lines(id, quantity_requested, quantity_approved, products(id, sku, name))",
     )
     .neq("status", "pending")
     .is("deleted_at", null)
@@ -220,11 +239,19 @@ export async function getReviewedRequests(limit = 30): Promise<ReviewedRequest[]
   if (error || !data) return []
 
   const requests = data as unknown as RawRequest[]
-  const requesterIds = [...new Set(requests.map((r) => r.requested_by))]
-  const userMap = await fetchUserMap(requesterIds)
+
+  // Batch-resolve requester + reviewer names in one pass
+  const allUserIds = [
+    ...new Set([
+      ...requests.map((r) => r.requested_by),
+      ...requests.map((r) => r.reviewed_by).filter(Boolean) as string[],
+    ]),
+  ]
+  const userMap = await fetchUserMap(allUserIds)
 
   return requests.map((req) => {
-    const info = userMap.get(req.requested_by)
+    const requesterInfo = userMap.get(req.requested_by)
+    const reviewerInfo = req.reviewed_by ? userMap.get(req.reviewed_by) : null
     return {
       id: req.id,
       purpose: req.purpose,
@@ -232,7 +259,8 @@ export async function getReviewedRequests(limit = 30): Promise<ReviewedRequest[]
       createdAt: req.created_at,
       reviewedAt: req.reviewed_at,
       reviewNote: req.review_note,
-      requesterLabel: info?.name || info?.email || "",
+      requesterLabel: requesterInfo?.name || requesterInfo?.email || "",
+      reviewerLabel: reviewerInfo?.name || reviewerInfo?.email || "",
       lines: req.stock_request_lines.map((l) => {
         const prod = resolveProduct(l.products)
         return {

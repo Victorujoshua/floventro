@@ -57,6 +57,46 @@ function formatDate(iso: string) {
   })
 }
 
+const REVIEWED_STATUSES = new Set(["approved", "partially_approved", "rejected"])
+
+function ReviewBlock({
+  status,
+  reviewedAt,
+  reviewNote,
+  reviewerLabel,
+}: {
+  status: string
+  reviewedAt: string | null
+  reviewNote: string | null
+  reviewerLabel: string
+}) {
+  const isPartialOrRejected = status === "partially_approved" || status === "rejected"
+  const noteClass = isPartialOrRejected
+    ? "border-l-2 border-amber-400 bg-amber-50 text-amber-800"
+    : "border-l-2 border-neutral-300 bg-neutral-50 text-neutral-700"
+
+  return (
+    <div className="px-5 py-3 border-t border-neutral-100 space-y-2">
+      <p className="text-xs text-neutral-500">
+        {reviewerLabel ? (
+          <>
+            Reviewed by{" "}
+            <span className="font-medium text-neutral-700">{reviewerLabel}</span>
+            {reviewedAt ? <> · {formatDate(reviewedAt)}</> : null}
+          </>
+        ) : reviewedAt ? (
+          <>Reviewed {formatDate(reviewedAt)}</>
+        ) : null}
+      </p>
+      {reviewNote && (
+        <blockquote className={`rounded-lg px-3 py-2 text-sm italic ${noteClass}`}>
+          {reviewNote}
+        </blockquote>
+      )}
+    </div>
+  )
+}
+
 export function RequestsClient({ myRequests, products, resolvedBranchId, branches }: Props) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
@@ -217,40 +257,49 @@ export function RequestsClient({ myRequests, products, resolvedBranchId, branche
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
-                  {req.lines.map((line) => (
-                    <tr key={line.id} className="hover:bg-neutral-50/60 transition-colors">
-                      <td className="px-5 py-3.5">
-                        <span className="font-medium text-neutral-950">{line.productName}</span>
-                        {line.productSku && (
-                          <span className="ml-1.5 text-xs text-neutral-400 font-mono">
-                            {line.productSku}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5 text-right tabular-nums text-neutral-700">
-                        {line.quantityRequested}
-                      </td>
-                      <td className="px-5 py-3.5 text-right tabular-nums">
-                        {line.quantityApproved === null ? (
-                          <span className="text-neutral-400">—</span>
-                        ) : (
-                          <span
-                            className={
-                              line.quantityApproved === 0
-                                ? "text-red-600"
-                                : line.quantityApproved < line.quantityRequested
-                                  ? "text-amber-600"
-                                  : "text-green-700"
-                            }
-                          >
-                            {line.quantityApproved}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {req.lines.map((line) => {
+                    const isShort =
+                      line.quantityApproved !== null &&
+                      line.quantityApproved < line.quantityRequested
+                    return (
+                      <tr key={line.id} className="hover:bg-neutral-50/60 transition-colors">
+                        <td className="px-5 py-3.5">
+                          <span className="font-medium text-neutral-950">{line.productName}</span>
+                          {line.productSku && (
+                            <span className="ml-1.5 text-xs text-neutral-400 font-mono">
+                              {line.productSku}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5 text-right tabular-nums text-neutral-700">
+                          {line.quantityRequested}
+                        </td>
+                        <td className="px-5 py-3.5 text-right tabular-nums">
+                          {line.quantityApproved === null ? (
+                            <span className="text-neutral-400">—</span>
+                          ) : isShort ? (
+                            <span className={line.quantityApproved === 0 ? "text-red-600" : "text-amber-600"}>
+                              {line.quantityApproved} of {line.quantityRequested} approved
+                            </span>
+                          ) : (
+                            <span className="text-green-700">{line.quantityApproved}</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
+
+              {/* Review block — visible on all terminal statuses */}
+              {REVIEWED_STATUSES.has(req.status) && (
+                <ReviewBlock
+                  status={req.status}
+                  reviewedAt={req.reviewedAt}
+                  reviewNote={req.reviewNote}
+                  reviewerLabel={req.reviewerLabel}
+                />
+              )}
             </div>
           ))}
         </div>

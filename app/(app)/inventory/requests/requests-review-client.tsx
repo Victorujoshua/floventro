@@ -51,8 +51,24 @@ function RequestReviewCard({ request }: { request: PendingRequest }) {
   const [error, setError] = useState<string | null>(null)
 
   async function handleDecision(decision: "approve" | "reject") {
-    setSubmitting(true)
     setError(null)
+
+    if (decision === "reject" && !note.trim()) {
+      setError("A note is required when rejecting — tell the requester why.")
+      return
+    }
+
+    if (decision === "approve") {
+      const isPartial = request.lines.some(
+        (l) => (qtys[l.id] ?? 0) < l.quantityRequested,
+      )
+      if (isPartial && !note.trim()) {
+        setError("A note is required when approving partial quantities — explain the shortfall.")
+        return
+      }
+    }
+
+    setSubmitting(true)
 
     const lines = request.lines.map((l) => ({
       lineId: l.id,
@@ -166,13 +182,21 @@ function RequestReviewCard({ request }: { request: PendingRequest }) {
             {error}
           </p>
         )}
-        <textarea
-          placeholder="Note to requester (optional)"
-          rows={2}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-violet-700 focus:border-violet-700 resize-none"
-        />
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-neutral-700">
+            Note to requester
+            <span className="ml-1 font-normal text-neutral-400">
+              — required when rejecting or approving partial quantities
+            </span>
+          </label>
+          <textarea
+            placeholder="They'll see this with the decision."
+            rows={2}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-violet-700 focus:border-violet-700 resize-none"
+          />
+        </div>
         <div className="flex items-center justify-end gap-3">
           <button
             onClick={() => handleDecision("reject")}
@@ -189,6 +213,91 @@ function RequestReviewCard({ request }: { request: PendingRequest }) {
             {submitting ? "Saving…" : "Approve"}
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function ReviewedRequestCard({ request }: { request: ReviewedRequest }) {
+  const isPartialOrRejected =
+    request.status === "partially_approved" || request.status === "rejected"
+  const noteClass = isPartialOrRejected
+    ? "border-l-2 border-amber-400 bg-amber-50 text-amber-800"
+    : "border-l-2 border-neutral-300 bg-neutral-50 text-neutral-700"
+
+  return (
+    <div className="bg-white rounded-2xl border border-neutral-200/60 overflow-hidden">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <StatusBadge status={request.status} />
+          <span className="text-sm font-medium text-neutral-950 truncate">
+            {request.requesterLabel || <span className="text-neutral-400">Unknown</span>}
+          </span>
+          {request.purpose && (
+            <span className="text-xs text-neutral-500 italic truncate hidden sm:inline">
+              &ldquo;{request.purpose}&rdquo;
+            </span>
+          )}
+        </div>
+        <span className="text-xs text-neutral-400 shrink-0">{formatDate(request.createdAt)}</span>
+      </div>
+
+      {/* Lines — compact */}
+      <table className="w-full text-sm">
+        <tbody className="divide-y divide-neutral-100">
+          {request.lines.map((line) => {
+            const isShort =
+              line.quantityApproved !== null &&
+              line.quantityApproved < line.quantityRequested
+            return (
+              <tr key={line.id} className="hover:bg-neutral-50/40 transition-colors">
+                <td className="px-5 py-2.5">
+                  <span className="text-neutral-950">{line.productName}</span>
+                  {line.productSku && (
+                    <span className="ml-1.5 text-xs text-neutral-400 font-mono">
+                      {line.productSku}
+                    </span>
+                  )}
+                </td>
+                <td className="px-5 py-2.5 text-right tabular-nums text-neutral-500 text-xs whitespace-nowrap">
+                  req {line.quantityRequested}
+                </td>
+                <td className="px-5 py-2.5 text-right tabular-nums whitespace-nowrap">
+                  {line.quantityApproved === null ? (
+                    <span className="text-neutral-400 text-xs">—</span>
+                  ) : isShort ? (
+                    <span className={`text-xs ${line.quantityApproved === 0 ? "text-red-600" : "text-amber-600"}`}>
+                      {line.quantityApproved} of {line.quantityRequested}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-green-700">{line.quantityApproved}</span>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+
+      {/* Reviewer attribution + note */}
+      <div className="px-5 py-3 border-t border-neutral-100 space-y-2">
+        <p className="text-xs text-neutral-500">
+          {request.reviewerLabel ? (
+            <>
+              Reviewed by{" "}
+              <span className="font-medium text-neutral-700">{request.reviewerLabel}</span>
+              {request.reviewedAt ? <> · {formatDate(request.reviewedAt)}</> : null}
+            </>
+          ) : request.reviewedAt ? (
+            <>Reviewed {formatDate(request.reviewedAt)}</>
+          ) : null}
+        </p>
+        {request.reviewNote && (
+          <blockquote className={`rounded-lg px-3 py-2 text-sm italic ${noteClass}`}>
+            {request.reviewNote}
+          </blockquote>
+        )}
       </div>
     </div>
   )
@@ -233,49 +342,10 @@ export function RequestsReviewClient({ pendingRequests, reviewedRequests }: Prop
       {reviewedRequests.length > 0 && (
         <div>
           <h2 className="text-base font-semibold text-neutral-950 mb-4">History</h2>
-          <div className="bg-white rounded-2xl border border-neutral-200/60 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-neutral-50 border-b border-neutral-100">
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">
-                    Date
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">
-                    Requester
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">
-                    Purpose
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">
-                    Lines
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {reviewedRequests.map((req) => (
-                  <tr key={req.id} className="hover:bg-neutral-50/60 transition-colors">
-                    <td className="px-5 py-3.5 text-neutral-500 text-xs">
-                      {formatDate(req.createdAt)}
-                    </td>
-                    <td className="px-5 py-3.5 text-neutral-950 font-medium">
-                      {req.requesterLabel || <span className="text-neutral-400">—</span>}
-                    </td>
-                    <td className="px-5 py-3.5 text-neutral-600 max-w-[200px] truncate">
-                      {req.purpose || <span className="text-neutral-400">—</span>}
-                    </td>
-                    <td className="px-5 py-3.5 text-neutral-500 tabular-nums">
-                      {req.lines.length} product{req.lines.length !== 1 ? "s" : ""}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <StatusBadge status={req.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-3">
+            {reviewedRequests.map((req) => (
+              <ReviewedRequestCard key={req.id} request={req} />
+            ))}
           </div>
         </div>
       )}
