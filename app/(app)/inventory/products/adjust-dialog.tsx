@@ -137,7 +137,7 @@ export function AdjustDialog({ product, resolvedBranchId, branches, open, onClos
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
-      <DialogContent className="rounded-2xl max-w-md">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Adjust stock</DialogTitle>
         </DialogHeader>

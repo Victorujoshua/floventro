@@ -231,7 +231,7 @@ export function ProductsClient({ products, resolvedBranchId, branches }: Props) 
         open={dialogState?.type === "create" || dialogState?.type === "edit"}
         onOpenChange={(open) => { if (!open) setDialogState(null) }}
       >
-        <DialogContent className="rounded-xl max-w-lg">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>
               {dialogState?.type === "create" ? "New product" : "Edit product"}
@@ -261,7 +261,7 @@ export function ProductsClient({ products, resolvedBranchId, branches }: Props) 
         open={dialogState?.type === "delete"}
         onOpenChange={(open) => { if (!open) setDialogState(null) }}
       >
-        <DialogContent className="rounded-xl max-w-sm">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete product?</DialogTitle>
           </DialogHeader>

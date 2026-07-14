@@ -459,7 +459,7 @@ export function InvoicesClient({ invoices }: { invoices: InvoiceRow[] }) {
         open={payModal !== null}
         onOpenChange={(open: boolean) => { if (!open) setPayModal(null) }}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Record payment</DialogTitle>
             {payModal && (
@@ -484,7 +484,7 @@ export function InvoicesClient({ invoices }: { invoices: InvoiceRow[] }) {
         open={histModal !== null}
         onOpenChange={(open: boolean) => { if (!open) setHistModal(null) }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Payment history</DialogTitle>
             {histModal && (

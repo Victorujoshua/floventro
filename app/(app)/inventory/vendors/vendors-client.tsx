@@ -239,7 +239,7 @@ export function VendorsClient({ vendors, branches }: Props) {
           if (!open) setDialogState(null)
         }}
       >
-        <DialogContent className="rounded-xl max-w-2xl">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>
               {dialogState?.type === "create" ? "New vendor" : "Edit vendor"}
@@ -276,7 +276,7 @@ export function VendorsClient({ vendors, branches }: Props) {
           if (!open) setDialogState(null)
         }}
       >
-        <DialogContent className="rounded-xl max-w-sm">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete vendor?</DialogTitle>
           </DialogHeader>

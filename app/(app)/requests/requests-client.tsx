@@ -307,7 +307,7 @@ export function RequestsClient({ myRequests, products, resolvedBranchId, branche
 
       {/* New request dialog */}
       <Dialog open={isOpen} onOpenChange={(open) => { if (!open) setIsOpen(false) }}>
-        <DialogContent className="rounded-2xl max-w-xl">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>New stock request</DialogTitle>
           </DialogHeader>

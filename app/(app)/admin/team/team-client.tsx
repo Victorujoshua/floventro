@@ -294,7 +294,7 @@ export function TeamClient({ orgName, members, invites, branches }: Props) {
 
       {/* Invite dialog */}
       <Dialog open={isOpen} onOpenChange={(open) => { if (!open) closeDialog() }}>
-        <DialogContent className="rounded-2xl max-w-md">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>
               {successData ? "Invite created" : "Invite a team member"}
