@@ -27,12 +27,12 @@ const ROLE_PRIORITY: Record<Role, number> = {
  * Returns null if unauthenticated or if the user has no memberships.
  */
 export async function getCurrentScope(): Promise<Scope | null> {
+  try {
   const supabase = await createAppServerClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return null
+  const { data: scopeData, error: scopeUserError } = await supabase.auth.getUser()
+  if (scopeUserError || !scopeData?.user) return null
+  const user = scopeData.user
 
   const { data: memberships } = await supabase
     .from("memberships")
@@ -78,6 +78,10 @@ export async function getCurrentScope(): Promise<Scope | null> {
     organisationId: first.organisation_id,
     branchId: first.branch_id,
     role: first.role as Role,
+  }
+  } catch (err) {
+    console.error("[getCurrentScope] failed:", err instanceof Error ? err.stack : JSON.stringify(err))
+    return null
   }
 }
 

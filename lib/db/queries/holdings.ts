@@ -62,8 +62,14 @@ export async function getMyHoldings(): Promise<MyHolding[]> {
   if (!scope) return []
 
   const supabase = await createAppServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return []
+  console.log("[getMyHoldings] before getUser")
+  const { data: authData, error: userError } = await supabase.auth.getUser()
+  console.log("[getMyHoldings] after getUser, user=", !!authData?.user)
+  if (userError || !authData?.user) {
+    console.error("[getMyHoldings] auth.getUser failed or no user", userError)
+    return []
+  }
+  const user = authData.user
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)

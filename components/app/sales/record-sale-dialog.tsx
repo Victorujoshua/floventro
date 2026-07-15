@@ -89,7 +89,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
       .catch((err: unknown) => {
         if (cancelled) return
         console.error("holdings load failed", err)
-        setHoldingsError("Could not load your holding. Please try again.")
+        setHoldingsError("Could not load your holding: " + ((err as Error)?.message ?? "unknown"))
       })
       .finally(() => {
         if (!cancelled) setLoadingHoldings(false)
@@ -162,7 +162,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
                       .then((h) => { setHoldings(h) })
                       .catch((err: unknown) => {
                         console.error("holdings retry failed", err)
-                        setHoldingsError("Could not load your holding. Please try again.")
+                        setHoldingsError("Could not load your holding: " + ((err as Error)?.message ?? "unknown"))
                       })
                       .finally(() => setLoadingHoldings(false))
                   }}
