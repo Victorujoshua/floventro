@@ -37,6 +37,7 @@ function todayLocal() {
 export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProductId }: Props) {
   const [holdings, setHoldings] = useState<MyHolding[]>([])
   const [loadingHoldings, setLoadingHoldings] = useState(false)
+  const [holdingsError, setHoldingsError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
   const {
@@ -70,19 +71,30 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
 
   useEffect(() => {
     if (!open) return
+    let cancelled = false
     setLoadingHoldings(true)
-    getMyHoldingsAction().then((h) => {
-      setHoldings(h)
-      setLoadingHoldings(false)
-
-      if (initialProductId) {
-        const holding = h.find((x) => x.productId === initialProductId)
-        if (holding) {
-          setValue("lines.0.productId", holding.productId)
-          setValue("lines.0.unitPriceNaira", holding.defaultPriceCents != null ? holding.defaultPriceCents / 100 : 0)
+    setHoldingsError(null)
+    getMyHoldingsAction()
+      .then((h) => {
+        if (cancelled) return
+        setHoldings(h)
+        if (initialProductId) {
+          const holding = h.find((x) => x.productId === initialProductId)
+          if (holding) {
+            setValue("lines.0.productId", holding.productId)
+            setValue("lines.0.unitPriceNaira", holding.defaultPriceCents != null ? holding.defaultPriceCents / 100 : 0)
+          }
         }
-      }
-    })
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        console.error("holdings load failed", err)
+        setHoldingsError("Could not load your holding. Please try again.")
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingHoldings(false)
+      })
+    return () => { cancelled = true }
   }, [open, initialProductId, setValue])
 
   function handleClose() {
@@ -94,6 +106,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
       lines: [{ productId: initialProductId ?? "", quantity: 1, unitPriceNaira: 0 }],
     })
     setSubmitError(null)
+    setHoldingsError(null)
     onOpenChange(false)
   }
 
@@ -137,6 +150,27 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
             <Label>Products sold</Label>
             {loadingHoldings ? (
               <p className="text-sm text-neutral-500">Loading your holding…</p>
+            ) : holdingsError ? (
+              <div className="space-y-2">
+                <p className="text-sm text-red-600">{holdingsError}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHoldingsError(null)
+                    setLoadingHoldings(true)
+                    getMyHoldingsAction()
+                      .then((h) => { setHoldings(h) })
+                      .catch((err: unknown) => {
+                        console.error("holdings retry failed", err)
+                        setHoldingsError("Could not load your holding. Please try again.")
+                      })
+                      .finally(() => setLoadingHoldings(false))
+                  }}
+                  className="text-sm text-violet-700 hover:text-violet-800 underline underline-offset-2"
+                >
+                  Retry
+                </button>
+              </div>
             ) : holdings.length === 0 ? (
               <p className="text-sm text-neutral-500">You have no stock in your holding to sell.</p>
             ) : (
@@ -300,7 +334,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
           <Button
             type="submit"
             form=""
-            disabled={isSubmitting || holdings.length === 0}
+            disabled={isSubmitting || loadingHoldings || !!holdingsError || holdings.length === 0}
             onClick={handleSubmit(onSubmit)}
             className="bg-violet-700 hover:bg-violet-800 text-white rounded-md"
           >
