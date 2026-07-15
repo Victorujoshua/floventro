@@ -38,6 +38,7 @@ type Product = {
   description: string | null
   reorder_point: number
   unit_cost_cents: number | null
+  default_price_cents: number | null
   stock: number
   hasHistory: boolean
   created_at: string
@@ -249,6 +250,9 @@ export function ProductsClient({ products, resolvedBranchId, branches }: Props) 
                 name: dialogState.product.name,
                 description: dialogState.product.description ?? "",
                 reorderPoint: dialogState.product.reorder_point,
+                defaultPriceNaira: dialogState.product.default_price_cents != null
+                  ? dialogState.product.default_price_cents / 100
+                  : undefined,
               }}
               onSuccess={handleSuccess}
             />

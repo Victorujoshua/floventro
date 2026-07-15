@@ -27,7 +27,9 @@ export async function createProductAction(
       name: parsed.data.name,
       description: parsed.data.description || null,
       reorder_point: parsed.data.reorderPoint,
-    })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      default_price_cents: parsed.data.defaultPriceNaira != null ? Math.round(parsed.data.defaultPriceNaira * 100) : null,
+    } as any)
     .select("id")
     .single()
 
@@ -60,7 +62,9 @@ export async function updateProductAction(
       name: parsed.data.name,
       description: parsed.data.description || null,
       reorder_point: parsed.data.reorderPoint,
-    })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      default_price_cents: parsed.data.defaultPriceNaira != null ? Math.round(parsed.data.defaultPriceNaira * 100) : null,
+    } as any)
     .eq("id", id)
     .eq("organisation_id", scope.organisationId)
     .is("deleted_at", null)

@@ -30,6 +30,7 @@ export function ProductForm({ mode, initialData, onSuccess }: Props) {
           name: initialData.name,
           description: initialData.description ?? "",
           reorderPoint: initialData.reorderPoint,
+          defaultPriceNaira: initialData.defaultPriceNaira,
         }
       : { reorderPoint: 0 },
   })
@@ -97,6 +98,30 @@ export function ProductForm({ mode, initialData, onSuccess }: Props) {
         {errors.description && (
           <p className="text-xs text-red-500">{errors.description.message}</p>
         )}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="defaultPriceNaira">
+          Default selling price (
+          <span className="font-inter">₦</span>)
+          <span className="text-neutral-400 font-normal ml-1">(optional)</span>
+        </Label>
+        <Input
+          id="defaultPriceNaira"
+          type="number"
+          min={0}
+          step="0.01"
+          placeholder="e.g. 2500"
+          {...register("defaultPriceNaira", {
+            setValueAs: (v) => (v === "" || v === undefined ? undefined : parseFloat(v)),
+          })}
+        />
+        {errors.defaultPriceNaira && (
+          <p className="text-xs text-red-500">{errors.defaultPriceNaira.message}</p>
+        )}
+        <p className="text-xs text-neutral-400">
+          Pre-fills when selling this product. Editable at the point of sale. Leave blank if this product isn&apos;t sold.
+        </p>
       </div>
 
       <div className="flex justify-end pt-2">

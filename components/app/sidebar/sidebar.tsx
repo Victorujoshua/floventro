@@ -13,6 +13,9 @@ import {
   LogOut,
   ClipboardList,
   ClipboardCheck,
+  ShoppingCart,
+  Wallet,
+  Layers,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Role } from "@/lib/auth/scope"
@@ -32,6 +35,8 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "Invoices",        href: "/inventory/invoices",     icon: FileText },
     { label: "Requests",        href: "/requests",               icon: ClipboardList },
     { label: "Stock requests",  href: "/inventory/requests",     icon: ClipboardCheck },
+    { label: "My Holding",      href: "/holding",                icon: Wallet },
+    { label: "Sales",           href: "/sales",                  icon: ShoppingCart },
   ],
   inventory: [
     { label: "Dashboard",       href: "/dashboard",              icon: LayoutDashboard },
@@ -40,21 +45,35 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "Invoices",        href: "/inventory/invoices",     icon: FileText },
     { label: "Requests",        href: "/requests",               icon: ClipboardList },
     { label: "Stock requests",  href: "/inventory/requests",     icon: ClipboardCheck },
+    { label: "My Holding",      href: "/holding",                icon: Wallet },
+    { label: "Sales",           href: "/sales",                  icon: ShoppingCart },
   ],
-  sales:        [
-    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { label: "Requests",  href: "/requests",  icon: ClipboardList },
+  sales: [
+    { label: "Dashboard",  href: "/dashboard", icon: LayoutDashboard },
+    { label: "Requests",   href: "/requests",  icon: ClipboardList },
+    { label: "My Holding", href: "/holding",   icon: Wallet },
+    { label: "Sales",      href: "/sales",     icon: ShoppingCart },
   ],
   internal_use: [
-    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { label: "Requests",  href: "/requests",  icon: ClipboardList },
+    { label: "Dashboard",  href: "/dashboard", icon: LayoutDashboard },
+    { label: "Requests",   href: "/requests",  icon: ClipboardList },
+    { label: "My Holding", href: "/holding",   icon: Wallet },
+    { label: "Sales",      href: "/sales",     icon: ShoppingCart },
   ],
 }
 
-const MANAGEMENT_MENU: NavItem[] = [
-  { label: "Team", href: "/admin/team", icon: Users },
-  { label: "Settings", href: "/admin/settings", icon: SettingsIcon },
-]
+const MANAGEMENT_MENU: Record<Role, NavItem[]> = {
+  owner:        [
+    { label: "Team",           href: "/admin/team",             icon: Users },
+    { label: "Settings",       href: "/admin/settings",         icon: SettingsIcon },
+    { label: "Staff holdings", href: "/inventory/holdings",     icon: Layers },
+  ],
+  inventory:    [
+    { label: "Staff holdings", href: "/inventory/holdings",     icon: Layers },
+  ],
+  sales:        [],
+  internal_use: [],
+}
 
 function NavBadge({ count }: { count: number }) {
   if (count === 0) return null
@@ -106,7 +125,8 @@ export function Sidebar({ role, pastDueCount, pendingRequestsCount }: Props) {
     if (item.href === "/inventory/requests") return { ...item, badge: pendingRequestsCount }
     return item
   })
-  const showManagement = role === "owner"
+  const managementItems = MANAGEMENT_MENU[role] ?? []
+  const showManagement = managementItems.length > 0
 
   return (
     <aside className="fixed left-0 top-0 z-30 flex h-screen w-60 flex-col border-r border-neutral-200 bg-white">
@@ -143,7 +163,7 @@ export function Sidebar({ role, pastDueCount, pendingRequestsCount }: Props) {
               Management
             </p>
             <div className="space-y-0.5">
-              {MANAGEMENT_MENU.map((item) => (
+              {managementItems.map((item) => (
                 <NavLink
                   key={item.href}
                   item={item}
