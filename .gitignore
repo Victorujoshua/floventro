@@ -55,3 +55,9 @@ dev-err.log
 /.agents/
 /skills-lock.json
 /.claude/
+
+# throwaway investigation / scratch scripts
+_db_investigate.cjs
+*.investigate.cjs
+*.investigate.mjs
+*.investigate.ts
