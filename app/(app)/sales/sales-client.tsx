@@ -19,12 +19,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { RecordSaleDialog } from "@/components/app/sales/record-sale-dialog"
-import { getSaleById, type SaleRow, type SaleDetail } from "@/lib/db/queries/sales"
+import type { SaleRow, SaleDetail } from "@/lib/db/queries/sales"
 import { formatNaira } from "@/lib/format/money"
-
-// getSaleById is a server-only query — wrap as a server action in the action file.
-// Here we fetch the detail directly via a server action defined inline via import.
-// Because this is a client component, we import the server action wrapper.
 import { getSaleDetailAction } from "@/lib/db/actions/sales"
 
 type Props = {
