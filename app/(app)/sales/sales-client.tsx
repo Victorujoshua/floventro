@@ -1,4 +1,5 @@
 "use client"
+// cache-bust: force fresh chunk after stale SaleDetail bundle
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
