@@ -95,7 +95,7 @@ export default async function ProductHistoryPage({ params }: Props) {
                   Change
                 </th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wide">
-                  Balance
+                  Branch balance
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wide">
                   By
@@ -112,7 +112,12 @@ export default async function ProductHistoryPage({ params }: Props) {
                     {formatDate(row.createdAt)}
                   </td>
                   <td className="px-4 py-3.5 text-neutral-950">
-                    {row.movementLabel}
+                    <span>{row.movementLabel}</span>
+                    {row.isHolding && (
+                      <span className="ml-2 inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium bg-neutral-100 text-neutral-500">
+                        holding
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3.5 text-right font-mono tabular-nums whitespace-nowrap">
                     <span
@@ -128,8 +133,12 @@ export default async function ProductHistoryPage({ params }: Props) {
                       {row.quantityDelta}
                     </span>
                   </td>
-                  <td className="px-4 py-3.5 text-right font-mono tabular-nums text-neutral-950 whitespace-nowrap">
-                    {row.balance}
+                  <td className="px-4 py-3.5 text-right font-mono tabular-nums whitespace-nowrap">
+                    {row.branchBalance !== null ? (
+                      <span className="text-neutral-950">{row.branchBalance}</span>
+                    ) : (
+                      <span className="text-neutral-300">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3.5 text-neutral-500 text-xs">
                     {row.createdByLabel || "—"}
