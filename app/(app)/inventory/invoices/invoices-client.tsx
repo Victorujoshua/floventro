@@ -16,8 +16,8 @@ import {
 import {
   recordPaymentAction,
   getInvoicePaymentsAction,
-  type InvoicePayment,
 } from "@/lib/db/actions/payments"
+import type { InvoicePayment } from "@/lib/db/queries/payments"
 import {
   Table,
   TableBody,

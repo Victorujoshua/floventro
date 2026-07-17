@@ -7,7 +7,8 @@ import { toast } from "sonner"
 import { Plus, Trash2 } from "lucide-react"
 import { saleSchema, type SaleInput } from "@/lib/validation/sales"
 import { recordSaleAction } from "@/lib/db/actions/sales"
-import { getMyHoldingsAction, type MyHolding } from "@/lib/db/actions/holdings"
+import { getMyHoldingsAction } from "@/lib/db/actions/holdings"
+import type { MyHolding } from "@/lib/db/queries/holdings"
 import { formatNaira } from "@/lib/format/money"
 import {
   Dialog,

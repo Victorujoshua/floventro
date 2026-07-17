@@ -1,3 +1,4 @@
+import "server-only"
 import { createAppServerClient, createAppServiceRoleClient } from "@/lib/supabase/app-server"
 import { getCurrentScope } from "@/lib/auth/scope"
 

@@ -6,8 +6,6 @@ import { paymentSchema, type PaymentInput } from "@/lib/validation/payments"
 import { formatNaira } from "@/lib/format/money"
 import { getInvoicePayments } from "@/lib/db/queries/payments"
 
-export type { InvoicePayment } from "@/lib/db/queries/payments"
-
 type ActionResult<T = null> =
   | { ok: true; data: T }
   | { ok: false; error: string; message?: string }

@@ -1,8 +1,7 @@
 "use server"
 
-import { getMyHoldings, type MyHolding } from "@/lib/db/queries/holdings"
-
-export type { MyHolding }
+import { getMyHoldings } from "@/lib/db/queries/holdings"
+import type { MyHolding } from "@/lib/db/queries/holdings"
 
 export async function getMyHoldingsAction(): Promise<MyHolding[]> {
   try {

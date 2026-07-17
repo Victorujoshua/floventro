@@ -1,3 +1,4 @@
+import "server-only"
 import { createAppServiceRoleClient } from "@/lib/supabase/app-server"
 
 export type InviteStatus = "valid" | "not_found" | "used" | "expired"
