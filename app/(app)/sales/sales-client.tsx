@@ -24,6 +24,14 @@ import type { SaleRow, SaleDetail } from "@/lib/db/queries/sales"
 import { formatNaira } from "@/lib/format/money"
 import { getSaleDetailAction } from "@/lib/db/actions/sales"
 
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "Cash",
+  pos: "POS",
+  bank_transfer: "Bank transfer",
+  cheque: "Cheque",
+  other: "Other",
+}
+
 type Props = {
   sales: SaleRow[]
 }
@@ -92,6 +100,7 @@ export function SalesClient({ sales }: Props) {
                 <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Date</TableHead>
                 <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Seller</TableHead>
                 <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Customer</TableHead>
+                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Method</TableHead>
                 <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">Items</TableHead>
                 <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">Total</TableHead>
               </TableRow>
@@ -111,6 +120,11 @@ export function SalesClient({ sales }: Props) {
                   </TableCell>
                   <TableCell className="text-sm text-neutral-500 py-3.5">
                     {sale.customerName ?? <span className="text-neutral-300">—</span>}
+                  </TableCell>
+                  <TableCell className="text-sm text-neutral-500 py-3.5">
+                    {sale.paymentMethod
+                      ? PAYMENT_METHOD_LABELS[sale.paymentMethod] ?? sale.paymentMethod
+                      : <span className="text-neutral-300">—</span>}
                   </TableCell>
                   <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3.5 text-right">
                     {sale.lineCount}
@@ -156,6 +170,14 @@ export function SalesClient({ sales }: Props) {
                   <div className="flex justify-between text-sm">
                     <span className="text-neutral-500">Phone</span>
                     <span className="text-neutral-950 font-mono tabular-nums">{detailSale.customerPhone}</span>
+                  </div>
+                )}
+                {detailSale.paymentMethod && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-neutral-500">Payment method</span>
+                    <span className="text-neutral-950">
+                      {PAYMENT_METHOD_LABELS[detailSale.paymentMethod] ?? detailSale.paymentMethod}
+                    </span>
                   </div>
                 )}
                 {detailSale.note && (

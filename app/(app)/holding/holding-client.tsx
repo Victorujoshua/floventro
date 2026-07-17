@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ShoppingCart, Wallet } from "lucide-react"
+import { ShoppingCart, Wallet, Sparkles } from "lucide-react"
 import Link from "next/link"
 import {
   Table,
@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { RecordSaleDialog } from "@/components/app/sales/record-sale-dialog"
+import { RecordServiceDialog } from "@/components/app/dialogs/record-service-dialog"
 import type { MyHolding } from "@/lib/db/queries/holdings"
 
 type Props = {
@@ -23,10 +24,17 @@ export function HoldingClient({ holdings }: Props) {
   const router = useRouter()
   const [sellProductId, setSellProductId] = useState<string | undefined>(undefined)
   const [saleOpen, setSaleOpen] = useState(false)
+  const [serviceProductId, setServiceProductId] = useState<string | undefined>(undefined)
+  const [serviceOpen, setServiceOpen] = useState(false)
 
   function openSell(productId?: string) {
     setSellProductId(productId)
     setSaleOpen(true)
+  }
+
+  function openService(productId?: string) {
+    setServiceProductId(productId)
+    setServiceOpen(true)
   }
 
   return (
@@ -38,13 +46,22 @@ export function HoldingClient({ holdings }: Props) {
           <p className="text-sm text-neutral-500 mt-1">Stock issued to you that you can sell or use</p>
         </div>
         {holdings.length > 0 && (
-          <button
-            onClick={() => openSell(undefined)}
-            className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
-          >
-            <ShoppingCart className="h-4 w-4" />
-            New sale
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => openService(undefined)}
+              className="inline-flex items-center gap-2 rounded-md border border-neutral-300 px-4 h-10 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+            >
+              <Sparkles className="h-4 w-4" />
+              Record service
+            </button>
+            <button
+              onClick={() => openSell(undefined)}
+              className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              New sale
+            </button>
+          </div>
         )}
       </div>
 
@@ -90,13 +107,22 @@ export function HoldingClient({ holdings }: Props) {
                     {h.quantity}
                   </TableCell>
                   <TableCell className="py-3.5 text-right">
-                    <button
-                      onClick={() => openSell(h.productId)}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-violet-50 px-3 h-7 text-xs font-medium text-violet-700 hover:bg-violet-100 transition-colors"
-                    >
-                      <ShoppingCart className="h-3 w-3" />
-                      Sell
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => openService(h.productId)}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-neutral-100 px-3 h-7 text-xs font-medium text-neutral-700 hover:bg-neutral-200 transition-colors"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        Service
+                      </button>
+                      <button
+                        onClick={() => openSell(h.productId)}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-violet-50 px-3 h-7 text-xs font-medium text-violet-700 hover:bg-violet-100 transition-colors"
+                      >
+                        <ShoppingCart className="h-3 w-3" />
+                        Sell
+                      </button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -110,6 +136,13 @@ export function HoldingClient({ holdings }: Props) {
         onOpenChange={(o) => { if (!o) { setSaleOpen(false); setSellProductId(undefined) } }}
         onSuccess={() => router.refresh()}
         initialProductId={sellProductId}
+      />
+
+      <RecordServiceDialog
+        open={serviceOpen}
+        onOpenChange={(o) => { if (!o) { setServiceOpen(false); setServiceProductId(undefined) } }}
+        onSuccess={() => router.refresh()}
+        initialProductId={serviceProductId}
       />
     </div>
   )

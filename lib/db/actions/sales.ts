@@ -53,6 +53,7 @@ export async function recordSaleAction(input: SaleInput): Promise<ActionResult<{
     p_customer_phone: parsed.data.customerPhone || null,
     p_sold_on: parsed.data.soldOn,
     p_note: parsed.data.note || null,
+    p_payment_method: parsed.data.paymentMethod || null,
     p_lines: pLines,
   })
 

@@ -11,6 +11,7 @@ export const saleSchema = z.object({
   customerPhone: z.string().max(40).optional().or(z.literal("")),
   soldOn: z.string().min(1, "Date is required"),
   note: z.string().max(500).optional().or(z.literal("")),
+  paymentMethod: z.enum(["cash", "pos", "bank_transfer", "cheque", "other"]).optional(),
   lines: z.array(saleLineSchema).min(1, "Add at least one product"),
 })
 

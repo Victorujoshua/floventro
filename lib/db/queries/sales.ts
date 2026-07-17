@@ -9,6 +9,7 @@ export type SaleRow = {
   sellerLabel: string
   customerName: string | null
   customerPhone: string | null
+  paymentMethod: string | null
   totalCents: number
   lineCount: number
   createdAt: string
@@ -35,6 +36,7 @@ type RawSaleRow = {
   seller_user_id: string
   customer_name: string | null
   customer_phone: string | null
+  payment_method: string | null
   total_cents: number
   created_at: string
   sale_lines: { count: number }[]
@@ -55,6 +57,7 @@ type RawSaleDetail = {
   seller_user_id: string
   customer_name: string | null
   customer_phone: string | null
+  payment_method: string | null
   total_cents: number
   note: string | null
   created_at: string
@@ -90,7 +93,7 @@ export async function getSales(): Promise<SaleRow[]> {
 
   const { data, error } = await supabase
     .from("sales")
-    .select("id, sold_on, seller_user_id, customer_name, customer_phone, total_cents, created_at, sale_lines(count)")
+    .select("id, sold_on, seller_user_id, customer_name, customer_phone, payment_method, total_cents, created_at, sale_lines(count)")
     .order("created_at", { ascending: false })
     .limit(100)
 
@@ -107,6 +110,7 @@ export async function getSales(): Promise<SaleRow[]> {
     sellerLabel: sellerMap.get(row.seller_user_id) ?? row.seller_user_id,
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
+    paymentMethod: row.payment_method,
     totalCents: row.total_cents,
     lineCount: (row.sale_lines as unknown as { count: number }[])?.[0]?.count ?? row.sale_lines?.length ?? 0,
     createdAt: row.created_at,
@@ -122,7 +126,7 @@ export async function getSaleById(id: string): Promise<SaleDetail | null> {
 
   const { data, error } = await supabase
     .from("sales")
-    .select("id, sold_on, seller_user_id, customer_name, customer_phone, total_cents, note, created_at, sale_lines(id, product_id, quantity, unit_price_cents, line_total_cents, products(name, sku))")
+    .select("id, sold_on, seller_user_id, customer_name, customer_phone, payment_method, total_cents, note, created_at, sale_lines(id, product_id, quantity, unit_price_cents, line_total_cents, products(name, sku))")
     .eq("id", id)
     .single()
 
@@ -138,6 +142,7 @@ export async function getSaleById(id: string): Promise<SaleDetail | null> {
     sellerLabel: sellerMap.get(row.seller_user_id) ?? row.seller_user_id,
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
+    paymentMethod: row.payment_method,
     totalCents: row.total_cents,
     note: row.note,
     lineCount: row.sale_lines.length,

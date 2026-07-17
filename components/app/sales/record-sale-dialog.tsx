@@ -31,6 +31,14 @@ type Props = {
 const SELECT_CLASS =
   "flex h-9 w-full rounded-md border border-neutral-300 bg-white px-3 py-1 text-sm text-neutral-950 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-700 focus:border-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
 
+const PAYMENT_METHODS = [
+  { value: "cash",          label: "Cash" },
+  { value: "pos",           label: "POS" },
+  { value: "bank_transfer", label: "Bank transfer" },
+  { value: "cheque",        label: "Cheque" },
+  { value: "other",         label: "Other" },
+]
+
 function todayLocal() {
   return new Date().toLocaleDateString("en-CA")
 }
@@ -56,6 +64,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
       customerPhone: "",
       soldOn: todayLocal(),
       note: "",
+      paymentMethod: undefined,
       lines: [{ productId: initialProductId ?? "", quantity: 1, unitPriceNaira: 0 }],
     },
   })
@@ -104,6 +113,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
       customerPhone: "",
       soldOn: todayLocal(),
       note: "",
+      paymentMethod: undefined,
       lines: [{ productId: initialProductId ?? "", quantity: 1, unitPriceNaira: 0 }],
     })
     setSubmitError(null)
@@ -184,7 +194,6 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
 
                 return (
                   <div key={field.id} className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 space-y-3">
-                    {/* Product select */}
                     <div className="space-y-1.5">
                       <Label htmlFor={`lines.${index}.productId`} className="text-xs">Product</Label>
                       <select
@@ -206,7 +215,6 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
                       )}
                     </div>
 
-                    {/* Quantity + Price */}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <Label htmlFor={`qty-${index}`} className="text-xs">Quantity</Label>
@@ -242,7 +250,6 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
                       </div>
                     </div>
 
-                    {/* Line total + remove */}
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-neutral-500">
                         Line total:{" "}
@@ -299,16 +306,29 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
             </div>
           </div>
 
-          {/* Date */}
-          <div className="space-y-1.5">
-            <Label htmlFor="soldOn">Sale date</Label>
-            <Input id="soldOn" type="date" {...register("soldOn")} />
-            {isFutureDate && (
-              <p className="text-xs text-amber-600">This date is in the future.</p>
-            )}
-            {errors.soldOn && (
-              <p className="text-xs text-red-500">{errors.soldOn.message}</p>
-            )}
+          {/* Date + Payment method */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="soldOn">Sale date</Label>
+              <Input id="soldOn" type="date" {...register("soldOn")} />
+              {isFutureDate && (
+                <p className="text-xs text-amber-600">This date is in the future.</p>
+              )}
+              {errors.soldOn && (
+                <p className="text-xs text-red-500">{errors.soldOn.message}</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="paymentMethod">
+                Payment method <span className="text-neutral-400 font-normal">(optional)</span>
+              </Label>
+              <select id="paymentMethod" className={SELECT_CLASS} {...register("paymentMethod")}>
+                <option value="">Select…</option>
+                {PAYMENT_METHODS.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Note */}
@@ -317,7 +337,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
             <textarea
               id="note"
               rows={2}
-              placeholder="e.g. payment via transfer"
+              placeholder="e.g. discount applied"
               className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-violet-700 focus:border-violet-700 resize-none"
               {...register("note")}
             />

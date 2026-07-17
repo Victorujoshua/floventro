@@ -16,6 +16,7 @@ import {
   ShoppingCart,
   Wallet,
   Layers,
+  Sparkles,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Role } from "@/lib/auth/scope"
@@ -29,47 +30,53 @@ type NavItem = {
 
 const MAIN_MENU: Record<Role, NavItem[]> = {
   owner: [
-    { label: "Dashboard",       href: "/dashboard",              icon: LayoutDashboard },
-    { label: "Products",        href: "/inventory/products",     icon: Package },
-    { label: "Vendors",         href: "/inventory/vendors",      icon: Truck },
-    { label: "Invoices",        href: "/inventory/invoices",     icon: FileText },
-    { label: "Requests",        href: "/requests",               icon: ClipboardList },
-    { label: "Stock requests",  href: "/inventory/requests",     icon: ClipboardCheck },
-    { label: "My Holding",      href: "/holding",                icon: Wallet },
-    { label: "Sales",           href: "/sales",                  icon: ShoppingCart },
+    { label: "Dashboard",          href: "/dashboard",              icon: LayoutDashboard },
+    { label: "Products",           href: "/inventory/products",     icon: Package },
+    { label: "Vendors",            href: "/inventory/vendors",      icon: Truck },
+    { label: "Invoices",           href: "/inventory/invoices",     icon: FileText },
+    { label: "Requests",           href: "/requests",               icon: ClipboardList },
+    { label: "Stock requests",     href: "/inventory/requests",     icon: ClipboardCheck },
+    { label: "My Holding",         href: "/holding",                icon: Wallet },
+    { label: "Sales",              href: "/sales",                  icon: ShoppingCart },
+    { label: "Services performed", href: "/services-performed",     icon: Sparkles },
   ],
   inventory: [
-    { label: "Dashboard",       href: "/dashboard",              icon: LayoutDashboard },
-    { label: "Products",        href: "/inventory/products",     icon: Package },
-    { label: "Vendors",         href: "/inventory/vendors",      icon: Truck },
-    { label: "Invoices",        href: "/inventory/invoices",     icon: FileText },
-    { label: "Requests",        href: "/requests",               icon: ClipboardList },
-    { label: "Stock requests",  href: "/inventory/requests",     icon: ClipboardCheck },
-    { label: "My Holding",      href: "/holding",                icon: Wallet },
-    { label: "Sales",           href: "/sales",                  icon: ShoppingCart },
+    { label: "Dashboard",          href: "/dashboard",              icon: LayoutDashboard },
+    { label: "Products",           href: "/inventory/products",     icon: Package },
+    { label: "Vendors",            href: "/inventory/vendors",      icon: Truck },
+    { label: "Invoices",           href: "/inventory/invoices",     icon: FileText },
+    { label: "Requests",           href: "/requests",               icon: ClipboardList },
+    { label: "Stock requests",     href: "/inventory/requests",     icon: ClipboardCheck },
+    { label: "My Holding",         href: "/holding",                icon: Wallet },
+    { label: "Sales",              href: "/sales",                  icon: ShoppingCart },
+    { label: "Services performed", href: "/services-performed",     icon: Sparkles },
   ],
   sales: [
-    { label: "Dashboard",  href: "/dashboard", icon: LayoutDashboard },
-    { label: "Requests",   href: "/requests",  icon: ClipboardList },
-    { label: "My Holding", href: "/holding",   icon: Wallet },
-    { label: "Sales",      href: "/sales",     icon: ShoppingCart },
+    { label: "Dashboard",          href: "/dashboard",          icon: LayoutDashboard },
+    { label: "Requests",           href: "/requests",           icon: ClipboardList },
+    { label: "My Holding",         href: "/holding",            icon: Wallet },
+    { label: "Sales",              href: "/sales",              icon: ShoppingCart },
+    { label: "Services performed", href: "/services-performed", icon: Sparkles },
   ],
   internal_use: [
-    { label: "Dashboard",  href: "/dashboard", icon: LayoutDashboard },
-    { label: "Requests",   href: "/requests",  icon: ClipboardList },
-    { label: "My Holding", href: "/holding",   icon: Wallet },
-    { label: "Sales",      href: "/sales",     icon: ShoppingCart },
+    { label: "Dashboard",          href: "/dashboard",          icon: LayoutDashboard },
+    { label: "Requests",           href: "/requests",           icon: ClipboardList },
+    { label: "My Holding",         href: "/holding",            icon: Wallet },
+    { label: "Sales",              href: "/sales",              icon: ShoppingCart },
+    { label: "Services performed", href: "/services-performed", icon: Sparkles },
   ],
 }
 
 const MANAGEMENT_MENU: Record<Role, NavItem[]> = {
-  owner:        [
+  owner: [
     { label: "Team",           href: "/admin/team",             icon: Users },
     { label: "Settings",       href: "/admin/settings",         icon: SettingsIcon },
     { label: "Staff holdings", href: "/inventory/holdings",     icon: Layers },
+    { label: "Services",       href: "/inventory/services",     icon: Sparkles },
   ],
-  inventory:    [
+  inventory: [
     { label: "Staff holdings", href: "/inventory/holdings",     icon: Layers },
+    { label: "Services",       href: "/inventory/services",     icon: Sparkles },
   ],
   sales:        [],
   internal_use: [],
