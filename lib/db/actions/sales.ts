@@ -3,9 +3,8 @@
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { requireScope } from "@/lib/auth/guards"
 import { saleSchema, type SaleInput } from "@/lib/validation/sales"
-import { getSaleById, type SaleDetail } from "@/lib/db/queries/sales"
-
-export type { SaleDetail }
+import { getSaleById } from "@/lib/db/queries/sales"
+import type { SaleDetail } from "@/lib/db/queries/sales"
 
 export async function getSaleDetailAction(id: string): Promise<SaleDetail | null> {
   await requireScope()
