@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ShoppingCart, Wallet, Sparkles } from "lucide-react"
+import { ShoppingCart, Wallet, Sparkles, Undo2 } from "lucide-react"
 import Link from "next/link"
 import {
   Table,
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table"
 import { RecordSaleDialog } from "@/components/app/sales/record-sale-dialog"
 import { RecordServiceDialog } from "@/components/app/dialogs/record-service-dialog"
+import { ReturnToBranchDialog } from "@/components/app/dialogs/return-to-branch-dialog"
 import type { MyHolding } from "@/lib/db/queries/holdings"
 
 type Props = {
@@ -22,10 +23,15 @@ type Props = {
 
 export function HoldingClient({ holdings }: Props) {
   const router = useRouter()
+
   const [sellProductId, setSellProductId] = useState<string | undefined>(undefined)
   const [saleOpen, setSaleOpen] = useState(false)
+
   const [serviceProductId, setServiceProductId] = useState<string | undefined>(undefined)
   const [serviceOpen, setServiceOpen] = useState(false)
+
+  const [returnHolding, setReturnHolding] = useState<MyHolding | null>(null)
+  const [returnOpen, setReturnOpen] = useState(false)
 
   function openSell(productId?: string) {
     setSellProductId(productId)
@@ -35,6 +41,11 @@ export function HoldingClient({ holdings }: Props) {
   function openService(productId?: string) {
     setServiceProductId(productId)
     setServiceOpen(true)
+  }
+
+  function openReturn(h: MyHolding) {
+    setReturnHolding(h)
+    setReturnOpen(true)
   }
 
   return (
@@ -88,7 +99,7 @@ export function HoldingClient({ holdings }: Props) {
                 <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Product</TableHead>
                 <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Branch</TableHead>
                 <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">Held</TableHead>
-                <TableHead className="w-24" />
+                <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -108,6 +119,13 @@ export function HoldingClient({ holdings }: Props) {
                   </TableCell>
                   <TableCell className="py-3.5 text-right">
                     <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => openReturn(h)}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 h-7 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
+                      >
+                        <Undo2 className="h-3 w-3" />
+                        Return
+                      </button>
                       <button
                         onClick={() => openService(h.productId)}
                         className="inline-flex items-center gap-1.5 rounded-md bg-neutral-100 px-3 h-7 text-xs font-medium text-neutral-700 hover:bg-neutral-200 transition-colors"
@@ -143,6 +161,13 @@ export function HoldingClient({ holdings }: Props) {
         onOpenChange={(o) => { if (!o) { setServiceOpen(false); setServiceProductId(undefined) } }}
         onSuccess={() => router.refresh()}
         initialProductId={serviceProductId}
+      />
+
+      <ReturnToBranchDialog
+        open={returnOpen}
+        onOpenChange={(o) => { if (!o) setReturnOpen(false) }}
+        onSuccess={() => router.refresh()}
+        holding={returnHolding}
       />
     </div>
   )
