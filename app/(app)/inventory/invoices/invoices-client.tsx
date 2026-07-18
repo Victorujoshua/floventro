@@ -458,6 +458,18 @@ function ReceiveInvoiceForm({
         </table>
       </div>
 
+      {/* Running summary */}
+      {(() => {
+        const total = quantities.reduce((s, q) => s + (q || 0), 0)
+        const count = quantities.filter((q) => q > 0).length
+        return total > 0 ? (
+          <p className="text-xs text-neutral-500 tabular-nums">
+            Receiving <span className="font-medium text-neutral-950">{total}</span> unit{total !== 1 ? "s" : ""} across{" "}
+            <span className="font-medium text-neutral-950">{count}</span> line{count !== 1 ? "s" : ""}
+          </p>
+        ) : null
+      })()}
+
       {/* Note */}
       <div className="space-y-1.5">
         <Label htmlFor="receive-note">
