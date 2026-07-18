@@ -18,6 +18,7 @@ import {
   Layers,
   Sparkles,
   ArrowLeftRight,
+  GitBranch,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Role } from "@/lib/auth/scope"
@@ -71,6 +72,7 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
 const MANAGEMENT_MENU: Record<Role, NavItem[]> = {
   owner: [
     { label: "Team",           href: "/admin/team",                  icon: Users },
+    { label: "Branches",       href: "/admin/branches",              icon: GitBranch },
     { label: "Settings",       href: "/admin/settings",              icon: SettingsIcon },
     { label: "Staff holdings", href: "/inventory/holdings",          icon: Layers },
     { label: "Transfers",      href: "/inventory/transfers",         icon: ArrowLeftRight },
