@@ -35,12 +35,20 @@ export async function getMembers(): Promise<Member[]> {
 
   const supabase = await createAppServerClient()
 
-  const { data: memberships, error } = await supabase
+  let query = supabase
     .from("memberships")
     .select("id, user_id, role, branch_id, created_at, branches(name)")
     .eq("organisation_id", scope.organisationId)
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
+
+  // When an owner has entered a specific branch, scope the list to that branch
+  // (members of that branch plus owners who span the whole org).
+  if (scope.branchId) {
+    query = query.or(`branch_id.eq.${scope.branchId},branch_id.is.null`)
+  }
+
+  const { data: memberships, error } = await query
 
   if (error || !memberships) return []
 

@@ -78,7 +78,26 @@ export async function signInAction(input: SignInInput, next?: string): Promise<A
     return { ok: false, error: "server", code: "server" }
   }
 
-  redirect(safeNext(next) ?? "/dashboard")
+  // If a safe deep-link was provided, honour it (invite flows, bookmarks).
+  const nextUrl = safeNext(next)
+  if (nextUrl) redirect(nextUrl)
+
+  // Owner lands on /org; everyone else lands on /dashboard.
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) {
+    const { data: ownerMem } = await supabase
+      .from("memberships")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("role", "owner")
+      .is("branch_id", null)
+      .is("deleted_at", null)
+      .limit(1)
+      .maybeSingle()
+    if (ownerMem) redirect("/org")
+  }
+
+  redirect("/dashboard")
 }
 
 export async function signOutAction(): Promise<void> {
@@ -109,5 +128,5 @@ export async function createOrgAction(
     return { ok: false, error: "server", code: "server" }
   }
 
-  redirect("/dashboard")
+  redirect("/org")
 }

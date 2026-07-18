@@ -68,21 +68,27 @@ function StatusBadge({ status }: { status: string }) {
 function InitiateTransferDialog({
   open,
   onOpenChange,
+  currentBranchId,
+  currentBranchName,
   branches,
   products,
   onSuccess,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
+  currentBranchId: string
+  currentBranchName: string
   branches: OrgBranch[]
   products: OrgProduct[]
   onSuccess: () => void
 }) {
   const [submitError, setSubmitError] = useState<string | null>(null)
 
+  // Destination options are all branches except the current (source) branch.
+  const destOptions = branches.filter((b) => b.id !== currentBranchId)
+
   const defaultValues: InitiateTransferInput = {
-    sourceBranchId: branches[0]?.id ?? "",
-    destBranchId: branches[1]?.id ?? "",
+    destBranchId: destOptions[0]?.id ?? "",
     note: "",
     lines: [{ productId: "", quantity: 1 }],
   }
@@ -91,7 +97,6 @@ function InitiateTransferDialog({
     register,
     handleSubmit,
     control,
-    watch,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<InitiateTransferInput>({
@@ -100,8 +105,6 @@ function InitiateTransferDialog({
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: "lines" })
-  const sourceBranchId = watch("sourceBranchId")
-  const destOptions = branches.filter((b) => b.id !== sourceBranchId)
 
   function handleClose() {
     reset(defaultValues)
@@ -129,21 +132,13 @@ function InitiateTransferDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 pt-1">
-          {/* Route */}
+          {/* Route — source is fixed to the entered branch */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>From (source)</Label>
-              <select
-                className="w-full rounded-md border border-neutral-300 bg-white px-3 h-9 text-sm text-neutral-950 focus:outline-none focus:ring-2 focus:ring-violet-700 focus:border-violet-700"
-                {...register("sourceBranchId")}
-              >
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-              {errors.sourceBranchId && (
-                <p className="text-xs text-red-500">{errors.sourceBranchId.message}</p>
-              )}
+              <div className="flex items-center h-9 rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-700 font-medium">
+                {currentBranchName}
+              </div>
             </div>
 
             <div className="space-y-1.5">
@@ -529,18 +524,21 @@ function CancelTransferDialog({
 
 type Props = {
   transfers: Transfer[]
+  currentBranchId: string
+  currentBranchName: string
   branches: OrgBranch[]
   products: OrgProduct[]
 }
 
-export function TransfersClient({ transfers, branches, products }: Props) {
+export function TransfersClient({ transfers, currentBranchId, currentBranchName, branches, products }: Props) {
   const router = useRouter()
 
   const [initiateOpen, setInitiateOpen] = useState(false)
   const [receiveTarget, setReceiveTarget] = useState<Transfer | null>(null)
   const [cancelTarget, setCancelTarget] = useState<Transfer | null>(null)
 
-  const isMultiBranch = branches.length > 1
+  // "Multi-branch" means there are destinations OTHER than the current branch.
+  const isMultiBranch = branches.filter((b) => b.id !== currentBranchId).length > 0
 
   return (
     <div>
@@ -648,6 +646,8 @@ export function TransfersClient({ transfers, branches, products }: Props) {
       <InitiateTransferDialog
         open={initiateOpen}
         onOpenChange={setInitiateOpen}
+        currentBranchId={currentBranchId}
+        currentBranchName={currentBranchName}
         branches={branches}
         products={products}
         onSuccess={() => router.refresh()}

@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Bell, ChevronDown, LogOut, Settings, ExternalLink } from "lucide-react"
+import { Bell, ChevronDown, LogOut, Settings, ExternalLink, ChevronLeft } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { setScopeAction } from "@/lib/db/actions/scope"
+import { clearBranchAction } from "@/lib/db/actions/org"
 
 export type NotificationItem = {
   id: string
@@ -30,6 +31,8 @@ export type WorkspaceMembership = {
 
 type Props = {
   orgName: string
+  branchId: string | null
+  branchName: string
   role: string
   userName: string
   userEmail: string
@@ -39,6 +42,8 @@ type Props = {
 
 export function AppHeader({
   orgName,
+  branchId,
+  branchName,
   role,
   userName,
   userEmail,
@@ -48,16 +53,40 @@ export function AppHeader({
   const displayName = userName || userEmail
   const initials = displayName.charAt(0).toUpperCase()
   const hasAlerts = notifications.length > 0
+  const isOwnerInBranch = role === "owner" && branchId !== null
 
   async function switchScope(m: WorkspaceMembership) {
     await setScopeAction(m.organisationId, m.branchId, m.role)
     window.location.href = "/dashboard"
   }
 
+  async function handleBackToOrg() {
+    await clearBranchAction()
+    window.location.href = "/org"
+  }
+
   return (
     <header className="sticky top-0 z-20 h-16 bg-white border-b border-neutral-200 px-8 flex items-center justify-between">
-      {/* Left slot — pages render their own h1 */}
-      <div />
+      {/* Left slot — branch name + back-to-org for owners in a branch */}
+      <div className="flex items-center gap-3 min-w-0">
+        {isOwnerInBranch ? (
+          <>
+            <button
+              onClick={handleBackToOrg}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 px-3 h-8 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors shrink-0"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Back to organization
+            </button>
+            <span className="text-neutral-300 hidden sm:block">|</span>
+            <span className="text-sm font-medium text-neutral-950 truncate hidden sm:block">
+              {branchName}
+            </span>
+          </>
+        ) : (
+          <div />
+        )}
+      </div>
 
       {/* Right cluster */}
       <div className="flex items-center gap-2">

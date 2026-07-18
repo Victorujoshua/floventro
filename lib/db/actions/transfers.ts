@@ -17,10 +17,17 @@ export async function initiateTransferAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }
   }
 
-  await requireRole("owner", "inventory")
+  const scope = await requireRole("owner", "inventory")
+
+  // Source is always the branch the caller is currently inside.
+  if (!scope.branchId) {
+    return { ok: false, error: "no_branch", message: "Enter a branch before initiating a transfer." }
+  }
+  const sourceBranchId = scope.branchId
+
   const supabase = await createAppServerClient()
 
-  const { sourceBranchId, destBranchId, note, lines } = parsed.data
+  const { destBranchId, note, lines } = parsed.data
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any).rpc("initiate_transfer", {

@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { redirect } from "next/navigation"
 import { ArrowUpRight, Check, TrendingUp } from "lucide-react"
 import { requireScope } from "@/lib/auth/guards"
 import {
@@ -33,6 +34,13 @@ function vendorName(vendors: unknown): string {
 
 export default async function DashboardPage() {
   const scope = await requireScope()
+
+  // Owner with no entered branch has no branch-level data to show — send to /org.
+  // This is the anti-loop anchor: /org does NOT redirect owners back to /dashboard.
+  if (scope.role === "owner" && scope.branchId === null) {
+    redirect("/org")
+  }
+
   const isInventoryUser = scope.role === "owner" || scope.role === "inventory"
 
   const [stock, payables, recentInvoices, lowStockProducts, stockSeries] = await Promise.all([

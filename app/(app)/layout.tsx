@@ -52,12 +52,25 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const pastDueCount = notifications.filter((n) => n.kind === "past_due").length
 
+  // Resolve current branch name for the header when owner is inside a branch.
+  let branchName = ""
+  if (scope.branchId) {
+    const { data: branchData } = await supabase
+      .from("branches")
+      .select("name")
+      .eq("id", scope.branchId)
+      .maybeSingle()
+    branchName = branchData?.name ?? ""
+  }
+
   return (
     <div className="flex min-h-screen bg-neutral-50">
       <Sidebar role={scope.role} pastDueCount={pastDueCount} pendingRequestsCount={pendingRequestsCount} />
       <div className="ml-60 flex flex-1 flex-col min-w-0">
         <AppHeader
           orgName={orgResult.data?.name ?? ""}
+          branchId={scope.branchId}
+          branchName={branchName}
           role={scope.role}
           userName={userName}
           userEmail={userEmail}
