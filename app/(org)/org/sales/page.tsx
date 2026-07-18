@@ -4,7 +4,8 @@ import { getOrgSales } from "@/lib/db/queries/org"
 import { formatNaira } from "@/lib/format/money"
 import { BranchRevenueChart } from "./branch-revenue-chart"
 
-function pct(value: number) {
+function pct(value: number | null): string {
+  if (value === null) return "—"
   return `${value.toFixed(1)}%`
 }
 
@@ -12,6 +13,9 @@ export default async function OrgSalesPage() {
   await requireOwner()
 
   const data = await getOrgSales()
+
+  const hasPartialCost =
+    data.profitLast30dCents !== null && !data.costDataComplete && data.missingCostProductCount > 0
 
   return (
     <div className="space-y-6">
@@ -47,26 +51,52 @@ export default async function OrgSalesPage() {
 
         <div className="bg-tint-success rounded-2xl border border-neutral-200/60 p-5">
           <div className="flex items-start justify-between">
-            <p className="text-xs uppercase tracking-wide text-neutral-500">Profit (30d)</p>
+            <p className="text-xs uppercase tracking-wide text-neutral-500">Gross profit (30d)</p>
             <DollarSign className="h-4 w-4 text-green-400" />
           </div>
-          <p className="text-2xl font-semibold text-neutral-950 tabular-nums mt-3">
-            <span className="font-inter">₦</span>{formatNaira(data.profitLast30dCents)}
-          </p>
-          <p className="text-xs text-neutral-500 mt-1">revenue minus cost</p>
+          {data.profitLast30dCents === null ? (
+            <>
+              <p className="text-2xl font-semibold text-neutral-400 mt-3">—</p>
+              <p className="text-xs text-neutral-500 mt-1">record vendor invoices to see profit</p>
+            </>
+          ) : (
+            <>
+              <p className="text-2xl font-semibold text-neutral-950 tabular-nums mt-3">
+                <span className="font-inter">₦</span>{formatNaira(data.profitLast30dCents)}
+              </p>
+              {hasPartialCost ? (
+                <p className="text-xs text-amber-600 mt-1">
+                  partial — {data.missingCostProductCount} product{data.missingCostProductCount !== 1 ? "s" : ""} without cost data
+                </p>
+              ) : (
+                <p className="text-xs text-neutral-500 mt-1">revenue minus vendor cost</p>
+              )}
+            </>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl border border-neutral-200/60 p-5">
           <div className="flex items-start justify-between">
-            <p className="text-xs uppercase tracking-wide text-neutral-500">Avg margin (30d)</p>
+            <p className="text-xs uppercase tracking-wide text-neutral-500">Gross margin (30d)</p>
             <Percent className="h-4 w-4 text-neutral-300" />
           </div>
-          <p className="text-2xl font-semibold text-neutral-950 tabular-nums mt-3">
-            {pct(data.avgMarginPct)}
-          </p>
-          <p className="text-xs text-neutral-500 mt-1">
-            {data.revenueLast30dCents === 0 ? "no sales in period" : "gross margin"}
-          </p>
+          {data.avgMarginPct === null ? (
+            <>
+              <p className="text-2xl font-semibold text-neutral-400 mt-3">—</p>
+              <p className="text-xs text-neutral-500 mt-1">no cost data yet</p>
+            </>
+          ) : (
+            <>
+              <p className="text-2xl font-semibold text-neutral-950 tabular-nums mt-3">
+                {pct(data.avgMarginPct)}
+              </p>
+              {hasPartialCost ? (
+                <p className="text-xs text-amber-600 mt-1">based on products with cost data</p>
+              ) : (
+                <p className="text-xs text-neutral-500 mt-1">gross margin</p>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -75,7 +105,9 @@ export default async function OrgSalesPage() {
         <h2 className="text-base font-semibold text-neutral-950 mb-1">
           Revenue &amp; profit by branch
         </h2>
-        <p className="text-xs text-neutral-500 mb-5">Last 30 days · gross margin per branch</p>
+        <p className="text-xs text-neutral-500 mb-5">
+          Last 30 days · profit shown only for branches with vendor cost data
+        </p>
         <BranchRevenueChart branches={data.branchRevenue} />
       </div>
 
@@ -83,7 +115,10 @@ export default async function OrgSalesPage() {
       <div className="grid md:grid-cols-2 gap-5">
         {/* Product performance */}
         <div className="bg-white rounded-2xl border border-neutral-200/60 p-6">
-          <h2 className="text-base font-semibold text-neutral-950 mb-4">Product performance</h2>
+          <h2 className="text-base font-semibold text-neutral-950 mb-1">Product performance</h2>
+          <p className="text-xs text-neutral-500 mb-4">
+            All time · cost &amp; margin from vendor invoices
+          </p>
           {data.productPerformance.length === 0 ? (
             <p className="text-sm text-neutral-500">No sales recorded yet.</p>
           ) : (
@@ -104,7 +139,7 @@ export default async function OrgSalesPage() {
                         <p className="text-sm font-medium text-neutral-950 truncate max-w-[160px]">
                           {p.productName}
                         </p>
-                        <p className="text-xs text-neutral-400 font-mono">{p.productSku}</p>
+                        <p className="text-xs text-neutral-400 font-mono">{p.productSku || "—"}</p>
                       </td>
                       <td className="py-2.5 text-right font-mono tabular-nums text-neutral-600 whitespace-nowrap">
                         {p.qtySold.toLocaleString()}
@@ -114,23 +149,32 @@ export default async function OrgSalesPage() {
                         {formatNaira(p.revenueCents)}
                       </td>
                       <td className="py-2.5 text-right font-mono tabular-nums whitespace-nowrap">
-                        <span
-                          className={
-                            p.marginPct >= 20
-                              ? "text-green-700"
-                              : p.marginPct < 0
-                              ? "text-red-600"
-                              : "text-neutral-600"
-                          }
-                        >
-                          {pct(p.marginPct)}
-                        </span>
+                        {p.marginPct === null ? (
+                          <span className="text-neutral-400">—</span>
+                        ) : (
+                          <span
+                            className={
+                              p.marginPct >= 20
+                                ? "text-green-700"
+                                : p.marginPct < 0
+                                ? "text-red-600"
+                                : "text-neutral-600"
+                            }
+                          >
+                            {pct(p.marginPct)}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          )}
+          {data.productPerformance.some((p) => p.costCents === null) && (
+            <p className="text-xs text-neutral-400 mt-3 pt-3 border-t border-neutral-100">
+              — = no vendor invoices recorded for this product
+            </p>
           )}
         </div>
 

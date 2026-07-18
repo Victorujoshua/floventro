@@ -26,7 +26,8 @@ export type OrgBranchRevenue = {
   branchId: string
   branchName: string
   revenueCents: number
-  profitCents: number
+  // null when no sold products in this branch have vendor invoice cost data
+  profitCents: number | null
 }
 
 export type OrgProductPerf = {
@@ -35,8 +36,9 @@ export type OrgProductPerf = {
   productSku: string
   qtySold: number
   revenueCents: number
-  costCents: number
-  marginPct: number
+  // null when this product has no vendor_invoice_lines → cost unknown
+  costCents: number | null
+  marginPct: number | null
 }
 
 export type OrgRecentSale = {
@@ -52,8 +54,13 @@ export type OrgRecentSale = {
 export type OrgSalesData = {
   revenueAllTimeCents: number
   revenueLast30dCents: number
-  profitLast30dCents: number
-  avgMarginPct: number
+  // null when no products sold in the 30d period have vendor invoice cost data
+  profitLast30dCents: number | null
+  avgMarginPct: number | null
+  // true when every product sold in 30d has a known cost
+  costDataComplete: boolean
+  // distinct product count sold in 30d that lack vendor invoice history
+  missingCostProductCount: number
   branchRevenue: OrgBranchRevenue[]
   productPerformance: OrgProductPerf[]
   recentSales: OrgRecentSale[]
@@ -92,6 +99,55 @@ function resolveMovementLabel(reason: string, adjReason: string | null): string 
     case "reversal":           return "Reversal"
     default:                   return reason
   }
+}
+
+/**
+ * Builds a per-product weighted-average unit cost (in cents) from all
+ * vendor_invoice_lines in the org.
+ *
+ * Products NOT returned → cost is UNKNOWN (null), NOT zero.
+ * This is the only honest cost source: products added via adjustment (opening
+ * stock) have no invoice line and therefore no cost data.
+ * TODO: capture optional cost on opening-stock adjustments when needed.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchOrgCostMap(supabase: any, organisationId: string): Promise<Map<string, number>> {
+  const { data, error } = await supabase
+    .from("vendor_invoices")
+    .select("vendor_invoice_lines(product_id, quantity, unit_cost_cents)")
+    .eq("organisation_id", organisationId)
+    .is("deleted_at", null)
+
+  if (error || !data) return new Map()
+
+  type RawLine = { product_id: string; quantity: number; unit_cost_cents: number }
+  type RawInvoice = { vendor_invoice_lines: RawLine[] }
+
+  // Accumulate (totalCostCents, totalQty) per product across all invoices
+  const perProduct = new Map<string, { totalCostCents: number; totalQty: number }>()
+  for (const inv of (data as unknown as RawInvoice[])) {
+    for (const line of inv.vendor_invoice_lines ?? []) {
+      const existing = perProduct.get(line.product_id)
+      if (existing) {
+        existing.totalCostCents += line.unit_cost_cents * line.quantity
+        existing.totalQty += line.quantity
+      } else {
+        perProduct.set(line.product_id, {
+          totalCostCents: line.unit_cost_cents * line.quantity,
+          totalQty: line.quantity,
+        })
+      }
+    }
+  }
+
+  // Compute weighted average: totalCostCents / totalQty
+  const result = new Map<string, number>()
+  for (const [productId, { totalCostCents, totalQty }] of perProduct) {
+    if (totalQty > 0) {
+      result.set(productId, totalCostCents / totalQty)
+    }
+  }
+  return result
 }
 
 // ── getOrgOverview ────────────────────────────────────────────────────────────
@@ -213,8 +269,10 @@ export async function getOrgOverview(): Promise<OrgOverview> {
 const EMPTY_ORG_SALES: OrgSalesData = {
   revenueAllTimeCents: 0,
   revenueLast30dCents: 0,
-  profitLast30dCents: 0,
-  avgMarginPct: 0,
+  profitLast30dCents: null,
+  avgMarginPct: null,
+  costDataComplete: false,
+  missingCostProductCount: 0,
   branchRevenue: [],
   productPerformance: [],
   recentSales: [],
@@ -228,11 +286,12 @@ export async function getOrgSales(): Promise<OrgSalesData> {
   const supabase = (await createAppServerClient()) as any
   const cutoff = since30dCutoff()
 
-  const [salesRes, branchRes] = await Promise.all([
+  // Run all three data sources in parallel.
+  const [salesRes, branchRes, costMap] = await Promise.all([
     supabase
       .from("sales")
       .select(
-        "id, branch_id, total_cents, created_at, sold_on, customer_name, sale_lines(product_id, quantity, line_total_cents, products(id, name, sku, unit_cost_cents))",
+        "id, branch_id, total_cents, created_at, sold_on, customer_name, sale_lines(product_id, quantity, line_total_cents, products(id, name, sku))",
       )
       .eq("organisation_id", scope.organisationId)
       .order("created_at", { ascending: false }),
@@ -242,9 +301,11 @@ export async function getOrgSales(): Promise<OrgSalesData> {
       .select("id, name")
       .eq("organisation_id", scope.organisationId)
       .is("deleted_at", null),
+
+    fetchOrgCostMap(supabase, scope.organisationId),
   ])
 
-  type RawLineProduct = { id: string; name: string; sku: string; unit_cost_cents: number }
+  type RawLineProduct = { id: string; name: string; sku: string }
   type RawLine = {
     product_id: string
     quantity: number
@@ -270,12 +331,32 @@ export async function getOrgSales(): Promise<OrgSalesData> {
   }
 
   // ── Aggregation pass ──────────────────────────────────────────────────────
+
   let revenueAllTimeCents = 0
   let revenueLast30dCents = 0
-  let costLast30dCents = 0
 
-  const branchAgg = new Map<string, { revenueCents: number; costCents: number }>()
-  type ProdAgg = { name: string; sku: string; qtySold: number; revenueCents: number; costCents: number }
+  // For 30d profit: track revenue and cost only over lines with known cost.
+  let revenueLast30dKnownCostCents = 0
+  let costLast30dKnownCents = 0
+  let hasAny30dCostData = false
+  const missingCostProductIds = new Set<string>()
+
+  // Per-branch last-30d aggregation.
+  // hasAnyCostData: true if at least one sold line in this branch had known cost.
+  const branchAgg = new Map<
+    string,
+    { revenueCents: number; knownCostCents: number; hasAnyCostData: boolean }
+  >()
+
+  // Per-product ALL-TIME aggregation.
+  type ProdAgg = {
+    name: string
+    sku: string
+    qtySold: number
+    revenueCents: number
+    // null when this product has no entry in costMap (no purchase history)
+    costCents: number | null
+  }
   const productAgg = new Map<string, ProdAgg>()
 
   for (const sale of sales) {
@@ -284,58 +365,81 @@ export async function getOrgSales(): Promise<OrgSalesData> {
 
     if (isLast30d) {
       revenueLast30dCents += sale.total_cents
-      const ba = branchAgg.get(sale.branch_id)
-      if (ba) {
-        ba.revenueCents += sale.total_cents
-      } else {
-        branchAgg.set(sale.branch_id, { revenueCents: sale.total_cents, costCents: 0 })
+      if (!branchAgg.has(sale.branch_id)) {
+        branchAgg.set(sale.branch_id, { revenueCents: 0, knownCostCents: 0, hasAnyCostData: false })
       }
+      branchAgg.get(sale.branch_id)!.revenueCents += sale.total_cents
     }
 
     for (const line of sale.sale_lines ?? []) {
       const prod = Array.isArray(line.products) ? line.products[0] : line.products
-      const unitCost = (prod as RawLineProduct | null)?.unit_cost_cents ?? 0
-      const lineCost = line.quantity * unitCost
+      const avgCost = costMap.get(line.product_id)    // undefined = cost unknown
+      const hasCost = avgCost !== undefined
+      const lineCost = hasCost ? line.quantity * avgCost! : null
 
-      // Product performance (all time)
-      const pa = productAgg.get(line.product_id)
-      if (pa) {
-        pa.qtySold += line.quantity
-        pa.revenueCents += line.line_total_cents
-        pa.costCents += lineCost
+      // ── Product performance (all time) ──────────────────────────────────
+      const existing = productAgg.get(line.product_id)
+      if (existing) {
+        existing.qtySold += line.quantity
+        existing.revenueCents += line.line_total_cents
+        if (existing.costCents !== null && lineCost !== null) {
+          existing.costCents += lineCost
+        }
+        // If the product already had costCents = null, it stays null.
       } else {
         productAgg.set(line.product_id, {
           name: (prod as RawLineProduct | null)?.name ?? "Unknown",
           sku: (prod as RawLineProduct | null)?.sku ?? "",
           qtySold: line.quantity,
           revenueCents: line.line_total_cents,
-          costCents: lineCost,
+          costCents: hasCost ? (lineCost ?? 0) : null,
         })
       }
 
-      // Last 30d cost aggregation
+      // ── 30d cost aggregation ─────────────────────────────────────────────
       if (isLast30d) {
-        costLast30dCents += lineCost
-        const ba = branchAgg.get(sale.branch_id)
-        if (ba) ba.costCents += lineCost
+        if (hasCost && lineCost !== null) {
+          revenueLast30dKnownCostCents += line.line_total_cents
+          costLast30dKnownCents += lineCost
+          hasAny30dCostData = true
+          const ba = branchAgg.get(sale.branch_id)
+          if (ba) {
+            ba.knownCostCents += lineCost
+            ba.hasAnyCostData = true
+          }
+        } else {
+          missingCostProductIds.add(line.product_id)
+        }
       }
     }
   }
 
-  const profitLast30dCents = revenueLast30dCents - costLast30dCents
+  // ── Derived metrics ───────────────────────────────────────────────────────
+
+  const profitLast30dCents = hasAny30dCostData
+    ? revenueLast30dKnownCostCents - costLast30dKnownCents
+    : null
+
   const avgMarginPct =
-    revenueLast30dCents > 0
-      ? Math.round((profitLast30dCents / revenueLast30dCents) * 1000) / 10
-      : 0
+    hasAny30dCostData && revenueLast30dKnownCostCents > 0
+      ? Math.round((profitLast30dCents! / revenueLast30dKnownCostCents) * 1000) / 10
+      : null
+
+  const costDataComplete = hasAny30dCostData && missingCostProductIds.size === 0
+  const missingCostProductCount = missingCostProductIds.size
+
+  // ── Build output arrays ───────────────────────────────────────────────────
 
   const branchRevenue: OrgBranchRevenue[] = ((branchRes.data ?? []) as unknown as RawBranch[])
     .map((b) => {
-      const agg = branchAgg.get(b.id) ?? { revenueCents: 0, costCents: 0 }
+      const agg = branchAgg.get(b.id)
       return {
         branchId: b.id,
         branchName: b.name,
-        revenueCents: agg.revenueCents,
-        profitCents: agg.revenueCents - agg.costCents,
+        revenueCents: agg?.revenueCents ?? 0,
+        profitCents: agg?.hasAnyCostData
+          ? (agg.revenueCents - agg.knownCostCents)
+          : null,
       }
     })
     .sort((a, b) => b.revenueCents - a.revenueCents)
@@ -349,9 +453,9 @@ export async function getOrgSales(): Promise<OrgSalesData> {
       revenueCents: pa.revenueCents,
       costCents: pa.costCents,
       marginPct:
-        pa.revenueCents > 0
+        pa.costCents !== null && pa.revenueCents > 0
           ? Math.round(((pa.revenueCents - pa.costCents) / pa.revenueCents) * 1000) / 10
-          : 0,
+          : null,
     }))
     .sort((a, b) => b.revenueCents - a.revenueCents)
     .slice(0, 20)
@@ -371,6 +475,8 @@ export async function getOrgSales(): Promise<OrgSalesData> {
     revenueLast30dCents,
     profitLast30dCents,
     avgMarginPct,
+    costDataComplete,
+    missingCostProductCount,
     branchRevenue,
     productPerformance,
     recentSales,

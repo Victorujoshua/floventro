@@ -27,7 +27,8 @@ export function BranchRevenueChart({ branches }: { branches: OrgBranchRevenue[] 
   const data = branches.map((b) => ({
     name: b.branchName,
     Revenue: b.revenueCents,
-    Profit: b.profitCents,
+    // undefined → Recharts renders no bar for this branch (honest: no cost data)
+    Profit: b.profitCents !== null ? b.profitCents : undefined,
   }))
 
   return (
