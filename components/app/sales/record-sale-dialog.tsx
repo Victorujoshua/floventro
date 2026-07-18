@@ -65,6 +65,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
       soldOn: todayLocal(),
       note: "",
       paymentMethod: undefined,
+      paymentStatus: "paid",
       lines: [{ productId: initialProductId ?? "", quantity: 1, unitPriceNaira: 0 }],
     },
   })
@@ -72,6 +73,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
   const { fields, append, remove } = useFieldArray({ control, name: "lines" })
   const watchedLines = watch("lines")
   const soldOn = watch("soldOn")
+  const paymentStatus = watch("paymentStatus")
 
   const isFutureDate = soldOn && soldOn > todayLocal()
 
@@ -114,6 +116,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
       soldOn: todayLocal(),
       note: "",
       paymentMethod: undefined,
+      paymentStatus: "paid",
       lines: [{ productId: initialProductId ?? "", quantity: 1, unitPriceNaira: 0 }],
     })
     setSubmitError(null)
@@ -306,8 +309,37 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
             </div>
           </div>
 
-          {/* Date + Payment method */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Payment toggle */}
+          <div className="space-y-1.5">
+            <Label>Payment</Label>
+            <div className="grid grid-cols-2 rounded-md border border-neutral-300 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setValue("paymentStatus", "paid")}
+                className={`h-9 text-sm font-medium transition-colors ${
+                  paymentStatus === "paid"
+                    ? "bg-violet-700 text-white"
+                    : "bg-white text-neutral-600 hover:bg-neutral-50"
+                }`}
+              >
+                Paid now
+              </button>
+              <button
+                type="button"
+                onClick={() => setValue("paymentStatus", "unpaid")}
+                className={`h-9 text-sm font-medium border-l border-neutral-300 transition-colors ${
+                  paymentStatus === "unpaid"
+                    ? "bg-violet-700 text-white"
+                    : "bg-white text-neutral-600 hover:bg-neutral-50"
+                }`}
+              >
+                On account
+              </button>
+            </div>
+          </div>
+
+          {/* Date + Payment method (method hidden when on account) */}
+          <div className={`grid gap-3 ${paymentStatus === "paid" ? "grid-cols-2" : "grid-cols-1"}`}>
             <div className="space-y-1.5">
               <Label htmlFor="soldOn">Sale date</Label>
               <Input id="soldOn" type="date" {...register("soldOn")} />
@@ -318,17 +350,19 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
                 <p className="text-xs text-red-500">{errors.soldOn.message}</p>
               )}
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="paymentMethod">
-                Payment method <span className="text-neutral-400 font-normal">(optional)</span>
-              </Label>
-              <select id="paymentMethod" className={SELECT_CLASS} {...register("paymentMethod")}>
-                <option value="">Select…</option>
-                {PAYMENT_METHODS.map((m) => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
-            </div>
+            {paymentStatus === "paid" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="paymentMethod">
+                  Payment method <span className="text-neutral-400 font-normal">(optional)</span>
+                </Label>
+                <select id="paymentMethod" className={SELECT_CLASS} {...register("paymentMethod")}>
+                  <option value="">Select…</option>
+                  {PAYMENT_METHODS.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Note */}

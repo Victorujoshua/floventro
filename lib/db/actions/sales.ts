@@ -1,7 +1,8 @@
 "use server"
 
 import { createAppServerClient } from "@/lib/supabase/app-server"
-import { requireScope } from "@/lib/auth/guards"
+import { requireScope, requireRole } from "@/lib/auth/guards"
+import { formatNaira } from "@/lib/format/money"
 import { saleSchema, type SaleInput } from "@/lib/validation/sales"
 import { getSaleById } from "@/lib/db/queries/sales"
 import type { SaleDetail } from "@/lib/db/queries/sales"
@@ -54,6 +55,7 @@ export async function recordSaleAction(input: SaleInput): Promise<ActionResult<{
     p_sold_on: parsed.data.soldOn,
     p_note: parsed.data.note || null,
     p_payment_method: parsed.data.paymentMethod || null,
+    p_payment_status: parsed.data.paymentStatus,
     p_lines: pLines,
   })
 
@@ -100,4 +102,51 @@ export async function recordSaleAction(input: SaleInput): Promise<ActionResult<{
   }
 
   return { ok: true, data: { saleId: data as string } }
+}
+
+export async function recordSalePaymentAction(
+  saleId: string,
+  amountNaira: number,
+  paidOn: string,
+  method: string | null,
+  note: string,
+): Promise<{ ok: true; paymentStatus: string } | { ok: false; error: string; message?: string }> {
+  await requireRole("owner", "inventory")
+  const supabase = await createAppServerClient()
+
+  const amountCents = Math.round(amountNaira * 100)
+  if (amountCents <= 0) {
+    return { ok: false, error: "validation", message: "Amount must be greater than zero." }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc("record_sale_payment", {
+    p_sale_id: saleId,
+    p_amount_cents: amountCents,
+    p_paid_on: paidOn || null,
+    p_method: method || null,
+    p_note: note || null,
+  })
+
+  if (error) {
+    const msg: string = error.message ?? ""
+    const lower = msg.toLowerCase()
+
+    if (lower.includes("already fully paid"))
+      return { ok: false, error: "already_paid", message: "This sale is already fully paid." }
+
+    if (lower.includes("exceeds the outstanding balance")) {
+      const match = msg.match(/outstanding: (\d+)/)
+      const outstandingCents = match ? parseInt(match[1], 10) : null
+      const suffix = outstandingCents != null ? ` (₦${formatNaira(outstandingCents)} outstanding)` : ""
+      return { ok: false, error: "overpayment", message: `Payment exceeds the outstanding balance${suffix}.` }
+    }
+
+    if (lower.includes("not authorised"))
+      return { ok: false, error: "not_allowed", message: "You are not authorised to record payments for this sale." }
+
+    return { ok: false, error: "server", message: "Something went wrong. Please try again." }
+  }
+
+  return { ok: true, paymentStatus: data as string }
 }

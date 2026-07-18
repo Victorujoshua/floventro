@@ -12,8 +12,17 @@ export const saleSchema = z.object({
   soldOn: z.string().min(1, "Date is required"),
   note: z.string().max(500).optional().or(z.literal("")),
   paymentMethod: z.enum(["cash", "pos", "bank_transfer", "cheque", "other"]).optional(),
+  paymentStatus: z.enum(["paid", "unpaid"]),
   lines: z.array(saleLineSchema).min(1, "Add at least one product"),
+})
+
+export const salePaymentSchema = z.object({
+  amountNaira: z.number().positive("Amount must be greater than zero"),
+  paidOn: z.string().min(1, "Date is required"),
+  method: z.enum(["cash", "pos", "bank_transfer", "cheque", "other"]).optional(),
+  note: z.string().max(500).optional().or(z.literal("")),
 })
 
 export type SaleLine = z.infer<typeof saleLineSchema>
 export type SaleInput = z.infer<typeof saleSchema>
+export type SalePaymentInput = z.infer<typeof salePaymentSchema>

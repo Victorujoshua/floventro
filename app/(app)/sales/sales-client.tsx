@@ -3,7 +3,9 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ShoppingCart } from "lucide-react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { ShoppingCart, MoreHorizontal, CreditCard } from "lucide-react"
 import { toast } from "sonner"
 import {
   Table,
@@ -18,11 +20,22 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { RecordSaleDialog } from "@/components/app/sales/record-sale-dialog"
+import { salePaymentSchema, type SalePaymentInput } from "@/lib/validation/sales"
 import type { SaleRow, SaleDetail } from "@/lib/db/queries/sales"
 import { formatNaira } from "@/lib/format/money"
-import { getSaleDetailAction } from "@/lib/db/actions/sales"
+import { getSaleDetailAction, recordSalePaymentAction } from "@/lib/db/actions/sales"
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: "Cash",
@@ -31,6 +44,189 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cheque: "Cheque",
   other: "Other",
 }
+
+const PAYMENT_METHODS = [
+  { value: "cash",          label: "Cash" },
+  { value: "pos",           label: "POS" },
+  { value: "bank_transfer", label: "Bank transfer" },
+  { value: "cheque",        label: "Cheque" },
+  { value: "other",         label: "Other" },
+]
+
+const SELECT_CLASS =
+  "flex h-9 w-full rounded-md border border-neutral-300 bg-white px-3 py-1 text-sm text-neutral-950 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-700 focus:border-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+
+function todayIso() {
+  return new Date().toLocaleDateString("en-CA")
+}
+
+// ── Payment badge ─────────────────────────────────────────────────────────────
+
+function PaymentBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; className: string }> = {
+    paid:    { label: "Paid",     className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    unpaid:  { label: "Unpaid",   className: "bg-amber-50 text-amber-700 border-amber-200" },
+    partial: { label: "Partial",  className: "bg-amber-50 text-amber-700 border-amber-200" },
+  }
+  const { label, className } = map[status] ?? { label: status, className: "bg-neutral-50 text-neutral-600 border-neutral-200" }
+  return (
+    <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${className}`}>
+      {label}
+    </span>
+  )
+}
+
+// ── Mark as paid modal ────────────────────────────────────────────────────────
+
+function MarkAsPaidModal({
+  sale,
+  onClose,
+  onSuccess,
+}: {
+  sale: SaleRow | null
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const outstandingCents = sale ? sale.totalCents - sale.amountPaidCents : 0
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<SalePaymentInput>({
+    resolver: zodResolver(salePaymentSchema),
+    values: {
+      amountNaira: outstandingCents / 100,
+      paidOn: todayIso(),
+      method: undefined,
+      note: "",
+    },
+  })
+
+  function handleClose() {
+    reset()
+    setSubmitError(null)
+    onClose()
+  }
+
+  async function onSubmit(values: SalePaymentInput) {
+    if (!sale) return
+    setSubmitError(null)
+    const result = await recordSalePaymentAction(
+      sale.id,
+      values.amountNaira,
+      values.paidOn,
+      values.method ?? null,
+      values.note ?? "",
+    )
+    if (!result.ok) {
+      setSubmitError(result.message ?? result.error)
+      return
+    }
+    toast.success("Payment recorded")
+    handleClose()
+    onSuccess()
+  }
+
+  return (
+    <Dialog open={sale !== null} onOpenChange={(o) => { if (!o) handleClose() }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Mark as paid</DialogTitle>
+        </DialogHeader>
+
+        {sale && (
+          <div className="rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-3 space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-neutral-500">Sale total</span>
+              <span className="tabular-nums font-medium text-neutral-950">
+                <span className="font-inter">₦</span>{formatNaira(sale.totalCents)}
+              </span>
+            </div>
+            {sale.amountPaidCents > 0 && (
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Already paid</span>
+                <span className="tabular-nums text-emerald-700">
+                  <span className="font-inter">₦</span>{formatNaira(sale.amountPaidCents)}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between font-medium border-t border-neutral-200 pt-1 mt-1">
+              <span className="text-neutral-700">Outstanding</span>
+              <span className="tabular-nums text-neutral-950">
+                <span className="font-inter">₦</span>{formatNaira(outstandingCents)}
+              </span>
+            </div>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="mp-amount">Amount (<span className="font-inter">₦</span>)</Label>
+              <Input
+                id="mp-amount"
+                type="number"
+                min={0.01}
+                step="0.01"
+                className="h-9 text-sm tabular-nums"
+                {...register("amountNaira", { valueAsNumber: true })}
+              />
+              {errors.amountNaira && (
+                <p className="text-xs text-red-500">{errors.amountNaira.message}</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="mp-paid-on">Date</Label>
+              <Input id="mp-paid-on" type="date" className="h-9 text-sm" {...register("paidOn")} />
+              {errors.paidOn && (
+                <p className="text-xs text-red-500">{errors.paidOn.message}</p>
+              )}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="mp-method">
+              Method <span className="text-neutral-400 font-normal">(optional)</span>
+            </Label>
+            <select id="mp-method" className={SELECT_CLASS} {...register("method")}>
+              <option value="">Select…</option>
+              {PAYMENT_METHODS.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="mp-note">
+              Note <span className="text-neutral-400 font-normal">(optional)</span>
+            </Label>
+            <Input id="mp-note" placeholder="e.g. cash collected at branch" className="h-9 text-sm" {...register("note")} />
+          </div>
+
+          {submitError && (
+            <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+              {submitError}
+            </p>
+          )}
+        </form>
+
+        <DialogFooter showCloseButton>
+          <Button
+            type="button"
+            disabled={isSubmitting || !sale}
+            onClick={handleSubmit(onSubmit)}
+            className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-md"
+          >
+            {isSubmitting ? "Recording…" : "Record payment"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ── Main client ───────────────────────────────────────────────────────────────
 
 type Props = {
   sales: SaleRow[]
@@ -42,6 +238,7 @@ export function SalesClient({ sales }: Props) {
   const [detailSale, setDetailSale] = useState<SaleDetail | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [loadingDetail, setLoadingDetail] = useState(false)
+  const [markPaidSale, setMarkPaidSale] = useState<SaleRow | null>(null)
 
   async function openDetail(saleId: string) {
     setLoadingDetail(true)
@@ -101,40 +298,66 @@ export function SalesClient({ sales }: Props) {
                 <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Seller</TableHead>
                 <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Customer</TableHead>
                 <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Method</TableHead>
+                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Payment</TableHead>
                 <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">Items</TableHead>
                 <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">Total</TableHead>
+                <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sales.map((sale) => (
-                <TableRow
-                  key={sale.id}
-                  className="hover:bg-neutral-50/60 transition-colors cursor-pointer"
-                  onClick={() => openDetail(sale.id)}
-                >
-                  <TableCell className="text-sm text-neutral-700 py-3.5">
-                    {formatDate(sale.soldOn)}
-                  </TableCell>
-                  <TableCell className="text-sm text-neutral-700 py-3.5">
-                    {sale.sellerLabel}
-                  </TableCell>
-                  <TableCell className="text-sm text-neutral-500 py-3.5">
-                    {sale.customerName ?? <span className="text-neutral-300">—</span>}
-                  </TableCell>
-                  <TableCell className="text-sm text-neutral-500 py-3.5">
-                    {sale.paymentMethod
-                      ? PAYMENT_METHOD_LABELS[sale.paymentMethod] ?? sale.paymentMethod
-                      : <span className="text-neutral-300">—</span>}
-                  </TableCell>
-                  <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3.5 text-right">
-                    {sale.lineCount}
-                  </TableCell>
-                  <TableCell className="text-sm font-mono tabular-nums font-medium text-neutral-950 py-3.5 text-right">
-                    <span className="font-inter">₦</span>
-                    {formatNaira(sale.totalCents)}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {sales.map((sale) => {
+                const canMarkPaid = sale.paymentStatus === "unpaid" || sale.paymentStatus === "partial"
+                return (
+                  <TableRow
+                    key={sale.id}
+                    className="hover:bg-neutral-50/60 transition-colors cursor-pointer"
+                    onClick={() => openDetail(sale.id)}
+                  >
+                    <TableCell className="text-sm text-neutral-700 py-3.5">
+                      {formatDate(sale.soldOn)}
+                    </TableCell>
+                    <TableCell className="text-sm text-neutral-700 py-3.5">
+                      {sale.sellerLabel}
+                    </TableCell>
+                    <TableCell className="text-sm text-neutral-500 py-3.5">
+                      {sale.customerName ?? <span className="text-neutral-300">—</span>}
+                    </TableCell>
+                    <TableCell className="text-sm text-neutral-500 py-3.5">
+                      {sale.paymentMethod
+                        ? PAYMENT_METHOD_LABELS[sale.paymentMethod] ?? sale.paymentMethod
+                        : <span className="text-neutral-300">—</span>}
+                    </TableCell>
+                    <TableCell className="py-3.5">
+                      <PaymentBadge status={sale.paymentStatus} />
+                    </TableCell>
+                    <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3.5 text-right">
+                      {sale.lineCount}
+                    </TableCell>
+                    <TableCell className="text-sm font-mono tabular-nums font-medium text-neutral-950 py-3.5 text-right">
+                      <span className="font-inter">₦</span>
+                      {formatNaira(sale.totalCents)}
+                    </TableCell>
+                    <TableCell
+                      className="py-3.5 text-right w-10"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {canMarkPaid && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 transition-colors">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setMarkPaidSale(sale)}>
+                              <CreditCard className="h-3.5 w-3.5 mr-2" />
+                              Mark as paid
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         </div>
@@ -208,17 +431,49 @@ export function SalesClient({ sales }: Props) {
                 </div>
               </div>
 
-              {/* Total */}
-              <div className="flex items-center justify-between rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-3">
-                <span className="text-sm font-semibold text-neutral-950">Total</span>
-                <span className="text-base font-semibold tabular-nums text-neutral-950">
-                  <span className="font-inter">₦</span>{formatNaira(detailSale.totalCents)}
-                </span>
+              {/* Payment summary */}
+              <div className="rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-3 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-neutral-500">Total</span>
+                  <span className="font-semibold tabular-nums text-neutral-950">
+                    <span className="font-inter">₦</span>{formatNaira(detailSale.totalCents)}
+                  </span>
+                </div>
+                {detailSale.amountPaidCents > 0 && detailSale.amountPaidCents < detailSale.totalCents && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-neutral-500">Paid</span>
+                    <span className="tabular-nums text-emerald-700">
+                      <span className="font-inter">₦</span>{formatNaira(detailSale.amountPaidCents)}
+                    </span>
+                  </div>
+                )}
+                {detailSale.paymentStatus !== "paid" && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-neutral-500">Outstanding</span>
+                    <span className="tabular-nums text-amber-700">
+                      <span className="font-inter">₦</span>{formatNaira(detailSale.totalCents - detailSale.amountPaidCents)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between pt-1 border-t border-neutral-200">
+                  <span className="text-sm text-neutral-500">Payment status</span>
+                  <PaymentBadge status={detailSale.paymentStatus} />
+                </div>
               </div>
             </div>
           ) : null}
         </DialogContent>
       </Dialog>
+
+      {/* Mark as paid modal */}
+      <MarkAsPaidModal
+        sale={markPaidSale}
+        onClose={() => setMarkPaidSale(null)}
+        onSuccess={() => {
+          setMarkPaidSale(null)
+          router.refresh()
+        }}
+      />
 
       {/* New sale dialog */}
       <RecordSaleDialog

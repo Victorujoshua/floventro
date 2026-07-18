@@ -10,6 +10,8 @@ export type SaleRow = {
   customerName: string | null
   customerPhone: string | null
   paymentMethod: string | null
+  paymentStatus: string
+  amountPaidCents: number
   totalCents: number
   lineCount: number
   createdAt: string
@@ -37,6 +39,8 @@ type RawSaleRow = {
   customer_name: string | null
   customer_phone: string | null
   payment_method: string | null
+  payment_status: string
+  amount_paid_cents: number
   total_cents: number
   created_at: string
   sale_lines: { count: number }[]
@@ -58,6 +62,8 @@ type RawSaleDetail = {
   customer_name: string | null
   customer_phone: string | null
   payment_method: string | null
+  payment_status: string
+  amount_paid_cents: number
   total_cents: number
   note: string | null
   created_at: string
@@ -93,7 +99,7 @@ export async function getSales(): Promise<SaleRow[]> {
 
   const { data, error } = await supabase
     .from("sales")
-    .select("id, sold_on, seller_user_id, customer_name, customer_phone, payment_method, total_cents, created_at, sale_lines(count)")
+    .select("id, sold_on, seller_user_id, customer_name, customer_phone, payment_method, payment_status, amount_paid_cents, total_cents, created_at, sale_lines(count)")
     .order("created_at", { ascending: false })
     .limit(100)
 
@@ -111,6 +117,8 @@ export async function getSales(): Promise<SaleRow[]> {
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
     paymentMethod: row.payment_method,
+    paymentStatus: row.payment_status,
+    amountPaidCents: row.amount_paid_cents,
     totalCents: row.total_cents,
     lineCount: (row.sale_lines as unknown as { count: number }[])?.[0]?.count ?? row.sale_lines?.length ?? 0,
     createdAt: row.created_at,
@@ -126,7 +134,7 @@ export async function getSaleById(id: string): Promise<SaleDetail | null> {
 
   const { data, error } = await supabase
     .from("sales")
-    .select("id, sold_on, seller_user_id, customer_name, customer_phone, payment_method, total_cents, note, created_at, sale_lines(id, product_id, quantity, unit_price_cents, line_total_cents, products(name, sku))")
+    .select("id, sold_on, seller_user_id, customer_name, customer_phone, payment_method, payment_status, amount_paid_cents, total_cents, note, created_at, sale_lines(id, product_id, quantity, unit_price_cents, line_total_cents, products(name, sku))")
     .eq("id", id)
     .single()
 
@@ -143,6 +151,8 @@ export async function getSaleById(id: string): Promise<SaleDetail | null> {
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
     paymentMethod: row.payment_method,
+    paymentStatus: row.payment_status,
+    amountPaidCents: row.amount_paid_cents,
     totalCents: row.total_cents,
     note: row.note,
     lineCount: row.sale_lines.length,
