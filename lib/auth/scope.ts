@@ -63,6 +63,36 @@ export async function getCurrentScope(): Promise<Scope | null> {
         role: match.role as Role,
       }
     }
+
+    // ── Owner branch-entry: a branch cookie is set but no exact row matches ──
+    // Owner memberships have branch_id = NULL, so the match above never fires
+    // when a branch cookie is present. Re-validate with two explicit checks:
+    // (1) the caller is an owner of requestedOrg, (2) the branch still exists
+    // in that same org. If the branch was deleted, fall back to org-level scope.
+    if (requestedRole === "owner" && requestedBranch) {
+      const ownerMembership = memberships.find(
+        (m) =>
+          m.organisation_id === requestedOrg &&
+          m.role === "owner" &&
+          m.branch_id === null,
+      )
+      if (ownerMembership) {
+        const { data: branch } = await supabase
+          .from("branches")
+          .select("id")
+          .eq("id", requestedBranch)
+          .eq("organisation_id", requestedOrg) // tenant-isolation: must be in the same org
+          .is("deleted_at", null)
+          .maybeSingle()
+
+        return {
+          userId: user.id,
+          organisationId: requestedOrg,
+          branchId: branch ? requestedBranch : null, // null if branch was deleted
+          role: "owner",
+        }
+      }
+    }
   }
 
   // Fall back to the highest-priority membership (deterministic).
@@ -101,7 +131,58 @@ export async function setCurrentScope(scope: {
   } = await supabase.auth.getUser()
   if (!user) return false
 
-  // Build the query to verify this is a real membership.
+  // ── Owner branch-entry path ───────────────────────────────────────────────
+  // Owner memberships have branch_id = NULL (org-wide), so the exact-membership
+  // query below would reject any non-null branchId for an owner. This path
+  // handles that case with two explicit tenant-isolation checks instead.
+  if (scope.role === "owner" && scope.branchId !== null) {
+    // 1. Verify the caller has an active owner membership in this org.
+    //    This is a branch_id IS NULL membership — the canonical owner row.
+    const { data: ownerMembership } = await supabase
+      .from("memberships")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("organisation_id", scope.organisationId)
+      .eq("role", "owner")
+      .is("branch_id", null)
+      .is("deleted_at", null)
+      .maybeSingle()
+
+    if (!ownerMembership) return false
+
+    // 2. Verify the target branch EXISTS and belongs to THE SAME ORG the
+    //    owner owns. "branch exists" alone is insufficient — this eq on
+    //    organisation_id is the tenant-isolation guard that prevents an owner
+    //    of org A from entering a branch belonging to org B.
+    const { data: branch } = await supabase
+      .from("branches")
+      .select("id")
+      .eq("id", scope.branchId)
+      .eq("organisation_id", scope.organisationId) // ← must match the owned org
+      .is("deleted_at", null)
+      .maybeSingle()
+
+    if (!branch) return false
+
+    // Both checks passed — write cookies with the entered branch.
+    const cookieStore = await cookies()
+    const cookieOpts = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax" as const,
+      maxAge: 60 * 60 * 24 * 30,
+      path: "/",
+    }
+    cookieStore.set(COOKIE_ORG, scope.organisationId, cookieOpts)
+    cookieStore.set(COOKIE_ROLE, scope.role, cookieOpts)
+    cookieStore.set(COOKIE_BRANCH, scope.branchId, cookieOpts)
+    return true
+  }
+
+  // ── All other cases: exact-membership validation (UNCHANGED) ─────────────
+  // Non-owner roles (inventory / sales / internal_use) and owner clearing
+  // their entered branch (branchId = null) must match an exact membership row.
+  // Nothing below this line changed from the original implementation.
   let query = supabase
     .from("memberships")
     .select("id")
