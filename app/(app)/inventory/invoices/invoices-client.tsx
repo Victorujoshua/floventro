@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
-import { MoreHorizontal, CreditCard, History } from "lucide-react"
+import { MoreHorizontal, CreditCard, History, PackagePlus } from "lucide-react"
 import { formatNaira } from "@/lib/format/money"
 import {
   paymentSchema,
@@ -17,7 +17,12 @@ import {
   recordPaymentAction,
   getInvoicePaymentsAction,
 } from "@/lib/db/actions/payments"
+import {
+  getInvoiceForReceivingAction,
+  receiveInvoiceStockAction,
+} from "@/lib/db/actions/invoices"
 import type { InvoicePayment } from "@/lib/db/queries/payments"
+import type { InvoiceForReceiving } from "@/lib/db/queries/invoices"
 import {
   Table,
   TableBody,
@@ -52,6 +57,7 @@ export type InvoiceRow = {
   total_cents:      number
   amount_paid_cents: number
   status:           string
+  receipt_status:   string
   vendors:          { name: string } | { name: string }[] | null
 }
 
@@ -61,9 +67,9 @@ function resolveVendorName(vendors: InvoiceRow["vendors"]): string {
   return (vendors as { name?: string }).name ?? "—"
 }
 
-// ── Status badge ──────────────────────────────────────────────────────────────
+// ── Payment status badge ──────────────────────────────────────────────────────
 
-function StatusBadge({ status, dueDate, today }: { status: string; dueDate: string | null; today: string }) {
+function PaymentBadge({ status, dueDate, today }: { status: string; dueDate: string | null; today: string }) {
   const effective =
     status === "paid"
       ? "paid"
@@ -86,11 +92,28 @@ function StatusBadge({ status, dueDate, today }: { status: string; dueDate: stri
   )
 }
 
+// ── Receipt status badge ──────────────────────────────────────────────────────
+
+function ReceiptBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; className: string }> = {
+    pending:            { label: "Awaiting delivery",  className: "bg-tint-amber text-amber-700" },
+    partially_received: { label: "Partially received", className: "bg-tint-amber text-amber-700" },
+    received:           { label: "Received",           className: "bg-tint-success text-green-700" },
+  }
+  const entry = map[status] ?? { label: status, className: "bg-neutral-100 text-neutral-500" }
+
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${entry.className}`}>
+      {entry.label}
+    </span>
+  )
+}
+
 // ── Record payment modal ──────────────────────────────────────────────────────
 
 function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose: () => void }) {
   const router = useRouter()
-  const today = new Date().toLocaleDateString("en-CA") // YYYY-MM-DD in local tz
+  const today = new Date().toLocaleDateString("en-CA")
   const outstanding = invoice.total_cents - invoice.amount_paid_cents
 
   const {
@@ -111,11 +134,11 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
   const [serverError, setServerError] = useState<string | null>(null)
   const amountNaira = watch("amountNaira")
 
-  const amountCents  = amountNaira ? Math.round(amountNaira * 100) : 0
-  const newPaid      = invoice.amount_paid_cents + amountCents
+  const amountCents    = amountNaira ? Math.round(amountNaira * 100) : 0
+  const newPaid        = invoice.amount_paid_cents + amountCents
   const newOutstanding = Math.max(0, invoice.total_cents - newPaid)
-  const previewStatus =
-    newPaid <= 0              ? "Unpaid"
+  const previewStatus  =
+    newPaid <= 0                   ? "Unpaid"
     : newPaid < invoice.total_cents ? "Partial"
     : "Paid"
 
@@ -133,7 +156,6 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="mt-4 space-y-4">
-      {/* Invoice summary strip */}
       <div className="rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-3 flex flex-col divide-y divide-neutral-100">
         <div className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
           <p className="text-xs text-neutral-500">Total</p>
@@ -163,7 +185,6 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
 
       <input type="hidden" {...register("invoiceId")} />
 
-      {/* Amount */}
       <div className="space-y-1.5">
         <Label htmlFor="amountNaira">Amount (<span className="font-inter">₦</span>)</Label>
         <div className="flex gap-2">
@@ -190,7 +211,6 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
         )}
       </div>
 
-      {/* Payment date */}
       <div className="space-y-1.5">
         <Label htmlFor="paidOn">Payment date</Label>
         <Input
@@ -204,7 +224,6 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
         )}
       </div>
 
-      {/* Method */}
       <div className="space-y-1.5">
         <Label htmlFor="method">Method</Label>
         <select
@@ -223,7 +242,6 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
         )}
       </div>
 
-      {/* Reference */}
       <div className="space-y-1.5">
         <Label htmlFor="reference">
           Reference{" "}
@@ -237,7 +255,6 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
         />
       </div>
 
-      {/* Note */}
       <div className="space-y-1.5">
         <Label htmlFor="note">
           Note{" "}
@@ -246,7 +263,6 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
         <Textarea id="note" rows={2} {...register("note")} />
       </div>
 
-      {/* Live preview */}
       {amountCents > 0 && (
         <div className="rounded-md bg-violet-50 border border-violet-100 px-4 py-2.5 text-sm text-violet-800">
           After this payment:{" "}
@@ -347,13 +363,209 @@ function PaymentHistoryModal({ invoiceId }: { invoiceId: string }) {
   )
 }
 
+// ── Receive invoice stock modal ───────────────────────────────────────────────
+
+function ReceiveInvoiceForm({
+  invoice,
+  onClose,
+  onSuccess,
+}: {
+  invoice: InvoiceForReceiving
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const [quantities, setQuantities] = useState<number[]>(
+    invoice.lines.map((l) => l.remaining),
+  )
+  const [note, setNote]             = useState("")
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  function setQty(index: number, value: number) {
+    setQuantities((prev) => prev.map((q, i) => (i === index ? value : q)))
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const lines = invoice.lines
+      .map((l, i) => ({ lineId: l.id, quantityReceived: quantities[i] ?? 0 }))
+      .filter((l) => l.quantityReceived > 0)
+
+    if (lines.length === 0) {
+      setSubmitError("Enter at least one quantity greater than 0.")
+      return
+    }
+
+    setSubmitError(null)
+    setIsSubmitting(true)
+    try {
+      const result = await receiveInvoiceStockAction(invoice.id, lines, note)
+      if (!result.ok) {
+        setSubmitError(result.error)
+        return
+      }
+      toast.success("Stock received")
+      onClose()
+      onSuccess()
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-4 space-y-5">
+      {/* Lines table */}
+      <div className="rounded-lg border border-neutral-200 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-neutral-50 border-b border-neutral-200">
+              <th className="px-3 py-2 text-left text-xs font-medium text-neutral-500 w-full">Product</th>
+              <th className="px-3 py-2 text-right text-xs font-medium text-neutral-500 whitespace-nowrap">Ordered</th>
+              <th className="px-3 py-2 text-right text-xs font-medium text-neutral-500 whitespace-nowrap">Received</th>
+              <th className="px-3 py-2 text-right text-xs font-medium text-neutral-500 whitespace-nowrap">Remaining</th>
+              <th className="px-3 py-2 text-right text-xs font-medium text-neutral-500 whitespace-nowrap">Receiving now</th>
+            </tr>
+          </thead>
+          <tbody>
+            {invoice.lines.map((line, index) => (
+              <tr key={line.id} className="border-b border-neutral-100 last:border-0">
+                <td className="px-3 py-2.5">
+                  <p className="font-medium text-neutral-950">{line.productName}</p>
+                  <p className="text-xs font-mono text-neutral-400">{line.productSku}</p>
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums text-neutral-500">
+                  {line.quantity}
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums text-neutral-500">
+                  {line.quantityReceived}
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums text-neutral-500">
+                  {line.remaining}
+                </td>
+                <td className="px-3 py-2.5 text-right">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={line.remaining}
+                    value={quantities[index] ?? 0}
+                    onChange={(e) => setQty(index, Math.max(0, Math.min(line.remaining, parseInt(e.target.value, 10) || 0)))}
+                    className="h-8 w-20 text-sm tabular-nums text-right ml-auto"
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Note */}
+      <div className="space-y-1.5">
+        <Label htmlFor="receive-note">
+          Note{" "}
+          <span className="text-neutral-400 font-normal">(optional)</span>
+        </Label>
+        <textarea
+          id="receive-note"
+          rows={2}
+          placeholder="e.g. 2 units short, backordered"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-violet-700 focus:border-violet-700 resize-none"
+        />
+      </div>
+
+      {submitError && (
+        <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+          {submitError}
+        </p>
+      )}
+
+      <div className="flex justify-end gap-2 pt-1">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md border border-neutral-200 px-4 h-10 text-sm text-neutral-600 hover:bg-neutral-50 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="rounded-md bg-neutral-800 text-white px-4 h-10 text-sm font-medium hover:bg-neutral-900 active:scale-[0.98] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {isSubmitting ? "Receiving…" : "Confirm receipt"}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function ReceiveInvoiceModal({
+  invoice,
+  onClose,
+  onSuccess,
+}: {
+  invoice: InvoiceRow | null
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const [data, setData]       = useState<InvoiceForReceiving | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!invoice) return
+    setLoading(true)
+    setData(null)
+    getInvoiceForReceivingAction(invoice.id).then((d) => {
+      setData(d)
+      setLoading(false)
+    })
+  }, [invoice?.id])
+
+  return (
+    <Dialog
+      open={invoice !== null}
+      onOpenChange={(open: boolean) => { if (!open) onClose() }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Receive stock</DialogTitle>
+          {invoice && (
+            <p className="text-sm text-neutral-500">
+              {resolveVendorName(invoice.vendors)}
+              {invoice.invoice_number ? ` · ${invoice.invoice_number}` : ""}
+            </p>
+          )}
+        </DialogHeader>
+
+        {loading && (
+          <p className="text-sm text-neutral-500 py-6 text-center">Loading…</p>
+        )}
+        {!loading && data && (
+          <ReceiveInvoiceForm
+            key={data.id}
+            invoice={data}
+            onClose={onClose}
+            onSuccess={onSuccess}
+          />
+        )}
+        {!loading && !data && invoice && (
+          <p className="text-sm text-red-600 py-4">Failed to load invoice lines. Please try again.</p>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export function InvoicesClient({ invoices }: { invoices: InvoiceRow[] }) {
-  const today = new Date().toLocaleDateString("en-CA") // YYYY-MM-DD in local tz
+  const router = useRouter()
+  const today  = new Date().toLocaleDateString("en-CA")
 
-  const [payModal,  setPayModal]  = useState<InvoiceRow | null>(null)
-  const [histModal, setHistModal] = useState<InvoiceRow | null>(null)
+  const [payModal,     setPayModal]     = useState<InvoiceRow | null>(null)
+  const [histModal,    setHistModal]    = useState<InvoiceRow | null>(null)
+  const [receiveModal, setReceiveModal] = useState<InvoiceRow | null>(null)
 
   return (
     <>
@@ -380,15 +592,19 @@ export function InvoicesClient({ invoices }: { invoices: InvoiceRow[] }) {
                 Outstanding
               </TableHead>
               <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
-                Status
+                Delivery
+              </TableHead>
+              <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
+                Payment
               </TableHead>
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {invoices.map((inv) => {
-              const outstanding = inv.total_cents - inv.amount_paid_cents
-              const isPaid      = inv.status === "paid"
+              const outstanding     = inv.total_cents - inv.amount_paid_cents
+              const isPaid          = inv.status === "paid"
+              const isFullyReceived = inv.receipt_status === "received"
 
               return (
                 <TableRow key={inv.id} className="hover:bg-neutral-50/60 transition-colors">
@@ -413,7 +629,10 @@ export function InvoicesClient({ invoices }: { invoices: InvoiceRow[] }) {
                     </span>
                   </TableCell>
                   <TableCell className="py-3.5">
-                    <StatusBadge
+                    <ReceiptBadge status={inv.receipt_status} />
+                  </TableCell>
+                  <TableCell className="py-3.5">
+                    <PaymentBadge
                       status={inv.status}
                       dueDate={inv.due_date}
                       today={today}
@@ -428,6 +647,15 @@ export function InvoicesClient({ invoices }: { invoices: InvoiceRow[] }) {
                         <MoreHorizontal size={16} />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
+                        {!isFullyReceived && (
+                          <DropdownMenuItem
+                            className="gap-2"
+                            onClick={() => setReceiveModal(inv)}
+                          >
+                            <PackagePlus size={14} />
+                            Receive stock
+                          </DropdownMenuItem>
+                        )}
                         {!isPaid && (
                           <DropdownMenuItem
                             className="gap-2"
@@ -453,6 +681,13 @@ export function InvoicesClient({ invoices }: { invoices: InvoiceRow[] }) {
           </TableBody>
         </Table>
       </div>
+
+      {/* Receive stock dialog */}
+      <ReceiveInvoiceModal
+        invoice={receiveModal}
+        onClose={() => setReceiveModal(null)}
+        onSuccess={() => router.refresh()}
+      />
 
       {/* Record payment dialog */}
       <Dialog

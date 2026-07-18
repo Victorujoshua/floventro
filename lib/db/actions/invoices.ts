@@ -3,6 +3,7 @@
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { requireRole } from "@/lib/auth/guards"
 import { invoiceSchema, type InvoiceInput } from "@/lib/validation/invoices"
+import { getInvoiceForReceiving } from "@/lib/db/queries/invoices"
 
 type ActionResult<T = null> =
   | { ok: true; data: T }
@@ -70,4 +71,42 @@ export async function recordInvoiceAction(
   }
 
   return { ok: true, data: { invoiceId: invoiceId as string } }
+}
+
+export async function getInvoiceForReceivingAction(invoiceId: string) {
+  await requireRole("owner", "inventory")
+  return getInvoiceForReceiving(invoiceId)
+}
+
+export async function receiveInvoiceStockAction(
+  invoiceId: string,
+  lines: { lineId: string; quantityReceived: number }[],
+  note: string,
+): Promise<{ ok: true; receiptStatus: string } | { ok: false; error: string; code?: string }> {
+  await requireRole("owner", "inventory")
+  const supabase = await createAppServerClient()
+
+  const rpcLines = lines.map((l) => ({
+    line_id: l.lineId,
+    quantity_received: l.quantityReceived,
+  }))
+
+  const { data, error } = await supabase.rpc("receive_invoice_stock", {
+    p_invoice_id: invoiceId,
+    p_lines: rpcLines,
+    p_note: note || null,
+  })
+
+  if (error) {
+    const msg = error.message.toLowerCase()
+    if (msg.includes("already fully received"))
+      return { ok: false, error: "This invoice has already been fully received.", code: "already_received" }
+    if (msg.includes("cannot receive more than ordered"))
+      return { ok: false, error: error.message, code: "over_receive" }
+    if (msg.includes("not authorised"))
+      return { ok: false, error: "You don't have permission to receive stock for this invoice.", code: "not_allowed" }
+    return { ok: false, error: "Something went wrong. Please try again.", code: "server" }
+  }
+
+  return { ok: true, receiptStatus: data as string }
 }

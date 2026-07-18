@@ -79,7 +79,7 @@ export function InvoiceForm({ vendors, products, resolvedBranchId, branches }: P
       return
     }
 
-    toast.success("Invoice recorded — stock updated")
+    toast.success("Invoice recorded. Receive stock when it arrives.")
     router.push("/inventory/products")
   }
 
@@ -88,7 +88,7 @@ export function InvoiceForm({ vendors, products, resolvedBranchId, branches }: P
       <div className="mb-6">
         <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Record invoice</h1>
         <p className="mt-1 text-sm text-neutral-500">
-          Stock will be updated immediately on submission.
+          Stock moves when you confirm delivery.
         </p>
       </div>
 
