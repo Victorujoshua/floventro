@@ -17,6 +17,7 @@ import {
   Wallet,
   Layers,
   Sparkles,
+  ArrowLeftRight,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Role } from "@/lib/auth/scope"
@@ -69,14 +70,16 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
 
 const MANAGEMENT_MENU: Record<Role, NavItem[]> = {
   owner: [
-    { label: "Team",           href: "/admin/team",             icon: Users },
-    { label: "Settings",       href: "/admin/settings",         icon: SettingsIcon },
-    { label: "Staff holdings", href: "/inventory/holdings",     icon: Layers },
-    { label: "Services",       href: "/inventory/services",     icon: Sparkles },
+    { label: "Team",           href: "/admin/team",                  icon: Users },
+    { label: "Settings",       href: "/admin/settings",              icon: SettingsIcon },
+    { label: "Staff holdings", href: "/inventory/holdings",          icon: Layers },
+    { label: "Transfers",      href: "/inventory/transfers",         icon: ArrowLeftRight },
+    { label: "Services",       href: "/inventory/services",          icon: Sparkles },
   ],
   inventory: [
-    { label: "Staff holdings", href: "/inventory/holdings",     icon: Layers },
-    { label: "Services",       href: "/inventory/services",     icon: Sparkles },
+    { label: "Staff holdings", href: "/inventory/holdings",          icon: Layers },
+    { label: "Transfers",      href: "/inventory/transfers",         icon: ArrowLeftRight },
+    { label: "Services",       href: "/inventory/services",          icon: Sparkles },
   ],
   sales:        [],
   internal_use: [],
