@@ -55,7 +55,11 @@ export default async function OrgOverviewPage() {
           <p className="text-2xl font-semibold text-neutral-950 tabular-nums mt-3">
             {overview.totalStockUnits.toLocaleString()}
           </p>
-          <p className="text-xs text-neutral-500 mt-1">units across all branches</p>
+          <p className="text-xs text-neutral-500 mt-1 tabular-nums">
+            {overview.poolStockUnits.toLocaleString()} in branches
+            {overview.heldByStaffUnits > 0 && ` · ${overview.heldByStaffUnits.toLocaleString()} with staff`}
+            {overview.inTransitUnits > 0 && ` · ${overview.inTransitUnits.toLocaleString()} in transit`}
+          </p>
         </div>
 
         <div

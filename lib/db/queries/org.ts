@@ -7,7 +7,7 @@ import { getCurrentScope } from "@/lib/auth/scope"
 export type BranchSummary = {
   id: string
   name: string
-  address: string | null
+  // address removed — column does not exist in branches table (Option B)
   revenueLast30dCents: number
   stockUnits: number
 }
@@ -15,7 +15,12 @@ export type BranchSummary = {
 export type OrgOverview = {
   revenueLast30dCents: number
   revenueAllTimeCents: number
+  // Pool stock + staff holdings + in-transit
   totalStockUnits: number
+  // Breakdown for the card subtitle
+  poolStockUnits: number
+  heldByStaffUnits: number
+  inTransitUnits: number
   pendingRequestCount: number
   outstandingCents: number
   lowStockCount: number
@@ -123,7 +128,6 @@ async function fetchOrgCostMap(supabase: any, organisationId: string): Promise<M
   type RawLine = { product_id: string; quantity: number; unit_cost_cents: number }
   type RawInvoice = { vendor_invoice_lines: RawLine[] }
 
-  // Accumulate (totalCostCents, totalQty) per product across all invoices
   const perProduct = new Map<string, { totalCostCents: number; totalQty: number }>()
   for (const inv of (data as unknown as RawInvoice[])) {
     for (const line of inv.vendor_invoice_lines ?? []) {
@@ -140,7 +144,6 @@ async function fetchOrgCostMap(supabase: any, organisationId: string): Promise<M
     }
   }
 
-  // Compute weighted average: totalCostCents / totalQty
   const result = new Map<string, number>()
   for (const [productId, { totalCostCents, totalQty }] of perProduct) {
     if (totalQty > 0) {
@@ -152,60 +155,102 @@ async function fetchOrgCostMap(supabase: any, organisationId: string): Promise<M
 
 // ── getOrgOverview ────────────────────────────────────────────────────────────
 
-const EMPTY_OVERVIEW: OrgOverview = {
-  revenueLast30dCents: 0,
-  revenueAllTimeCents: 0,
-  totalStockUnits: 0,
-  pendingRequestCount: 0,
-  outstandingCents: 0,
-  lowStockCount: 0,
-  branches: [],
-}
-
 export async function getOrgOverview(): Promise<OrgOverview> {
   const scope = await getCurrentScope()
-  if (!scope) return EMPTY_OVERVIEW
+  if (!scope) throw new Error("No active scope — unauthenticated or missing membership")
 
   const supabase = await createAppServerClient()
   const cutoff = since30dCutoff()
 
-  const [branchRes, salesRes, productRes, requestRes, invoiceRes] = await Promise.all([
-    supabase
-      .from("branches")
-      .select("id, name, address")
-      .eq("organisation_id", scope.organisationId)
-      .is("deleted_at", null)
-      .order("name"),
+  // Run all queries in parallel. Errors are checked below before any processing.
+  const [branchRes, salesRes, productRes, requestRes, invoiceRes, staffRes, transferRes] =
+    await Promise.all([
+      // Bug 1 fix: select only columns that actually exist (no `address`)
+      supabase
+        .from("branches")
+        .select("id, name")
+        .eq("organisation_id", scope.organisationId)
+        .is("deleted_at", null)
+        .order("name"),
 
-    supabase
-      .from("sales")
-      .select("branch_id, total_cents, created_at")
-      .eq("organisation_id", scope.organisationId),
+      supabase
+        .from("sales")
+        .select("branch_id, total_cents, created_at")
+        .eq("organisation_id", scope.organisationId),
 
-    supabase
-      .from("products")
-      .select("reorder_point, product_stock(branch_id, quantity)")
-      .eq("organisation_id", scope.organisationId)
-      .is("deleted_at", null),
+      supabase
+        .from("products")
+        .select("reorder_point, product_stock(branch_id, quantity)")
+        .eq("organisation_id", scope.organisationId)
+        .is("deleted_at", null),
 
-    supabase
-      .from("stock_requests")
-      .select("id", { count: "exact", head: true })
-      .eq("organisation_id", scope.organisationId)
-      .eq("status", "pending")
-      .is("deleted_at", null),
+      supabase
+        .from("stock_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("organisation_id", scope.organisationId)
+        .eq("status", "pending")
+        .is("deleted_at", null),
 
-    supabase
-      .from("vendor_invoices")
-      .select("total_cents, amount_paid_cents")
-      .eq("organisation_id", scope.organisationId)
-      .is("deleted_at", null)
-      .in("status", ["unpaid", "partial"]),
-  ])
+      supabase
+        .from("vendor_invoices")
+        .select("total_cents, amount_paid_cents")
+        .eq("organisation_id", scope.organisationId)
+        .is("deleted_at", null)
+        .in("status", ["unpaid", "partial"]),
+
+      // Bug 2 fix: staff_holdings org-wide sum
+      // staff_holdings has organisation_id directly (see app_0022_staff_holdings.sql).
+      // RLS: owner can read all holdings via user_vendor_write_branch_ids() which
+      // returns all non-deleted branches for their org.
+      supabase
+        .from("staff_holdings")
+        .select("quantity")
+        .eq("organisation_id", scope.organisationId),
+
+      // Bug 2 fix: in-transit stock
+      // stock_transfers has organisation_id; nested select pulls transfer lines.
+      // RLS: owner can read all transfers via user_vendor_read_branch_ids().
+      supabase
+        .from("stock_transfers")
+        .select("stock_transfer_lines(quantity_sent, quantity_received)")
+        .eq("organisation_id", scope.organisationId)
+        .eq("status", "in_transit"),
+    ])
+
+  // Bug 3 fix: check errors explicitly — never let a failed query masquerade
+  // as empty data. Throw so Next.js shows an error boundary instead of "0 branches".
+  if (branchRes.error) {
+    console.error("[getOrgOverview] branches query failed", branchRes.error)
+    throw branchRes.error
+  }
+  if (salesRes.error) {
+    console.error("[getOrgOverview] sales query failed", salesRes.error)
+    throw salesRes.error
+  }
+  if (productRes.error) {
+    console.error("[getOrgOverview] products query failed", productRes.error)
+    throw productRes.error
+  }
+  if (requestRes.error) {
+    console.error("[getOrgOverview] stock_requests query failed", requestRes.error)
+    throw requestRes.error
+  }
+  if (invoiceRes.error) {
+    console.error("[getOrgOverview] vendor_invoices query failed", invoiceRes.error)
+    throw invoiceRes.error
+  }
+  if (staffRes.error) {
+    console.error("[getOrgOverview] staff_holdings query failed", staffRes.error)
+    throw staffRes.error
+  }
+  if (transferRes.error) {
+    console.error("[getOrgOverview] stock_transfers query failed", transferRes.error)
+    throw transferRes.error
+  }
 
   // ── Revenue aggregation ───────────────────────────────────────────────────
   type RawSale = { branch_id: string; total_cents: number; created_at: string }
-  const sales = (salesRes.data ?? []) as unknown as RawSale[]
+  const sales = salesRes.data as unknown as RawSale[]
 
   let revenueAllTimeCents = 0
   let revenueLast30dCents = 0
@@ -219,36 +264,55 @@ export async function getOrgOverview(): Promise<OrgOverview> {
     }
   }
 
-  // ── Stock aggregation ─────────────────────────────────────────────────────
+  // ── Branch pool stock aggregation ─────────────────────────────────────────
   type RawProductStock = { branch_id: string; quantity: number }
   type RawProduct = { reorder_point: number; product_stock: RawProductStock[] }
-  const products = (productRes.data ?? []) as unknown as RawProduct[]
+  const products = productRes.data as unknown as RawProduct[]
 
-  let totalStockUnits = 0
+  let poolStockUnits = 0
   let lowStockCount = 0
   const branchStockMap = new Map<string, number>()
 
   for (const p of products) {
     const stocks = p.product_stock ?? []
     const totalQty = stocks.reduce((s, r) => s + r.quantity, 0)
-    totalStockUnits += totalQty
+    poolStockUnits += totalQty
     if (p.reorder_point > 0 && totalQty <= p.reorder_point) lowStockCount++
     for (const s of stocks) {
       branchStockMap.set(s.branch_id, (branchStockMap.get(s.branch_id) ?? 0) + s.quantity)
     }
   }
 
+  // ── Staff holdings sum ────────────────────────────────────────────────────
+  type RawHolding = { quantity: number }
+  const heldByStaffUnits = (staffRes.data as unknown as RawHolding[]).reduce(
+    (sum, h) => sum + h.quantity,
+    0,
+  )
+
+  // ── In-transit sum ────────────────────────────────────────────────────────
+  // Each in-transit transfer line: in-transit = quantity_sent − coalesce(quantity_received, 0)
+  type RawTransferLine = { quantity_sent: number; quantity_received: number | null }
+  type RawTransfer = { stock_transfer_lines: RawTransferLine[] }
+  let inTransitUnits = 0
+  for (const t of (transferRes.data as unknown as RawTransfer[])) {
+    for (const line of t.stock_transfer_lines ?? []) {
+      inTransitUnits += line.quantity_sent - (line.quantity_received ?? 0)
+    }
+  }
+
+  const totalStockUnits = poolStockUnits + heldByStaffUnits + inTransitUnits
+
   // ── Payables aggregation ──────────────────────────────────────────────────
   type RawInvoice = { total_cents: number; amount_paid_cents: number }
-  const invoices = (invoiceRes.data ?? []) as unknown as RawInvoice[]
+  const invoices = invoiceRes.data as unknown as RawInvoice[]
   const outstandingCents = invoices.reduce((s, i) => s + i.total_cents - i.amount_paid_cents, 0)
 
   // ── Branch summaries ──────────────────────────────────────────────────────
-  type RawBranch = { id: string; name: string; address: string | null }
-  const branches: BranchSummary[] = ((branchRes.data ?? []) as unknown as RawBranch[]).map((b) => ({
+  type RawBranch = { id: string; name: string }
+  const branches: BranchSummary[] = (branchRes.data as unknown as RawBranch[]).map((b) => ({
     id: b.id,
     name: b.name,
-    address: b.address,
     revenueLast30dCents: branchRevMap.get(b.id) ?? 0,
     stockUnits: branchStockMap.get(b.id) ?? 0,
   }))
@@ -257,6 +321,9 @@ export async function getOrgOverview(): Promise<OrgOverview> {
     revenueLast30dCents,
     revenueAllTimeCents,
     totalStockUnits,
+    poolStockUnits,
+    heldByStaffUnits,
+    inTransitUnits,
     pendingRequestCount: requestRes.count ?? 0,
     outstandingCents,
     lowStockCount,
@@ -286,7 +353,6 @@ export async function getOrgSales(): Promise<OrgSalesData> {
   const supabase = (await createAppServerClient()) as any
   const cutoff = since30dCutoff()
 
-  // Run all three data sources in parallel.
   const [salesRes, branchRes, costMap] = await Promise.all([
     supabase
       .from("sales")
@@ -304,6 +370,15 @@ export async function getOrgSales(): Promise<OrgSalesData> {
 
     fetchOrgCostMap(supabase, scope.organisationId),
   ])
+
+  if (salesRes.error) {
+    console.error("[getOrgSales] sales query failed", salesRes.error)
+    throw salesRes.error
+  }
+  if (branchRes.error) {
+    console.error("[getOrgSales] branches query failed", branchRes.error)
+    throw branchRes.error
+  }
 
   type RawLineProduct = { id: string; name: string; sku: string }
   type RawLine = {
@@ -323,10 +398,10 @@ export async function getOrgSales(): Promise<OrgSalesData> {
   }
   type RawBranch = { id: string; name: string }
 
-  const sales = (salesRes.data ?? []) as unknown as RawSale[]
+  const sales = salesRes.data as unknown as RawSale[]
 
   const branchMap = new Map<string, string>()
-  for (const b of (branchRes.data ?? []) as unknown as RawBranch[]) {
+  for (const b of branchRes.data as unknown as RawBranch[]) {
     branchMap.set(b.id, b.name)
   }
 
@@ -335,26 +410,21 @@ export async function getOrgSales(): Promise<OrgSalesData> {
   let revenueAllTimeCents = 0
   let revenueLast30dCents = 0
 
-  // For 30d profit: track revenue and cost only over lines with known cost.
   let revenueLast30dKnownCostCents = 0
   let costLast30dKnownCents = 0
   let hasAny30dCostData = false
   const missingCostProductIds = new Set<string>()
 
-  // Per-branch last-30d aggregation.
-  // hasAnyCostData: true if at least one sold line in this branch had known cost.
   const branchAgg = new Map<
     string,
     { revenueCents: number; knownCostCents: number; hasAnyCostData: boolean }
   >()
 
-  // Per-product ALL-TIME aggregation.
   type ProdAgg = {
     name: string
     sku: string
     qtySold: number
     revenueCents: number
-    // null when this product has no entry in costMap (no purchase history)
     costCents: number | null
   }
   const productAgg = new Map<string, ProdAgg>()
@@ -373,11 +443,10 @@ export async function getOrgSales(): Promise<OrgSalesData> {
 
     for (const line of sale.sale_lines ?? []) {
       const prod = Array.isArray(line.products) ? line.products[0] : line.products
-      const avgCost = costMap.get(line.product_id)    // undefined = cost unknown
+      const avgCost = costMap.get(line.product_id)
       const hasCost = avgCost !== undefined
       const lineCost = hasCost ? line.quantity * avgCost! : null
 
-      // ── Product performance (all time) ──────────────────────────────────
       const existing = productAgg.get(line.product_id)
       if (existing) {
         existing.qtySold += line.quantity
@@ -385,7 +454,6 @@ export async function getOrgSales(): Promise<OrgSalesData> {
         if (existing.costCents !== null && lineCost !== null) {
           existing.costCents += lineCost
         }
-        // If the product already had costCents = null, it stays null.
       } else {
         productAgg.set(line.product_id, {
           name: (prod as RawLineProduct | null)?.name ?? "Unknown",
@@ -396,7 +464,6 @@ export async function getOrgSales(): Promise<OrgSalesData> {
         })
       }
 
-      // ── 30d cost aggregation ─────────────────────────────────────────────
       if (isLast30d) {
         if (hasCost && lineCost !== null) {
           revenueLast30dKnownCostCents += line.line_total_cents
@@ -414,8 +481,6 @@ export async function getOrgSales(): Promise<OrgSalesData> {
     }
   }
 
-  // ── Derived metrics ───────────────────────────────────────────────────────
-
   const profitLast30dCents = hasAny30dCostData
     ? revenueLast30dKnownCostCents - costLast30dKnownCents
     : null
@@ -428,9 +493,7 @@ export async function getOrgSales(): Promise<OrgSalesData> {
   const costDataComplete = hasAny30dCostData && missingCostProductIds.size === 0
   const missingCostProductCount = missingCostProductIds.size
 
-  // ── Build output arrays ───────────────────────────────────────────────────
-
-  const branchRevenue: OrgBranchRevenue[] = ((branchRes.data ?? []) as unknown as RawBranch[])
+  const branchRevenue: OrgBranchRevenue[] = (branchRes.data as unknown as RawBranch[])
     .map((b) => {
       const agg = branchAgg.get(b.id)
       return {
@@ -497,7 +560,10 @@ export async function getOrgLedger(limit = 100): Promise<OrgLedgerRow[]> {
     .order("created_at", { ascending: false })
     .limit(limit)
 
-  if (error || !data) return []
+  if (error) {
+    console.error("[getOrgLedger] stock_ledger query failed", error)
+    throw error
+  }
 
   type RawRow = {
     id: string
@@ -512,27 +578,33 @@ export async function getOrgLedger(limit = 100): Promise<OrgLedgerRow[]> {
 
   const rows = data as unknown as RawRow[]
 
-  // Batch-resolve branch names
   const branchIds = [...new Set(rows.filter((r) => r.branch_id).map((r) => r.branch_id!))]
   const branchNameMap = new Map<string, string>()
   if (branchIds.length > 0) {
-    const { data: branches } = await supabase
+    const { data: branches, error: branchErr } = await supabase
       .from("branches")
       .select("id, name")
       .in("id", branchIds)
+    if (branchErr) {
+      console.error("[getOrgLedger] branch name lookup failed", branchErr)
+      throw branchErr
+    }
     for (const b of (branches ?? []) as { id: string; name: string }[]) {
       branchNameMap.set(b.id, b.name)
     }
   }
 
-  // Batch-resolve product names
   const productIds = [...new Set(rows.filter((r) => r.product_id).map((r) => r.product_id!))]
   const productNameMap = new Map<string, { name: string; sku: string }>()
   if (productIds.length > 0) {
-    const { data: products } = await supabase
+    const { data: products, error: prodErr } = await supabase
       .from("products")
       .select("id, name, sku")
       .in("id", productIds)
+    if (prodErr) {
+      console.error("[getOrgLedger] product name lookup failed", prodErr)
+      throw prodErr
+    }
     for (const p of (products ?? []) as { id: string; name: string; sku: string }[]) {
       productNameMap.set(p.id, { name: p.name, sku: p.sku })
     }
