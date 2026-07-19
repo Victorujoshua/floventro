@@ -51,18 +51,25 @@ export function InvoiceForm({ vendors, products, resolvedBranchId, branches }: P
       invoiceDate: today,
       dueDate: "",
       note: "",
+      vatRate: null,
       lines: [{ productId: "", quantity: 1, unitCostNaira: 0 }],
     },
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: "lines" })
 
-  const watchedLines = useWatch({ control, name: "lines" })
-  const runningTotal = (watchedLines ?? []).reduce((sum, line) => {
+  const watchedLines   = useWatch({ control, name: "lines" })
+  const watchedVatRate = useWatch({ control, name: "vatRate" })
+
+  const subtotal = (watchedLines ?? []).reduce((sum, line) => {
     const qty = Number(line.quantity) || 0
     const cost = Number(line.unitCostNaira) || 0
     return sum + qty * cost
   }, 0)
+  const vatRateNum = typeof watchedVatRate === "number" && !isNaN(watchedVatRate) && watchedVatRate > 0
+    ? watchedVatRate : 0
+  const vatNaira   = Math.round(subtotal * 100 * vatRateNum / 100) / 100
+  const runningTotal = subtotal + vatNaira
 
   const onSubmit = async (values: InvoiceInput) => {
     const result = await recordInvoiceAction(values)
@@ -156,6 +163,32 @@ export function InvoiceForm({ vendors, products, resolvedBranchId, branches }: P
         <div className="space-y-1.5">
           <Label htmlFor="note">Note</Label>
           <Textarea id="note" placeholder="Optional note" rows={2} {...register("note")} />
+        </div>
+
+        {/* VAT % */}
+        <div className="space-y-1.5 max-w-[180px]">
+          <Label htmlFor="vatRate">
+            VAT %{" "}
+            <span className="text-neutral-400 font-normal">(optional)</span>
+          </Label>
+          <div className="relative">
+            <Input
+              id="vatRate"
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              placeholder="e.g. 7.5"
+              className="rounded-md pr-8"
+              {...register("vatRate", {
+                setValueAs: (v) => v === "" || v === null ? null : Number(v),
+              })}
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-neutral-400">%</span>
+          </div>
+          {errors.vatRate && (
+            <p className="text-xs text-red-500">{errors.vatRate.message}</p>
+          )}
         </div>
 
         {/* Line items */}
@@ -266,12 +299,33 @@ export function InvoiceForm({ vendors, products, resolvedBranchId, branches }: P
 
         {/* Running total + submit */}
         <div className="flex items-center justify-between border-t border-neutral-200 pt-4">
-          <div className="text-sm text-neutral-700">
-            Total{" "}
-            <span className="text-lg font-semibold text-neutral-950 font-mono tabular-nums">
-              <span className="font-inter">₦</span>
-              {formatNaira(runningTotal)}
-            </span>
+          <div className="text-sm text-neutral-700 tabular-nums">
+            {vatRateNum > 0 ? (
+              <>
+                <span className="text-neutral-500">Subtotal </span>
+                <span className="font-semibold text-neutral-950 font-mono">
+                  <span className="font-inter">₦</span>{formatNaira(subtotal)}
+                </span>
+                <span className="text-neutral-400 mx-2">·</span>
+                <span className="text-neutral-500">VAT ({vatRateNum}%) </span>
+                <span className="font-semibold text-neutral-950 font-mono">
+                  <span className="font-inter">₦</span>{formatNaira(vatNaira)}
+                </span>
+                <span className="text-neutral-400 mx-2">·</span>
+                <span className="text-neutral-700">Total </span>
+                <span className="text-lg font-semibold text-neutral-950 font-mono">
+                  <span className="font-inter">₦</span>{formatNaira(runningTotal)}
+                </span>
+              </>
+            ) : (
+              <>
+                Total{" "}
+                <span className="text-lg font-semibold text-neutral-950 font-mono">
+                  <span className="font-inter">₦</span>
+                  {formatNaira(runningTotal)}
+                </span>
+              </>
+            )}
           </div>
 
           <Button

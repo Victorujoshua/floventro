@@ -54,6 +54,9 @@ export type InvoiceRow = {
   invoice_number:   string | null
   invoice_date:     string
   due_date:         string | null
+  subtotal_cents:   number | null
+  vat_rate:         number | null
+  vat_cents:        number | null
   total_cents:      number
   amount_paid_cents: number
   status:           string
@@ -115,6 +118,7 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
   const router = useRouter()
   const today = new Date().toLocaleDateString("en-CA")
   const outstanding = invoice.total_cents - invoice.amount_paid_cents
+  const subtotalCents = invoice.subtotal_cents ?? invoice.total_cents
 
   const {
     register,
@@ -125,20 +129,25 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
   } = useForm<PaymentInput>({
     resolver: zodResolver(paymentSchema),
     defaultValues: {
-      invoiceId:   invoice.id,
-      paidOn:      today,
-      method:      "bank_transfer",
+      invoiceId: invoice.id,
+      paidOn:    today,
+      method:    "bank_transfer",
+      whtRate:   null,
     },
   })
 
   const [serverError, setServerError] = useState<string | null>(null)
   const amountNaira = watch("amountNaira")
+  const whtRateRaw  = watch("whtRate")
+  const whtRate     = typeof whtRateRaw === "number" && !isNaN(whtRateRaw) && whtRateRaw > 0 ? whtRateRaw : 0
 
-  const amountCents    = amountNaira ? Math.round(amountNaira * 100) : 0
-  const newPaid        = invoice.amount_paid_cents + amountCents
-  const newOutstanding = Math.max(0, invoice.total_cents - newPaid)
-  const previewStatus  =
-    newPaid <= 0                   ? "Unpaid"
+  const amountCents     = amountNaira ? Math.round(amountNaira * 100) : 0
+  const whtCents        = whtRate > 0 ? Math.round(subtotalCents * whtRate / 100) : 0
+  const settlementCents = amountCents + whtCents
+  const newPaid         = invoice.amount_paid_cents + settlementCents
+  const newOutstanding  = Math.max(0, invoice.total_cents - newPaid)
+  const previewStatus   =
+    newPaid <= 0                    ? "Unpaid"
     : newPaid < invoice.total_cents ? "Partial"
     : "Paid"
 
@@ -154,10 +163,29 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
     router.refresh()
   }
 
+  const hasVat = (invoice.vat_cents ?? 0) > 0
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="mt-4 space-y-4">
+      {/* Invoice summary */}
       <div className="rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-3 flex flex-col divide-y divide-neutral-100">
-        <div className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
+        {hasVat && (
+          <>
+            <div className="flex items-center justify-between py-2 first:pt-0">
+              <p className="text-xs text-neutral-500">Subtotal</p>
+              <p className="text-sm tabular-nums text-neutral-700">
+                <span className="font-inter">₦</span>{formatNaira(subtotalCents)}
+              </p>
+            </div>
+            <div className="flex items-center justify-between py-2">
+              <p className="text-xs text-neutral-500">VAT ({invoice.vat_rate}%)</p>
+              <p className="text-sm tabular-nums text-neutral-700">
+                <span className="font-inter">₦</span>{formatNaira(invoice.vat_cents ?? 0)}
+              </p>
+            </div>
+          </>
+        )}
+        <div className="flex items-center justify-between py-2 first:pt-0">
           <p className="text-xs text-neutral-500">Total</p>
           <p className="text-sm font-semibold tabular-nums text-neutral-950">
             <span className="font-inter">₦</span>{formatNaira(invoice.total_cents)}
@@ -169,7 +197,7 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
             <span className="font-inter">₦</span>{formatNaira(invoice.amount_paid_cents)}
           </p>
         </div>
-        <div className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
+        <div className="flex items-center justify-between py-2 last:pb-0">
           <p className="text-xs text-neutral-500">Outstanding</p>
           <p className="text-sm font-semibold tabular-nums text-red-600">
             <span className="font-inter">₦</span>{formatNaira(outstanding)}
@@ -185,8 +213,11 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
 
       <input type="hidden" {...register("invoiceId")} />
 
+      {/* Cash paid */}
       <div className="space-y-1.5">
-        <Label htmlFor="amountNaira">Amount (<span className="font-inter">₦</span>)</Label>
+        <Label htmlFor="amountNaira">
+          Cash paid (<span className="font-inter">₦</span>)
+        </Label>
         <div className="flex gap-2">
           <Input
             id="amountNaira"
@@ -209,6 +240,36 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
         {errors.amountNaira && (
           <p className="text-xs text-red-600">{errors.amountNaira.message}</p>
         )}
+      </div>
+
+      {/* WHT % */}
+      <div className="space-y-1.5">
+        <Label htmlFor="whtRate">
+          Withholding tax %{" "}
+          <span className="text-neutral-400 font-normal">(optional)</span>
+        </Label>
+        <div className="relative max-w-[180px]">
+          <Input
+            id="whtRate"
+            type="number"
+            min={0}
+            max={100}
+            step="0.01"
+            placeholder="e.g. 5"
+            className="rounded-md pr-8"
+            aria-invalid={!!errors.whtRate}
+            {...register("whtRate", {
+              setValueAs: (v) => v === "" || v === null ? null : Number(v),
+            })}
+          />
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-neutral-400">%</span>
+        </div>
+        {errors.whtRate && (
+          <p className="text-xs text-red-600">{errors.whtRate.message}</p>
+        )}
+        <p className="text-xs text-neutral-400">
+          Withholding tax is deducted from the vendor and remitted to FIRS; the invoice is settled by cash + WHT.
+        </p>
       </div>
 
       <div className="space-y-1.5">
@@ -263,17 +324,29 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
         <Textarea id="note" rows={2} {...register("note")} />
       </div>
 
+      {/* Settlement preview */}
       {amountCents > 0 && (
-        <div className="rounded-md bg-violet-50 border border-violet-100 px-4 py-2.5 text-sm text-violet-800">
-          After this payment:{" "}
-          <span className="font-semibold tabular-nums">
-            <span className="font-inter">₦</span>{formatNaira(newPaid)}
-          </span>{" "}
-          paid,{" "}
-          <span className="font-semibold tabular-nums">
-            <span className="font-inter">₦</span>{formatNaira(newOutstanding)}
-          </span>{" "}
-          outstanding — <span className="font-semibold">{previewStatus}</span>
+        <div className="rounded-md bg-violet-50 border border-violet-100 px-4 py-3 text-sm text-violet-800 space-y-1">
+          <div className="flex justify-between tabular-nums">
+            <span>Cash paid</span>
+            <span className="font-semibold"><span className="font-inter">₦</span>{formatNaira(amountCents)}</span>
+          </div>
+          {whtCents > 0 && (
+            <div className="flex justify-between tabular-nums">
+              <span>WHT withheld ({whtRate}%)</span>
+              <span className="font-semibold"><span className="font-inter">₦</span>{formatNaira(whtCents)}</span>
+            </div>
+          )}
+          <div className="flex justify-between tabular-nums border-t border-violet-200 pt-1 mt-1">
+            <span>Settles</span>
+            <span className="font-semibold"><span className="font-inter">₦</span>{formatNaira(settlementCents)}</span>
+          </div>
+          <div className="flex justify-between tabular-nums">
+            <span>Balance after</span>
+            <span className="font-semibold">
+              <span className="font-inter">₦</span>{formatNaira(newOutstanding)} — {previewStatus}
+            </span>
+          </div>
         </div>
       )}
 
@@ -331,13 +404,18 @@ function PaymentHistoryModal({ invoiceId }: { invoiceId: string }) {
     )
   }
 
+  const hasWht = payments.some((p) => (p.wht_cents ?? 0) > 0)
+
   return (
     <div className="mt-4 -mx-4 overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-neutral-100">
             <th className="px-4 pb-2 text-left text-xs font-medium text-neutral-500 whitespace-nowrap">Date</th>
-            <th className="px-4 pb-2 text-right text-xs font-medium text-neutral-500 whitespace-nowrap">Amount</th>
+            <th className="px-4 pb-2 text-right text-xs font-medium text-neutral-500 whitespace-nowrap">Cash paid</th>
+            {hasWht && (
+              <th className="px-4 pb-2 text-right text-xs font-medium text-neutral-500 whitespace-nowrap">WHT withheld</th>
+            )}
             <th className="px-4 pb-2 text-left text-xs font-medium text-neutral-500 whitespace-nowrap">Method</th>
             <th className="px-4 pb-2 text-left text-xs font-medium text-neutral-500 whitespace-nowrap">Reference</th>
             <th className="px-4 pb-2 text-left text-xs font-medium text-neutral-500 whitespace-nowrap">Recorded by</th>
@@ -350,6 +428,20 @@ function PaymentHistoryModal({ invoiceId }: { invoiceId: string }) {
               <td className="px-4 py-2.5 text-right tabular-nums font-medium text-neutral-950 whitespace-nowrap">
                 <span className="font-inter">₦</span>{formatNaira(p.amount_cents)}
               </td>
+              {hasWht && (
+                <td className="px-4 py-2.5 text-right tabular-nums text-neutral-700 whitespace-nowrap">
+                  {(p.wht_cents ?? 0) > 0 ? (
+                    <>
+                      <span className="font-inter">₦</span>{formatNaira(p.wht_cents ?? 0)}
+                      {p.wht_rate != null && (
+                        <span className="ml-1 text-xs text-neutral-400">({p.wht_rate}%)</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-neutral-300">—</span>
+                  )}
+                </td>
+              )}
               <td className="px-4 py-2.5 text-neutral-700">{METHOD_LABELS[p.method] ?? p.method}</td>
               <td className="px-4 py-2.5 text-neutral-500">
                 {p.reference ?? <span className="text-neutral-300">—</span>}

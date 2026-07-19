@@ -3,7 +3,6 @@
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { requireRole } from "@/lib/auth/guards"
 import { paymentSchema, type PaymentInput } from "@/lib/validation/payments"
-import { formatNaira } from "@/lib/format/money"
 import { getInvoicePayments } from "@/lib/db/queries/payments"
 
 type ActionResult<T = null> =
@@ -31,6 +30,7 @@ export async function recordPaymentAction(
     p_method:       parsed.data.method,
     p_reference:    parsed.data.reference || null,
     p_note:         parsed.data.note || null,
+    p_wht_rate:     parsed.data.whtRate ?? null,
   })
 
   if (error) {
@@ -41,17 +41,8 @@ export async function recordPaymentAction(
       return { ok: false, error: "already_paid", message: "This invoice is already fully paid." }
     }
 
-    if (lower.includes("payment exceeds the outstanding balance")) {
-      const match = msg.match(/outstanding: (\d+), attempted: (\d+)/)
-      if (match) {
-        const outstanding = parseInt(match[1], 10)
-        return {
-          ok: false,
-          error: "over_payment",
-          message: `Payment exceeds the outstanding balance. Outstanding: ₦${formatNaira(outstanding)}.`,
-        }
-      }
-      return { ok: false, error: "over_payment", message: "Payment exceeds the outstanding balance." }
+    if (lower.includes("exceeds the outstanding balance")) {
+      return { ok: false, error: "over_payment", message: "Payment plus withholding tax exceeds the outstanding balance." }
     }
 
     if (lower.includes("not authorised")) {

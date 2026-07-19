@@ -5,6 +5,8 @@ import { getCurrentScope } from "@/lib/auth/scope"
 export type InvoicePayment = {
   id:            string
   amount_cents:  number
+  wht_rate:      number | null
+  wht_cents:     number | null
   paid_on:       string
   method:        string
   reference:     string | null
@@ -14,14 +16,16 @@ export type InvoicePayment = {
 }
 
 type RawPaymentRow = {
-  id:         string
+  id:          string
   amount_cents: number
-  paid_on:    string
-  method:     string
-  reference:  string | null
-  note:       string | null
-  created_at: string
-  created_by: string | null
+  wht_rate:    number | null
+  wht_cents:   number | null
+  paid_on:     string
+  method:      string
+  reference:   string | null
+  note:        string | null
+  created_at:  string
+  created_by:  string | null
 }
 
 export async function getInvoicePayments(invoiceId: string): Promise<InvoicePayment[]> {
@@ -33,7 +37,7 @@ export async function getInvoicePayments(invoiceId: string): Promise<InvoicePaym
 
   const { data, error } = await supabase
     .from("vendor_payments")
-    .select("id, amount_cents, paid_on, method, reference, note, created_at, created_by")
+    .select("id, amount_cents, wht_rate, wht_cents, paid_on, method, reference, note, created_at, created_by")
     .eq("invoice_id", invoiceId)
     .order("paid_on", { ascending: false })
     .order("created_at", { ascending: false })
@@ -61,6 +65,8 @@ export async function getInvoicePayments(invoiceId: string): Promise<InvoicePaym
   return rows.map((p) => ({
     id:            p.id,
     amount_cents:  p.amount_cents,
+    wht_rate:      p.wht_rate,
+    wht_cents:     p.wht_cents,
     paid_on:       p.paid_on,
     method:        p.method,
     reference:     p.reference,

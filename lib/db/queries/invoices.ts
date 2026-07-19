@@ -31,7 +31,7 @@ export async function getInvoices() {
   const { data, error } = await supabase
     .from("vendor_invoices")
     .select(
-      "id, invoice_number, invoice_date, due_date, total_cents, amount_paid_cents, status, receipt_status, created_at, vendors(name)",
+      "id, invoice_number, invoice_date, due_date, subtotal_cents, vat_rate, vat_cents, total_cents, amount_paid_cents, status, receipt_status, created_at, vendors(name)",
     )
     .eq("organisation_id", scope.organisationId)
     .is("deleted_at", null)

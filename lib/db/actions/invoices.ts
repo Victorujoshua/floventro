@@ -50,14 +50,16 @@ export async function recordInvoiceAction(
     unit_cost_cents: Math.round(line.unitCostNaira * 100),
   }))
 
-  const { data: invoiceId, error } = await supabase.rpc("record_vendor_invoice", {
-    p_branch_id: branchId,
-    p_vendor_id: parsed.data.vendorId,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: invoiceId, error } = await (supabase as any).rpc("record_vendor_invoice", {
+    p_branch_id:      branchId,
+    p_vendor_id:      parsed.data.vendorId,
     p_invoice_number: parsed.data.invoiceNumber || null,
-    p_invoice_date: parsed.data.invoiceDate,
-    p_due_date: parsed.data.dueDate || null,
-    p_note: parsed.data.note || null,
-    p_lines: lines,
+    p_invoice_date:   parsed.data.invoiceDate,
+    p_due_date:       parsed.data.dueDate || null,
+    p_note:           parsed.data.note || null,
+    p_lines:          lines,
+    p_vat_rate:       parsed.data.vatRate ?? null,
   })
 
   if (error) {

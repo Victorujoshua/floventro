@@ -14,6 +14,7 @@ export const invoiceSchema = z.object({
   dueDate: z.string().optional().or(z.literal("")),
   note: z.string().max(1000).optional().or(z.literal("")),
   lines: z.array(invoiceLineSchema).min(1, "Add at least one product line"),
+  vatRate: z.number().min(0, "VAT cannot be negative").max(100, "VAT cannot exceed 100%").nullable().optional(),
 })
 
 export type InvoiceInput = z.infer<typeof invoiceSchema>

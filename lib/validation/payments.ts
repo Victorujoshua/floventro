@@ -18,6 +18,7 @@ export const paymentSchema = z.object({
   method:      z.enum(PAYMENT_METHODS, { error: "Select a payment method" }),
   reference:   z.string().max(200).optional().or(z.literal("")),
   note:        z.string().max(1000).optional().or(z.literal("")),
+  whtRate:     z.number().min(0, "WHT cannot be negative").max(100, "WHT cannot exceed 100%").nullable().optional(),
 })
 
 export type PaymentInput = z.infer<typeof paymentSchema>
