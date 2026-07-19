@@ -117,8 +117,8 @@ function ReceiptBadge({ status }: { status: string }) {
 function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose: () => void }) {
   const router = useRouter()
   const today = new Date().toLocaleDateString("en-CA")
-  const outstanding = invoice.total_cents - invoice.amount_paid_cents
-  const subtotalCents = invoice.subtotal_cents ?? invoice.total_cents
+  const outstanding    = invoice.total_cents - invoice.amount_paid_cents
+  const subtotalCents  = invoice.subtotal_cents ?? invoice.total_cents
 
   const {
     register,
@@ -136,20 +136,38 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
     },
   })
 
-  const [serverError, setServerError] = useState<string | null>(null)
+  const [serverError,    setServerError]    = useState<string | null>(null)
+  // tracks whether "Pay full" is active so cash recomputes when WHT rate changes
+  const [payFullActive, setPayFullActive]   = useState(false)
+
   const amountNaira = watch("amountNaira")
   const whtRateRaw  = watch("whtRate")
-  const whtRate     = typeof whtRateRaw === "number" && !isNaN(whtRateRaw) && whtRateRaw > 0 ? whtRateRaw : 0
+  const whtRate     = typeof whtRateRaw === "number" && !isNaN(whtRateRaw) && whtRateRaw > 0
+    ? whtRateRaw : 0
 
-  const amountCents     = amountNaira ? Math.round(amountNaira * 100) : 0
+  // WHT is always computed off pre-VAT subtotal, never off total or cash amount
   const whtCents        = whtRate > 0 ? Math.round(subtotalCents * whtRate / 100) : 0
+  const amountCents     = amountNaira ? Math.round(amountNaira * 100) : 0
   const settlementCents = amountCents + whtCents
-  const newPaid         = invoice.amount_paid_cents + settlementCents
-  const newOutstanding  = Math.max(0, invoice.total_cents - newPaid)
-  const previewStatus   =
-    newPaid <= 0                    ? "Unpaid"
-    : newPaid < invoice.total_cents ? "Partial"
-    : "Paid"
+  const isOverpayment   = amountCents > 0 && settlementCents > outstanding
+  const newOutstanding  = Math.max(0, outstanding - settlementCents)
+  const isFullyPaid     = amountCents > 0 && settlementCents === outstanding
+
+  // When WHT rate changes while payFullActive, recompute cash so settlement stays exact
+  useEffect(() => {
+    if (!payFullActive) return
+    const cashCents = Math.max(0, outstanding - whtCents)
+    setValue("amountNaira", cashCents / 100, { shouldValidate: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [whtCents])
+
+  const { onChange: onAmountChange, ...amountRegRest } = register("amountNaira", { valueAsNumber: true })
+
+  function handlePayFull() {
+    const cashCents = Math.max(0, outstanding - whtCents)
+    setValue("amountNaira", cashCents / 100, { shouldValidate: true })
+    setPayFullActive(true)
+  }
 
   async function onSubmit(data: PaymentInput) {
     setServerError(null)
@@ -227,11 +245,12 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
             placeholder="0.00"
             className="tabular-nums"
             aria-invalid={!!errors.amountNaira}
-            {...register("amountNaira", { valueAsNumber: true })}
+            onChange={(e) => { setPayFullActive(false); onAmountChange(e) }}
+            {...amountRegRest}
           />
           <button
             type="button"
-            onClick={() => setValue("amountNaira", outstanding / 100, { shouldValidate: true })}
+            onClick={handlePayFull}
             className="shrink-0 rounded-md border border-neutral-200 px-3 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors whitespace-nowrap"
           >
             Pay full
@@ -324,12 +343,16 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
         <Textarea id="note" rows={2} {...register("note")} />
       </div>
 
-      {/* Settlement preview */}
-      {amountCents > 0 && (
-        <div className="rounded-md bg-violet-50 border border-violet-100 px-4 py-3 text-sm text-violet-800 space-y-1">
-          <div className="flex justify-between tabular-nums">
-            <span>Cash paid</span>
-            <span className="font-semibold"><span className="font-inter">₦</span>{formatNaira(amountCents)}</span>
+      {/* Settlement breakdown — shown whenever cash is entered or WHT rate is set */}
+      {(amountCents > 0 || whtCents > 0) && (
+        <div className={`rounded-md border px-4 py-3 text-sm space-y-1.5 ${
+          isOverpayment
+            ? "bg-red-50 border-red-200 text-red-800"
+            : "bg-violet-50 border-violet-100 text-violet-800"
+        }`}>
+          <div className="flex justify-between tabular-nums text-xs text-neutral-500 mb-0.5">
+            <span>Outstanding</span>
+            <span className="font-medium"><span className="font-inter">₦</span>{formatNaira(outstanding)}</span>
           </div>
           {whtCents > 0 && (
             <div className="flex justify-between tabular-nums">
@@ -337,16 +360,34 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
               <span className="font-semibold"><span className="font-inter">₦</span>{formatNaira(whtCents)}</span>
             </div>
           )}
-          <div className="flex justify-between tabular-nums border-t border-violet-200 pt-1 mt-1">
+          {amountCents > 0 && (
+            <div className="flex justify-between tabular-nums">
+              <span>Cash paid</span>
+              <span className="font-semibold"><span className="font-inter">₦</span>{formatNaira(amountCents)}</span>
+            </div>
+          )}
+          <div className={`flex justify-between tabular-nums border-t pt-1.5 mt-0.5 font-medium ${
+            isOverpayment ? "border-red-200" : "border-violet-200"
+          }`}>
             <span>Settles</span>
             <span className="font-semibold"><span className="font-inter">₦</span>{formatNaira(settlementCents)}</span>
           </div>
-          <div className="flex justify-between tabular-nums">
-            <span>Balance after</span>
-            <span className="font-semibold">
-              <span className="font-inter">₦</span>{formatNaira(newOutstanding)} — {previewStatus}
-            </span>
-          </div>
+          {isOverpayment ? (
+            <div className="flex justify-between tabular-nums font-medium text-red-700">
+              <span>⚠ Exceeds outstanding by</span>
+              <span><span className="font-inter">₦</span>{formatNaira(settlementCents - outstanding)}</span>
+            </div>
+          ) : amountCents > 0 ? (
+            <div className="flex justify-between tabular-nums">
+              <span>Balance after</span>
+              <span className={`font-semibold ${isFullyPaid ? "text-green-600" : ""}`}>
+                {isFullyPaid
+                  ? "Fully paid"
+                  : <><span className="font-inter">₦</span>{formatNaira(newOutstanding)}</>
+                }
+              </span>
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -360,7 +401,7 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
         </button>
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || isOverpayment}
           className="rounded-md bg-violet-700 text-white px-4 h-10 text-sm font-medium hover:bg-violet-800 active:scale-[0.98] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {isSubmitting ? "Recording…" : "Record payment"}
