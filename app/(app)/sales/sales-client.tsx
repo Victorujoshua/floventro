@@ -5,7 +5,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { ShoppingCart, MoreHorizontal, CreditCard } from "lucide-react"
+import { ShoppingCart, MoreHorizontal, CreditCard, FileText } from "lucide-react"
 import { toast } from "sonner"
 import {
   Table,
@@ -341,19 +341,25 @@ export function SalesClient({ sales }: Props) {
                       className="py-3.5 text-right w-10"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {canMarkPaid && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger className="inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 transition-colors">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger className="inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 transition-colors">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => window.open(`/sales/${sale.id}/invoice`, "_blank")}
+                          >
+                            <FileText className="h-3.5 w-3.5 mr-2" />
+                            View invoice
+                          </DropdownMenuItem>
+                          {canMarkPaid && (
                             <DropdownMenuItem onClick={() => setMarkPaidSale(sale)}>
                               <CreditCard className="h-3.5 w-3.5 mr-2" />
                               Mark as paid
                             </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 )
@@ -460,6 +466,17 @@ export function SalesClient({ sales }: Props) {
                   <PaymentBadge status={detailSale.paymentStatus} />
                 </div>
               </div>
+
+              {/* Invoice link */}
+              <a
+                href={`/sales/${detailSale.id}/invoice`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 w-full rounded-md border border-neutral-200 px-4 h-9 text-sm text-neutral-700 hover:bg-neutral-50 hover:border-neutral-300 transition-colors"
+              >
+                <FileText className="h-3.5 w-3.5 text-neutral-400" />
+                View / print invoice
+              </a>
             </div>
           ) : null}
         </DialogContent>
