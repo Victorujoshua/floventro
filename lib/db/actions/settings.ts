@@ -3,6 +3,7 @@
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { requireOwner } from "@/lib/auth/guards"
 import { payoutAccountSchema, type PayoutAccountInput } from "@/lib/validation/settings"
+import type { CostingMethod } from "@/lib/db/queries/settings"
 
 type ActionResult = { ok: true } | { ok: false; error: string }
 
@@ -22,6 +23,23 @@ export async function updateOrgPayoutAccountAction(input: PayoutAccountInput): P
   const { error } = await supabase
     .from("organisations")
     .update(patch as Record<string, string | null>)
+    .eq("id", scope.organisationId)
+
+  if (error) return { ok: false, error: "Failed to save. Please try again." }
+  return { ok: true }
+}
+
+export async function updateCostingMethodAction(method: CostingMethod): Promise<ActionResult> {
+  if (method !== "weighted" && method !== "fifo") {
+    return { ok: false, error: "Invalid costing method." }
+  }
+
+  const scope = await requireOwner()
+  const supabase = await createAppServerClient()
+
+  const { error } = await supabase
+    .from("organisations")
+    .update({ costing_method: method, costing_method_set_at: new Date().toISOString() } as Record<string, unknown>)
     .eq("id", scope.organisationId)
 
   if (error) return { ok: false, error: "Failed to save. Please try again." }

@@ -1,12 +1,13 @@
 import { requireOwner } from "@/lib/auth/guards"
-import { getOrgPayoutAccount, getBranchesWithPayout } from "@/lib/db/queries/settings"
+import { getOrgPayoutAccount, getBranchesWithPayout, getCostingMethod } from "@/lib/db/queries/settings"
 import { SettingsClient } from "./settings-client"
 
 export default async function SettingsPage() {
   await requireOwner()
-  const [orgPayout, branches] = await Promise.all([
+  const [orgPayout, branches, costingMethod] = await Promise.all([
     getOrgPayoutAccount(),
     getBranchesWithPayout(),
+    getCostingMethod(),
   ])
-  return <SettingsClient orgPayout={orgPayout} branches={branches} />
+  return <SettingsClient orgPayout={orgPayout} branches={branches} costingMethod={costingMethod} />
 }
