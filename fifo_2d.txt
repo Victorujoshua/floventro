@@ -1,0 +1,576 @@
+─────────────────────────────────────────────────────────────────────────────
+app_0040_fifo_outflows.sql  —  FIFO method branch for record_sale &
+                                record_service_usage
+─────────────────────────────────────────────────────────────────────────────
+
+Both functions follow the same pattern. Changes are marked with
+  -- ── CHANGED (FIFO branch) ──
+  -- ── NEW (FIFO sync) ──
+Everything else is byte-identical to app_0035.
+
+═══════════════════════════════════════════════════════════════════════════════
+Design invariant (Option A, always drain both)
+═══════════════════════════════════════════════════════════════════════════════
+
+  WEIGHTED mode:
+    1. Read holder product_cost_state FOR UPDATE
+    2. v_cogs_cents = v_qty × holder_avg  (NULL if avg NULL)
+    3. INSERT cogs_allocations  method_used='weighted'
+    4. Decrement product_cost_state  (weighted formula)
+    5. PERFORM drain_fifo_layers(...)  — result discarded, keeps qty_remaining synced
+
+  FIFO mode:
+    1. Read holder product_cost_state FOR UPDATE  (for step 4)
+    2. SELECT ... FROM drain_fifo_layers(...)  → v_cogs_cents, v_cost_known
+       (cost_layers.qty_remaining decremented inside the function)
+    3. INSERT cogs_allocations  method_used='fifo'
+    4. Decrement product_cost_state  (weighted formula — product_cost_state is
+       always the weighted engine; decrement always uses holder_avg × qty,
+       never the FIFO COGS figure)
+
+  Lock order:  staff_holdings FOR UPDATE  →  product_cost_state FOR UPDATE
+                 →  cost_layers FOR UPDATE  (inside drain_fifo_layers)
+  This is the same in both modes; FIFO acquires cost_layers lock at step 2,
+  weighted acquires it at step 5.
+
+Key formula change vs app_0035:
+  OLD: else coalesce(v_holder_total, 0) - v_cogs_cents
+  NEW: else coalesce(v_holder_total, 0) - (v_qty * v_holder_avg)
+  Rationale: in FIFO mode v_cogs_cents holds the FIFO cost, not the weighted
+  cost. Using v_qty × v_holder_avg for the product_cost_state decrement is
+  always correct because product_cost_state is the weighted engine regardless
+  of the active costing_method. (In weighted mode the two expressions are
+  identical when avg is non-null, so no semantic change for that path.)
+
+No new DECLARE variables needed — existing v_cogs_cents (bigint) and
+v_cost_known (boolean) receive the FIFO aggregation via SELECT...INTO.
+
+═══════════════════════════════════════════════════════════════════════════════
+1.  record_sale
+═══════════════════════════════════════════════════════════════════════════════
+
+create or replace function public.record_sale(
+  p_branch_id      uuid,
+  p_customer_name  text,
+  p_customer_phone text,
+  p_sold_on        date,
+  p_note           text,
+  p_payment_method text,
+  p_payment_status text,
+  p_lines          jsonb
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id    uuid := auth.uid();
+  v_org_id     uuid;
+  v_sale_id    uuid;
+  v_line       jsonb;
+  v_product_id uuid;
+  v_qty        integer;
+  v_price      bigint;
+  v_held       integer;
+  v_total      bigint := 0;
+  -- costing accumulators (unchanged from app_0035)
+  v_org_costing_method text;
+  v_sale_line_id       uuid;
+  v_holder_qty         integer;
+  v_holder_avg         bigint;
+  v_holder_total       bigint;
+  v_cogs_cents         bigint;
+  v_cost_known         boolean;
+  v_new_qty            integer;
+  v_new_total          bigint;
+begin
+  if v_user_id is null then
+    raise exception 'not authenticated';
+  end if;
+
+  select organisation_id into v_org_id
+    from public.branches
+   where id = p_branch_id
+     and deleted_at is null;
+
+  if v_org_id is null then
+    raise exception 'branch not found';
+  end if;
+
+  if p_branch_id not in (select public.user_vendor_read_branch_ids()) then
+    raise exception 'not authorised to record sales in this branch';
+  end if;
+
+  if p_lines is null or jsonb_array_length(p_lines) = 0 then
+    raise exception 'a sale must have at least one line';
+  end if;
+
+  if p_payment_method is not null and
+     p_payment_method not in ('cash', 'pos', 'bank_transfer', 'cheque', 'other') then
+    raise exception 'invalid payment method';
+  end if;
+
+  if p_payment_status is null or p_payment_status not in ('paid', 'unpaid') then
+    raise exception 'payment_status must be paid or unpaid';
+  end if;
+
+  select coalesce(costing_method, 'weighted') into v_org_costing_method
+    from public.organisations
+   where id = v_org_id;
+
+  insert into public.sales (
+    organisation_id, branch_id, seller_user_id,
+    customer_name, customer_phone, sold_on, total_cents, note,
+    payment_method, payment_status, amount_paid_cents, created_by
+  ) values (
+    v_org_id, p_branch_id, v_user_id,
+    nullif(trim(p_customer_name),  ''),
+    nullif(trim(p_customer_phone), ''),
+    coalesce(p_sold_on, current_date),
+    0,
+    nullif(trim(p_note), ''),
+    p_payment_method, p_payment_status, 0, v_user_id
+  )
+  returning id into v_sale_id;
+
+  for v_line in select * from jsonb_array_elements(p_lines)
+  loop
+    v_product_id := (v_line->>'product_id')::uuid;
+    v_qty        := (v_line->>'quantity')::integer;
+    v_price      := (v_line->>'unit_price_cents')::bigint;
+
+    if v_qty is null or v_qty <= 0 then
+      raise exception 'quantity must be greater than 0';
+    end if;
+
+    if v_price is null or v_price < 0 then
+      raise exception 'unit price must be 0 or greater';
+    end if;
+
+    if not exists (
+      select 1
+        from public.products
+       where id              = v_product_id
+         and organisation_id = v_org_id
+         and deleted_at      is null
+    ) then
+      raise exception 'product % not found in this organisation', v_product_id;
+    end if;
+
+    -- FOR UPDATE on staff_holdings. Cost-state + cost_layers locks follow below.
+    select coalesce(quantity, 0) into v_held
+      from public.staff_holdings
+     where branch_id      = p_branch_id
+       and holder_user_id = v_user_id
+       and product_id     = v_product_id
+     for update;
+
+    if coalesce(v_held, 0) < v_qty then
+      raise exception
+        'insufficient holding for product % (holding: %, selling: %)',
+        v_product_id, coalesce(v_held, 0), v_qty;
+    end if;
+
+    insert into public.sale_lines (
+      sale_id, product_id, quantity, unit_price_cents, line_total_cents
+    ) values (
+      v_sale_id, v_product_id, v_qty, v_price, v_qty * v_price
+    )
+    returning id into v_sale_line_id;
+
+    v_total := v_total + (v_qty * v_price);
+
+    insert into public.stock_ledger (
+      organisation_id, branch_id, product_id, quantity_delta,
+      reason, reference_type, reference_id, holder_user_id, created_by
+    ) values (
+      v_org_id, p_branch_id, v_product_id, -v_qty,
+      'sale', 'sale', v_sale_id, v_user_id, v_user_id
+    );
+
+    update public.staff_holdings
+       set quantity   = quantity - v_qty,
+           updated_at = now()
+     where branch_id      = p_branch_id
+       and holder_user_id = v_user_id
+       and product_id     = v_product_id;
+
+    -- ── common: lock holder product_cost_state ─────────────────────────────────
+    -- staff_holdings already locked above; cost-state lock follows (consistent order).
+    -- Read in both modes: FIFO still needs holder_avg to decrement product_cost_state.
+    select quantity, avg_cost_cents, total_cost_cents
+      into v_holder_qty, v_holder_avg, v_holder_total
+      from public.product_cost_state
+     where branch_id      = p_branch_id
+       and holder_user_id = v_user_id
+       and product_id     = v_product_id
+     for update;
+
+    v_holder_qty := coalesce(v_holder_qty, 0);
+
+    -- ── CHANGED (FIFO branch): COGS source depends on costing_method ──────────
+    if v_org_costing_method = 'fifo' then
+      -- FIFO: drain holder layers oldest-first. Aggregate lot costs for the
+      -- cogs_allocations write. cost_layers.qty_remaining is decremented inside
+      -- drain_fifo_layers (the cost_layers FOR UPDATE lock is acquired here,
+      -- after the product_cost_state lock above — correct lock order).
+      --
+      -- SELECT...INTO over a SETOF function: drain_fifo_layers returns one row
+      -- per lot drained; bool_and + sum aggregate across all lots in one pass.
+      -- If any lot has unit_cost_cents NULL → the whole COGS is NULL (unknown).
+      -- coalesce(bool_and, false) guards against the pathological empty-result
+      -- case (impossible if stock/layers are in sync, but safe to handle).
+      select
+        case
+          when bool_and(d.unit_cost_cents is not null)
+            then sum(d.qty_consumed::bigint * d.unit_cost_cents)
+          else null
+        end,
+        coalesce(bool_and(d.unit_cost_cents is not null), false)
+      into v_cogs_cents, v_cost_known
+      from public.drain_fifo_layers(
+        v_org_id, p_branch_id, v_user_id, v_product_id, v_qty
+      ) d;
+
+    else
+      -- WEIGHTED (default): COGS = qty × holder avg at this exact moment.
+      -- NULL avg → cost unknown → cogs NULL, cost_known false. Never 0.
+      if v_holder_avg is not null then
+        v_cogs_cents := v_qty * v_holder_avg;
+        v_cost_known := true;
+      else
+        v_cogs_cents := null;
+        v_cost_known := false;
+      end if;
+    end if;
+    -- ── END CHANGED ────────────────────────────────────────────────────────────
+
+    -- ── common: freeze COGS into cogs_allocations ─────────────────────────────
+    insert into public.cogs_allocations (
+      organisation_id, branch_id, product_id,
+      reference_type, reference_id,
+      quantity, cogs_cents, cost_known, method_used
+    ) values (
+      v_org_id, p_branch_id, v_product_id,
+      'sale_line', v_sale_line_id,
+      v_qty, v_cogs_cents, v_cost_known,
+      case when v_org_costing_method = 'fifo' then 'fifo' else 'weighted' end
+    );
+
+    -- ── common: decrement holder product_cost_state (weighted formula always) ──
+    -- product_cost_state is the weighted engine. Its decrement uses holder_avg × qty
+    -- in BOTH modes — NOT v_cogs_cents, which holds FIFO lot costs in FIFO mode.
+    -- (In weighted mode, holder_avg × qty = v_cogs_cents, so no semantic change.)
+    -- Removing units at avg does NOT change avg; qty → 0 resets avg→NULL, total→0.
+    v_new_qty   := greatest(v_holder_qty - v_qty, 0);
+    v_new_total := case
+                     when v_new_qty = 0        then 0
+                     when v_holder_avg is null  then null
+                     else coalesce(v_holder_total, 0) - (v_qty * v_holder_avg)
+                   end;
+
+    insert into public.product_cost_state (
+      organisation_id, branch_id, holder_user_id, product_id,
+      quantity, avg_cost_cents, total_cost_cents
+    ) values (
+      v_org_id, p_branch_id, v_user_id, v_product_id,
+      v_new_qty,
+      case when v_new_qty = 0 then null else v_holder_avg end,
+      v_new_total
+    )
+    on conflict (branch_id, holder_user_id, product_id) where holder_user_id is not null
+    do update set
+      quantity         = excluded.quantity,
+      avg_cost_cents   = excluded.avg_cost_cents,
+      total_cost_cents = excluded.total_cost_cents,
+      updated_at       = now();
+
+    -- ── NEW (FIFO sync): weighted mode must also drain cost_layers ─────────────
+    -- In FIFO mode, cost_layers was already drained by drain_fifo_layers above.
+    -- In weighted mode, we drain now (discarding the result) so that
+    -- cost_layers.qty_remaining stays matched with product_cost_state.quantity.
+    -- Both engines always agree on quantity; only the COGS source differs.
+    -- Lock order is maintained: product_cost_state lock was acquired above.
+    if v_org_costing_method <> 'fifo' then
+      perform public.drain_fifo_layers(
+        v_org_id, p_branch_id, v_user_id, v_product_id, v_qty
+      );
+    end if;
+    -- ── END NEW ────────────────────────────────────────────────────────────────
+
+  end loop;
+
+  update public.sales
+     set total_cents       = v_total,
+         amount_paid_cents = case
+                               when p_payment_status = 'paid' then v_total
+                               else 0
+                             end
+   where id = v_sale_id;
+
+  return v_sale_id;
+end;
+$$;
+
+revoke all    on function public.record_sale(uuid, text, text, date, text, text, text, jsonb) from public;
+grant execute on function public.record_sale(uuid, text, text, date, text, text, text, jsonb) to authenticated;
+
+
+═══════════════════════════════════════════════════════════════════════════════
+2.  record_service_usage
+═══════════════════════════════════════════════════════════════════════════════
+
+create or replace function public.record_service_usage(
+  p_branch_id         uuid,
+  p_service_type_id   uuid,
+  p_customer_name     text,
+  p_customer_phone    text,
+  p_performed_on      date,
+  p_service_fee_cents bigint,
+  p_note              text,
+  p_lines             jsonb
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id    uuid := auth.uid();
+  v_org_id     uuid;
+  v_record_id  uuid;
+  v_line       jsonb;
+  v_product_id uuid;
+  v_qty        integer;
+  v_held       integer;
+  -- costing accumulators (unchanged from app_0035)
+  v_org_costing_method text;
+  v_consumption_id     uuid;
+  v_holder_qty         integer;
+  v_holder_avg         bigint;
+  v_holder_total       bigint;
+  v_cogs_cents         bigint;
+  v_cost_known         boolean;
+  v_new_qty            integer;
+  v_new_total          bigint;
+begin
+  if v_user_id is null then
+    raise exception 'not authenticated';
+  end if;
+
+  select organisation_id into v_org_id
+    from public.branches
+   where id = p_branch_id
+     and deleted_at is null;
+
+  if v_org_id is null then
+    raise exception 'branch not found';
+  end if;
+
+  if p_branch_id not in (select public.user_vendor_read_branch_ids()) then
+    raise exception 'not authorised to record service usage in this branch';
+  end if;
+
+  if not exists (
+    select 1
+      from public.service_types
+     where id              = p_service_type_id
+       and organisation_id = v_org_id
+       and is_active       = true
+       and deleted_at      is null
+  ) then
+    raise exception 'service type not found or inactive';
+  end if;
+
+  if p_lines is null or jsonb_array_length(p_lines) = 0 then
+    raise exception 'service usage must consume at least one product';
+  end if;
+
+  if p_service_fee_cents is not null and p_service_fee_cents < 0 then
+    raise exception 'service fee cannot be negative';
+  end if;
+
+  select coalesce(costing_method, 'weighted') into v_org_costing_method
+    from public.organisations
+   where id = v_org_id;
+
+  insert into public.service_records (
+    organisation_id, branch_id, service_type_id, performed_by,
+    customer_name, customer_phone, performed_on,
+    service_fee_cents, note, created_by
+  ) values (
+    v_org_id, p_branch_id, p_service_type_id, v_user_id,
+    nullif(trim(p_customer_name),  ''),
+    nullif(trim(p_customer_phone), ''),
+    coalesce(p_performed_on, current_date),
+    p_service_fee_cents,
+    nullif(trim(p_note), ''),
+    v_user_id
+  )
+  returning id into v_record_id;
+
+  for v_line in select * from jsonb_array_elements(p_lines)
+  loop
+    v_product_id := (v_line->>'product_id')::uuid;
+    v_qty        := (v_line->>'quantity')::integer;
+
+    if v_qty is null or v_qty <= 0 then
+      raise exception 'quantity must be greater than 0';
+    end if;
+
+    if not exists (
+      select 1
+        from public.products
+       where id              = v_product_id
+         and organisation_id = v_org_id
+         and deleted_at      is null
+    ) then
+      raise exception 'product % not found in this organisation', v_product_id;
+    end if;
+
+    -- FOR UPDATE on staff_holdings. Cost-state + cost_layers locks follow below.
+    select coalesce(quantity, 0) into v_held
+      from public.staff_holdings
+     where branch_id      = p_branch_id
+       and holder_user_id = v_user_id
+       and product_id     = v_product_id
+     for update;
+
+    if coalesce(v_held, 0) < v_qty then
+      raise exception
+        'insufficient holding for product % (holding: %, consuming: %)',
+        v_product_id, coalesce(v_held, 0), v_qty;
+    end if;
+
+    insert into public.service_consumption (
+      service_record_id, product_id, quantity
+    ) values (
+      v_record_id, v_product_id, v_qty
+    )
+    returning id into v_consumption_id;
+
+    insert into public.stock_ledger (
+      organisation_id, branch_id, product_id, quantity_delta,
+      reason, reference_type, reference_id, holder_user_id, created_by
+    ) values (
+      v_org_id, p_branch_id, v_product_id, -v_qty,
+      'usage', 'service_record', v_record_id, v_user_id, v_user_id
+    );
+
+    update public.staff_holdings
+       set quantity   = quantity - v_qty,
+           updated_at = now()
+     where branch_id      = p_branch_id
+       and holder_user_id = v_user_id
+       and product_id     = v_product_id;
+
+    -- ── common: lock holder product_cost_state ─────────────────────────────────
+    select quantity, avg_cost_cents, total_cost_cents
+      into v_holder_qty, v_holder_avg, v_holder_total
+      from public.product_cost_state
+     where branch_id      = p_branch_id
+       and holder_user_id = v_user_id
+       and product_id     = v_product_id
+     for update;
+
+    v_holder_qty := coalesce(v_holder_qty, 0);
+
+    -- ── CHANGED (FIFO branch): COGS source depends on costing_method ──────────
+    if v_org_costing_method = 'fifo' then
+      -- FIFO: drain holder layers oldest-first; aggregate COGS across all drained lots.
+      -- cost_layers.qty_remaining decremented inside drain_fifo_layers.
+      -- Lock order: product_cost_state FOR UPDATE (above) → cost_layers FOR UPDATE (here).
+      select
+        case
+          when bool_and(d.unit_cost_cents is not null)
+            then sum(d.qty_consumed::bigint * d.unit_cost_cents)
+          else null
+        end,
+        coalesce(bool_and(d.unit_cost_cents is not null), false)
+      into v_cogs_cents, v_cost_known
+      from public.drain_fifo_layers(
+        v_org_id, p_branch_id, v_user_id, v_product_id, v_qty
+      ) d;
+
+    else
+      -- WEIGHTED (default): COGS = qty × holder avg.
+      if v_holder_avg is not null then
+        v_cogs_cents := v_qty * v_holder_avg;
+        v_cost_known := true;
+      else
+        v_cogs_cents := null;
+        v_cost_known := false;
+      end if;
+    end if;
+    -- ── END CHANGED ────────────────────────────────────────────────────────────
+
+    -- ── common: freeze COGS into cogs_allocations ─────────────────────────────
+    insert into public.cogs_allocations (
+      organisation_id, branch_id, product_id,
+      reference_type, reference_id,
+      quantity, cogs_cents, cost_known, method_used
+    ) values (
+      v_org_id, p_branch_id, v_product_id,
+      'service_consumption', v_consumption_id,
+      v_qty, v_cogs_cents, v_cost_known,
+      case when v_org_costing_method = 'fifo' then 'fifo' else 'weighted' end
+    );
+
+    -- ── common: decrement holder product_cost_state (weighted formula always) ──
+    -- Uses holder_avg × qty, not v_cogs_cents — correct in FIFO mode because
+    -- product_cost_state is the weighted engine and must use its own math.
+    v_new_qty   := greatest(v_holder_qty - v_qty, 0);
+    v_new_total := case
+                     when v_new_qty = 0        then 0
+                     when v_holder_avg is null  then null
+                     else coalesce(v_holder_total, 0) - (v_qty * v_holder_avg)
+                   end;
+
+    insert into public.product_cost_state (
+      organisation_id, branch_id, holder_user_id, product_id,
+      quantity, avg_cost_cents, total_cost_cents
+    ) values (
+      v_org_id, p_branch_id, v_user_id, v_product_id,
+      v_new_qty,
+      case when v_new_qty = 0 then null else v_holder_avg end,
+      v_new_total
+    )
+    on conflict (branch_id, holder_user_id, product_id) where holder_user_id is not null
+    do update set
+      quantity         = excluded.quantity,
+      avg_cost_cents   = excluded.avg_cost_cents,
+      total_cost_cents = excluded.total_cost_cents,
+      updated_at       = now();
+
+    -- ── NEW (FIFO sync): weighted mode drains cost_layers to keep qty in sync ──
+    -- In FIFO mode, cost_layers was drained above. In weighted mode, drain now
+    -- (result discarded) so both engines' quantities stay matched.
+    if v_org_costing_method <> 'fifo' then
+      perform public.drain_fifo_layers(
+        v_org_id, p_branch_id, v_user_id, v_product_id, v_qty
+      );
+    end if;
+    -- ── END NEW ────────────────────────────────────────────────────────────────
+
+  end loop;
+
+  return v_record_id;
+end;
+$$;
+
+revoke all    on function public.record_service_usage(uuid, uuid, text, text, date, bigint, text, jsonb) from public;
+grant execute on function public.record_service_usage(uuid, uuid, text, text, date, bigint, text, jsonb) to authenticated;
+
+
+═══════════════════════════════════════════════════════════════════════════════
+What is NOT in this file (left for later steps)
+═══════════════════════════════════════════════════════════════════════════════
+
+  return_to_branch: moves holder → pool (no COGS). cost_layers also needs a
+    drain+add (holder lot → pool lot, carrying original_seq). This mirrors what
+    review_stock_request (app_0038 diff B) does in reverse. Separate step.
+
+  Transition RPC (weighted → fifo switch): the atomic UPDATE to
+    organisations.costing_method must verify that app_0039 has been applied
+    (all buckets have layers) before flipping. Could be a PL/pgSQL function
+    that runs the consistency check query and raises if any bucket is out of sync.
+    Separate step.
