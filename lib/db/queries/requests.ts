@@ -155,14 +155,21 @@ export async function getPendingRequests(): Promise<PendingRequest[]> {
 
   const supabase = await createAppServerClient()
 
-  const { data, error } = await supabase
+  let pendingQuery = supabase
     .from("stock_requests")
     .select(
       "id, branch_id, purpose, created_at, requested_by, stock_request_lines(id, quantity_requested, products(id, sku, name))",
     )
+    .eq("organisation_id", scope.organisationId)
     .eq("status", "pending")
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
+
+  if (scope.branchId) {
+    pendingQuery = pendingQuery.eq("branch_id", scope.branchId)
+  }
+
+  const { data, error } = await pendingQuery
 
   if (error || !data) return []
 
@@ -227,15 +234,22 @@ export async function getReviewedRequests(limit = 30): Promise<ReviewedRequest[]
 
   const supabase = await createAppServerClient()
 
-  const { data, error } = await supabase
+  let reviewedQuery = supabase
     .from("stock_requests")
     .select(
       "id, purpose, status, created_at, reviewed_at, review_note, requested_by, reviewed_by, stock_request_lines(id, quantity_requested, quantity_approved, products(id, sku, name))",
     )
+    .eq("organisation_id", scope.organisationId)
     .neq("status", "pending")
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(limit)
+
+  if (scope.branchId) {
+    reviewedQuery = reviewedQuery.eq("branch_id", scope.branchId)
+  }
+
+  const { data, error } = await reviewedQuery
 
   if (error || !data) return []
 

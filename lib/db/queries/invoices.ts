@@ -28,7 +28,7 @@ export async function getInvoices() {
 
   const supabase = await createAppServerClient()
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("vendor_invoices")
     .select(
       "id, invoice_number, invoice_date, due_date, subtotal_cents, vat_rate, vat_cents, total_cents, amount_paid_cents, status, receipt_status, created_at, vendors(name)",
@@ -37,6 +37,11 @@ export async function getInvoices() {
     .is("deleted_at", null)
     .order("invoice_date", { ascending: false })
 
+  if (scope.branchId) {
+    query = query.eq("branch_id", scope.branchId)
+  }
+
+  const { data, error } = await query
   if (error) return []
   return data
 }

@@ -8,7 +8,7 @@ export async function getVendors() {
 
   const supabase = await createAppServerClient()
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("vendors")
     .select(
       "id, organisation_id, branch_id, name, contact_person, phone, email, tin, cac_registration, notes, created_at, updated_at, vendor_invoices(total_cents, amount_paid_cents, status, deleted_at)",
@@ -17,6 +17,11 @@ export async function getVendors() {
     .is("deleted_at", null)
     .order("name", { ascending: true })
 
+  if (scope.branchId) {
+    query = query.eq("branch_id", scope.branchId)
+  }
+
+  const { data, error } = await query
   if (error) return []
 
   type InvoiceRow = { total_cents: number; amount_paid_cents: number; status: string; deleted_at: string | null }
