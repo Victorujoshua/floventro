@@ -535,6 +535,7 @@ export async function getOrgLedger(limit = 100): Promise<OrgLedgerRow[]> {
   const { data, error } = await supabase
     .from("stock_ledger")
     .select("id, created_at, quantity_delta, reason, adjustment_reason, note, branch_id, product_id")
+    .eq("organisation_id", scope.organisationId)
     .order("created_at", { ascending: false })
     .limit(limit)
 

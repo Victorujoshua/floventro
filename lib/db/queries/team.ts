@@ -93,13 +93,19 @@ export async function getPendingInvites(): Promise<PendingInvite[]> {
   const supabase = await createAppServerClient()
   const now = new Date().toISOString()
 
-  const { data, error } = await supabase
+  let inviteQuery = supabase
     .from("invitations")
     .select("id, email, role, branch_id, expires_at, token, branches(name)")
     .eq("organisation_id", scope.organisationId)
     .eq("status", "pending")
     .gt("expires_at", now)
     .order("created_at", { ascending: false })
+
+  if (scope.branchId) {
+    inviteQuery = inviteQuery.eq("branch_id", scope.branchId)
+  }
+
+  const { data, error } = await inviteQuery
 
   if (error || !data) return []
 

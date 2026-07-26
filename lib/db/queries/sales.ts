@@ -97,11 +97,18 @@ export async function getSales(): Promise<SaleRow[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = await createAppServerClient() as any
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("sales")
     .select("id, sold_on, seller_user_id, customer_name, customer_phone, payment_method, payment_status, amount_paid_cents, total_cents, created_at, sale_lines(count)")
+    .eq("organisation_id", scope.organisationId)
     .order("created_at", { ascending: false })
     .limit(100)
+
+  if (scope.branchId) {
+    query = query.eq("branch_id", scope.branchId)
+  }
+
+  const { data, error } = await query
 
   if (error || !data) return []
 
@@ -136,7 +143,8 @@ export async function getSaleById(id: string): Promise<SaleDetail | null> {
     .from("sales")
     .select("id, sold_on, seller_user_id, customer_name, customer_phone, payment_method, payment_status, amount_paid_cents, total_cents, note, created_at, sale_lines(id, product_id, quantity, unit_price_cents, line_total_cents, products(name, sku))")
     .eq("id", id)
-    .single()
+    .eq("organisation_id", scope.organisationId)
+    .maybeSingle()
 
   if (error || !data) return null
 

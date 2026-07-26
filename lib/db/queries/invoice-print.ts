@@ -40,7 +40,8 @@ export async function getSaleInvoiceData(saleId: string): Promise<SaleInvoiceDat
       "id, sold_on, customer_name, customer_phone, payment_status, amount_paid_cents, total_cents, branch_id, organisation_id, sale_lines(id, product_id, quantity, unit_price_cents, line_total_cents, products(name, sku))",
     )
     .eq("id", saleId)
-    .single()
+    .eq("organisation_id", scope.organisationId)
+    .maybeSingle()
 
   if (error || !data) return null
 

@@ -94,13 +94,20 @@ export async function getTransfers(limit = 50): Promise<Transfer[]> {
 
   const supabase = await createAppServerClient()
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("stock_transfers")
     .select(
       "id, organisation_id, source_branch_id, dest_branch_id, status, initiated_by, received_by, cancelled_by, initiated_at, received_at, cancelled_at, note, created_at, stock_transfer_lines(id, product_id, quantity_sent, quantity_received, products(id, sku, name))",
     )
+    .eq("organisation_id", scope.organisationId)
     .order("created_at", { ascending: false })
     .limit(limit)
+
+  if (scope.branchId) {
+    query = query.or(`source_branch_id.eq.${scope.branchId},dest_branch_id.eq.${scope.branchId}`)
+  }
+
+  const { data, error } = await query
 
   if (error || !data) return []
 

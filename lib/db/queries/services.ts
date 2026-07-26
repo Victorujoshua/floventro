@@ -169,13 +169,20 @@ export async function getServiceRecords(): Promise<ServiceRecordRow[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createAppServerClient()) as any
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("service_records")
     .select(
       "id, performed_on, performed_by, customer_name, service_fee_cents, created_at, service_types(name), service_consumption(count)",
     )
+    .eq("organisation_id", scope.organisationId)
     .order("created_at", { ascending: false })
     .limit(100)
+
+  if (scope.branchId) {
+    query = query.eq("branch_id", scope.branchId)
+  }
+
+  const { data, error } = await query
 
   if (error || !data) return []
 
@@ -209,7 +216,8 @@ export async function getServiceRecordById(id: string): Promise<ServiceRecordDet
       "id, performed_on, performed_by, customer_name, customer_phone, service_fee_cents, note, created_at, service_types(name), service_consumption(id, product_id, quantity, products(name, sku))",
     )
     .eq("id", id)
-    .single()
+    .eq("organisation_id", scope.organisationId)
+    .maybeSingle()
 
   if (error || !data) return null
 

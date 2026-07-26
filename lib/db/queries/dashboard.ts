@@ -43,12 +43,18 @@ export async function getPayablesSummary() {
 
   const today = new Date().toISOString().split("T")[0]
 
-  const { data, error } = await supabase
+  let payablesQuery = supabase
     .from("vendor_invoices")
     .select("total_cents, amount_paid_cents, status, due_date")
     .eq("organisation_id", scope.organisationId)
     .is("deleted_at", null)
     .in("status", ["unpaid", "partial"])
+
+  if (scope.branchId) {
+    payablesQuery = payablesQuery.eq("branch_id", scope.branchId)
+  }
+
+  const { data, error } = await payablesQuery
 
   if (error || !data) return { outstandingCents: 0, unpaidCount: 0, pastDueCount: 0 }
 
@@ -69,13 +75,19 @@ export async function getRecentInvoices(limit = 5) {
 
   const supabase = await createAppServerClient()
 
-  const { data, error } = await supabase
+  let recentQuery = supabase
     .from("vendor_invoices")
     .select("id, invoice_number, invoice_date, total_cents, status, vendors(name)")
     .eq("organisation_id", scope.organisationId)
     .is("deleted_at", null)
     .order("invoice_date", { ascending: false })
     .limit(limit)
+
+  if (scope.branchId) {
+    recentQuery = recentQuery.eq("branch_id", scope.branchId)
+  }
+
+  const { data, error } = await recentQuery
 
   if (error) return []
   return data
@@ -97,12 +109,19 @@ export async function getStockReceivedSeries() {
   }
   const since = dates[0] + "T00:00:00.000Z"
 
-  const { data, error } = await supabase
+  let ledgerQuery = supabase
     .from("stock_ledger")
     .select("quantity_delta, created_at")
+    .eq("organisation_id", scope.organisationId)
     .eq("reason", "vendor_invoice")
     .gt("quantity_delta", 0)
     .gte("created_at", since)
+
+  if (scope.branchId) {
+    ledgerQuery = ledgerQuery.eq("branch_id", scope.branchId)
+  }
+
+  const { data, error } = await ledgerQuery
 
   if (error || !data) return dates.map((date) => ({ date, units: 0 }))
 
@@ -130,16 +149,22 @@ export async function getNotifications(): Promise<NotificationItem[]> {
   const supabase = await createAppServerClient()
   const today = new Date().toISOString().split("T")[0]
 
+  let notifInvoiceQuery = supabase
+    .from("vendor_invoices")
+    .select("id, invoice_number, total_cents, due_date, vendors(name)")
+    .eq("organisation_id", scope.organisationId)
+    .is("deleted_at", null)
+    .in("status", ["unpaid", "partial"])
+    .lt("due_date", today)
+    .order("due_date", { ascending: true })
+    .limit(10)
+
+  if (scope.branchId) {
+    notifInvoiceQuery = notifInvoiceQuery.eq("branch_id", scope.branchId)
+  }
+
   const [invoiceRes, productRes, pendingCount] = await Promise.all([
-    supabase
-      .from("vendor_invoices")
-      .select("id, invoice_number, total_cents, due_date, vendors(name)")
-      .eq("organisation_id", scope.organisationId)
-      .is("deleted_at", null)
-      .in("status", ["unpaid", "partial"])
-      .lt("due_date", today)
-      .order("due_date", { ascending: true })
-      .limit(10),
+    notifInvoiceQuery,
     supabase
       .from("products")
       .select("id, sku, name, reorder_point, product_stock(quantity)")

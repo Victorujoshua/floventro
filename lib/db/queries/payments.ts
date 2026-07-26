@@ -35,6 +35,16 @@ export async function getInvoicePayments(invoiceId: string): Promise<InvoicePaym
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = await createAppServerClient() as any
 
+  // Verify the invoice belongs to this org before fetching its payments.
+  const { data: invoiceCheck } = await supabase
+    .from("vendor_invoices")
+    .select("id")
+    .eq("id", invoiceId)
+    .eq("organisation_id", scope.organisationId)
+    .maybeSingle()
+
+  if (!invoiceCheck) return []
+
   const { data, error } = await supabase
     .from("vendor_payments")
     .select("id, amount_cents, wht_rate, wht_cents, paid_on, method, reference, note, created_at, created_by")

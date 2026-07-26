@@ -297,11 +297,19 @@ export async function getPendingRequestCount(): Promise<number> {
   if (scope.role !== "owner" && scope.role !== "inventory") return 0
 
   const supabase = await createAppServerClient()
-  const { count, error } = await supabase
+
+  let countQuery = supabase
     .from("stock_requests")
     .select("id", { count: "exact", head: true })
+    .eq("organisation_id", scope.organisationId)
     .eq("status", "pending")
     .is("deleted_at", null)
+
+  if (scope.branchId) {
+    countQuery = countQuery.eq("branch_id", scope.branchId)
+  }
+
+  const { count, error } = await countQuery
 
   if (error) return 0
   return count ?? 0
