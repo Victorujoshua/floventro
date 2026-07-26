@@ -106,53 +106,6 @@ function resolveMovementLabel(reason: string, adjReason: string | null): string 
   }
 }
 
-/**
- * Builds a per-product weighted-average unit cost (in cents) from all
- * vendor_invoice_lines in the org.
- *
- * Products NOT returned → cost is UNKNOWN (null), NOT zero.
- * This is the only honest cost source: products added via adjustment (opening
- * stock) have no invoice line and therefore no cost data.
- * TODO: capture optional cost on opening-stock adjustments when needed.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fetchOrgCostMap(supabase: any, organisationId: string): Promise<Map<string, number>> {
-  const { data, error } = await supabase
-    .from("vendor_invoices")
-    .select("vendor_invoice_lines(product_id, quantity, unit_cost_cents)")
-    .eq("organisation_id", organisationId)
-    .is("deleted_at", null)
-
-  if (error || !data) return new Map()
-
-  type RawLine = { product_id: string; quantity: number; unit_cost_cents: number }
-  type RawInvoice = { vendor_invoice_lines: RawLine[] }
-
-  const perProduct = new Map<string, { totalCostCents: number; totalQty: number }>()
-  for (const inv of (data as unknown as RawInvoice[])) {
-    for (const line of inv.vendor_invoice_lines ?? []) {
-      const existing = perProduct.get(line.product_id)
-      if (existing) {
-        existing.totalCostCents += line.unit_cost_cents * line.quantity
-        existing.totalQty += line.quantity
-      } else {
-        perProduct.set(line.product_id, {
-          totalCostCents: line.unit_cost_cents * line.quantity,
-          totalQty: line.quantity,
-        })
-      }
-    }
-  }
-
-  const result = new Map<string, number>()
-  for (const [productId, { totalCostCents, totalQty }] of perProduct) {
-    if (totalQty > 0) {
-      result.set(productId, totalCostCents / totalQty)
-    }
-  }
-  return result
-}
-
 // ── getOrgOverview ────────────────────────────────────────────────────────────
 
 export async function getOrgOverview(): Promise<OrgOverview> {
@@ -353,11 +306,11 @@ export async function getOrgSales(): Promise<OrgSalesData> {
   const supabase = (await createAppServerClient()) as any
   const cutoff = since30dCutoff()
 
-  const [salesRes, branchRes, costMap] = await Promise.all([
+  const [salesRes, branchRes, cogsRes] = await Promise.all([
     supabase
       .from("sales")
       .select(
-        "id, branch_id, total_cents, created_at, sold_on, customer_name, sale_lines(product_id, quantity, line_total_cents, products(id, name, sku))",
+        "id, branch_id, total_cents, created_at, sold_on, customer_name, sale_lines(id, product_id, quantity, line_total_cents, products(id, name, sku))",
       )
       .eq("organisation_id", scope.organisationId)
       .order("created_at", { ascending: false }),
@@ -368,7 +321,13 @@ export async function getOrgSales(): Promise<OrgSalesData> {
       .eq("organisation_id", scope.organisationId)
       .is("deleted_at", null),
 
-    fetchOrgCostMap(supabase, scope.organisationId),
+    // Frozen COGS per sale_line — written at sale time, never retroactively updated.
+    // Pre-migration sale_lines have no row here → treated as unknown cost.
+    supabase
+      .from("cogs_allocations")
+      .select("reference_id, cogs_cents, cost_known")
+      .eq("organisation_id", scope.organisationId)
+      .eq("reference_type", "sale_line"),
   ])
 
   if (salesRes.error) {
@@ -379,9 +338,21 @@ export async function getOrgSales(): Promise<OrgSalesData> {
     console.error("[getOrgSales] branches query failed", branchRes.error)
     throw branchRes.error
   }
+  if (cogsRes.error) {
+    console.error("[getOrgSales] cogs_allocations query failed", cogsRes.error)
+    throw cogsRes.error
+  }
+
+  // sale_line_id → frozen COGS (immutable after the sale is recorded).
+  type RawCogs = { reference_id: string; cogs_cents: number | null; cost_known: boolean }
+  const cogsMap = new Map<string, { cogsCents: number | null; costKnown: boolean }>()
+  for (const alloc of (cogsRes.data as unknown as RawCogs[]) ?? []) {
+    cogsMap.set(alloc.reference_id, { cogsCents: alloc.cogs_cents, costKnown: alloc.cost_known })
+  }
 
   type RawLineProduct = { id: string; name: string; sku: string }
   type RawLine = {
+    id: string
     product_id: string
     quantity: number
     line_total_cents: number
@@ -443,9 +414,13 @@ export async function getOrgSales(): Promise<OrgSalesData> {
 
     for (const line of sale.sale_lines ?? []) {
       const prod = Array.isArray(line.products) ? line.products[0] : line.products
-      const avgCost = costMap.get(line.product_id)
-      const hasCost = avgCost !== undefined
-      const lineCost = hasCost ? line.quantity * avgCost! : null
+
+      // Frozen COGS from cogs_allocations — immutable after the sale is recorded.
+      // A new vendor receipt after this sale does NOT change this number.
+      // No allocation row (pre-migration sale) → unknown cost.
+      const alloc = cogsMap.get(line.id)
+      const hasCost = alloc?.costKnown === true
+      const lineCost: number | null = hasCost ? (alloc!.cogsCents ?? null) : null
 
       const existing = productAgg.get(line.product_id)
       if (existing) {
@@ -453,6 +428,9 @@ export async function getOrgSales(): Promise<OrgSalesData> {
         existing.revenueCents += line.line_total_cents
         if (existing.costCents !== null && lineCost !== null) {
           existing.costCents += lineCost
+        } else if (lineCost === null) {
+          // Any unknown-cost line taints the product's cost display entirely.
+          existing.costCents = null
         }
       } else {
         productAgg.set(line.product_id, {
@@ -460,7 +438,7 @@ export async function getOrgSales(): Promise<OrgSalesData> {
           sku: (prod as RawLineProduct | null)?.sku ?? "",
           qtySold: line.quantity,
           revenueCents: line.line_total_cents,
-          costCents: hasCost ? (lineCost ?? 0) : null,
+          costCents: lineCost,
         })
       }
 
