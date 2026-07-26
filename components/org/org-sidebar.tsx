@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   ShoppingCart,
   BookOpen,
+  Settings,
   Plus,
   LogIn,
   LogOut,
@@ -17,9 +18,10 @@ import { enterBranchAction } from "@/lib/db/actions/org"
 import type { BranchRow } from "@/lib/db/queries/branches"
 
 const ORG_NAV = [
-  { label: "Overview",        href: "/org",         icon: LayoutDashboard },
-  { label: "Sales & Revenue", href: "/org/sales",   icon: ShoppingCart },
-  { label: "Org Ledger",      href: "/org/ledger",  icon: BookOpen },
+  { label: "Overview",        href: "/org",          icon: LayoutDashboard },
+  { label: "Sales & Revenue", href: "/org/sales",    icon: ShoppingCart },
+  { label: "Org Ledger",      href: "/org/ledger",   icon: BookOpen },
+  { label: "Settings",        href: "/org/settings", icon: Settings },
 ]
 
 type Props = {
