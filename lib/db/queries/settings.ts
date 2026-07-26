@@ -30,6 +30,24 @@ function toPayout(raw: RawPayout): PayoutAccount {
   }
 }
 
+// Returns the currently-entered branch's payout data, or null if no branch is
+// entered (owner at org-level). Page redirects on null.
+export async function getCurrentBranchPayout(): Promise<BranchWithPayout | null> {
+  const scope = await getCurrentScope()
+  if (!scope?.branchId) return null
+  const supabase = await createAppServerClient()
+  const { data, error } = await supabase
+    .from("branches")
+    .select("id, name, payout_account_name, payout_account_number, payout_bank_name")
+    .eq("id", scope.branchId)
+    .eq("organisation_id", scope.organisationId)
+    .is("deleted_at", null)
+    .single()
+  if (error || !data) return null
+  const b = data as unknown as { id: string; name: string } & RawPayout
+  return { id: b.id, name: b.name, payout: toPayout(b) }
+}
+
 export async function getOrgPayoutAccount(): Promise<PayoutAccount | null> {
   const scope = await getCurrentScope()
   if (!scope) return null
@@ -43,23 +61,6 @@ export async function getOrgPayoutAccount(): Promise<PayoutAccount | null> {
   return toPayout(data as unknown as RawPayout)
 }
 
-export async function getBranchesWithPayout(): Promise<BranchWithPayout[]> {
-  const scope = await getCurrentScope()
-  if (!scope) return []
-  const supabase = await createAppServerClient()
-  const { data, error } = await supabase
-    .from("branches")
-    .select("id, name, payout_account_name, payout_account_number, payout_bank_name")
-    .eq("organisation_id", scope.organisationId)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: true })
-  if (error || !data) return []
-  return (data as unknown as Array<{ id: string; name: string } & RawPayout>).map((b) => ({
-    id:     b.id,
-    name:   b.name,
-    payout: toPayout(b),
-  }))
-}
 
 export async function getCostingMethod(): Promise<CostingMethod> {
   const scope = await getCurrentScope()

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
-import { GitBranch, Pencil, CheckCircle2 } from "lucide-react"
+import { CheckCircle2, Pencil } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -13,14 +13,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -28,14 +20,16 @@ import { payoutAccountSchema, type PayoutAccountInput } from "@/lib/validation/s
 import { updateBranchPayoutAccountAction } from "@/lib/db/actions/settings"
 import type { BranchWithPayout } from "@/lib/db/queries/settings"
 
-// ── Branch override panel ─────────────────────────────────────────────────────
+// ── Edit dialog ───────────────────────────────────────────────────────────────
 
-function BranchOverridePanel({
+function EditPayoutDialog({
   branch,
+  open,
   onClose,
   onSuccess,
 }: {
-  branch: BranchWithPayout | null
+  branch: BranchWithPayout
+  open: boolean
   onClose: () => void
   onSuccess: () => void
 }) {
@@ -46,13 +40,11 @@ function BranchOverridePanel({
     formState: { errors, isSubmitting },
   } = useForm<PayoutAccountInput>({
     resolver: zodResolver(payoutAccountSchema),
-    values: branch
-      ? {
-          accountName:   branch.payout.accountName   ?? "",
-          accountNumber: branch.payout.accountNumber ?? "",
-          bankName:      branch.payout.bankName      ?? "",
-        }
-      : { accountName: "", accountNumber: "", bankName: "" },
+    values: {
+      accountName:   branch.payout.accountName   ?? "",
+      accountNumber: branch.payout.accountNumber ?? "",
+      bankName:      branch.payout.bankName      ?? "",
+    },
   })
 
   function handleClose() {
@@ -61,22 +53,21 @@ function BranchOverridePanel({
   }
 
   async function onSubmit(values: PayoutAccountInput) {
-    if (!branch) return
     const result = await updateBranchPayoutAccountAction(branch.id, values)
     if (!result.ok) {
       toast.error(result.error)
       return
     }
-    toast.success(`${branch.name} override saved`)
+    toast.success("Branch account saved")
     handleClose()
     onSuccess()
   }
 
   return (
-    <Dialog open={branch !== null} onOpenChange={(o) => { if (!o) handleClose() }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Payout override — {branch?.name}</DialogTitle>
+          <DialogTitle>Payout account — {branch.name}</DialogTitle>
         </DialogHeader>
 
         <p className="text-sm text-neutral-500">
@@ -125,11 +116,11 @@ function BranchOverridePanel({
         <DialogFooter showCloseButton>
           <Button
             type="button"
-            disabled={isSubmitting || !branch}
+            disabled={isSubmitting}
             onClick={handleSubmit(onSubmit)}
             className="bg-neutral-800 hover:bg-neutral-900 text-white rounded-md"
           >
-            {isSubmitting ? "Saving…" : "Save override"}
+            {isSubmitting ? "Saving…" : "Save"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -140,84 +131,64 @@ function BranchOverridePanel({
 // ── Main client ───────────────────────────────────────────────────────────────
 
 type Props = {
-  branches: BranchWithPayout[]
+  branch: BranchWithPayout
 }
 
-export function SettingsClient({ branches }: Props) {
+export function SettingsClient({ branch }: Props) {
   const router = useRouter()
-  const [editBranch, setEditBranch] = useState<BranchWithPayout | null>(null)
+  const [editing, setEditing] = useState(false)
+
+  const { accountName, accountNumber, bankName } = branch.payout
+  const hasOverride = !!(accountName || accountNumber || bankName)
 
   return (
     <div className="max-w-2xl space-y-10">
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Branch payout accounts</h1>
+        <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">
+          {branch.name} payout account
+        </h1>
         <p className="text-sm text-neutral-500 mt-1">
-          Override the organisation&apos;s default payout account for a specific branch.
+          Override the organisation&apos;s default payout account for this branch.
           Leave blank to use the organisation account.
         </p>
       </div>
 
-      <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <GitBranch className="h-4 w-4 text-neutral-400" />
-          <h2 className="text-base font-semibold text-neutral-950">Branch overrides</h2>
+      <div className="rounded-xl border border-neutral-200 bg-white p-5 flex items-start justify-between gap-4">
+        <div>
+          {hasOverride ? (
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                <span className="text-sm font-medium text-neutral-950">
+                  {accountName}
+                </span>
+              </div>
+              <p className="text-sm text-neutral-500 pl-5.5">
+                {[bankName, accountNumber].filter(Boolean).join(" · ")}
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-neutral-400 italic">
+              Inheriting organisation default
+            </p>
+          )}
         </div>
 
-        {branches.length === 0 ? (
-          <p className="text-sm text-neutral-400">No branches found.</p>
-        ) : (
-          <div className="rounded-xl border border-neutral-200/60 bg-white overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-neutral-50">
-                  <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Branch</TableHead>
-                  <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Payout</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {branches.map((b) => {
-                  const hasOverride = !!(b.payout.accountName || b.payout.accountNumber || b.payout.bankName)
-                  return (
-                    <TableRow key={b.id} className="hover:bg-neutral-50/60 transition-colors">
-                      <TableCell className="text-sm font-medium text-neutral-950 py-3.5">
-                        {b.name}
-                      </TableCell>
-                      <TableCell className="py-3.5">
-                        {hasOverride ? (
-                          <div className="flex items-center gap-1.5">
-                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                            <span className="text-xs text-neutral-600">
-                              {[b.payout.bankName, b.payout.accountNumber].filter(Boolean).join(" · ")}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-neutral-400 italic">Inheriting org default</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-3.5 text-right">
-                        <button
-                          onClick={() => setEditBranch(b)}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 h-7 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
-                        >
-                          <Pencil className="h-3 w-3" />
-                          {hasOverride ? "Edit" : "Override"}
-                        </button>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </section>
+        <button
+          onClick={() => setEditing(true)}
+          className="shrink-0 inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 h-8 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
+        >
+          <Pencil className="h-3 w-3" />
+          {hasOverride ? "Edit" : "Override"}
+        </button>
+      </div>
 
-      <BranchOverridePanel
-        branch={editBranch}
-        onClose={() => setEditBranch(null)}
+      <EditPayoutDialog
+        branch={branch}
+        open={editing}
+        onClose={() => setEditing(false)}
         onSuccess={() => {
-          setEditBranch(null)
+          setEditing(false)
           router.refresh()
         }}
       />
