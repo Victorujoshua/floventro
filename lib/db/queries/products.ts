@@ -9,7 +9,7 @@ export async function getProducts() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = await createAppServerClient() as any
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("products")
     .select(
       "id, sku, name, description, reorder_point, unit_cost_cents, default_price_cents, created_at, updated_at, product_stock(quantity)",
@@ -17,6 +17,21 @@ export async function getProducts() {
     .eq("organisation_id", scope.organisationId)
     .is("deleted_at", null)
     .order("name", { ascending: true })
+
+  if (scope.branchId) {
+    // When inside a branch, show only products this branch carries (branch_products join table).
+    // After app_0043 backfill every existing pair is listed, so this is visually inert on deploy.
+    const { data: carried } = await supabase
+      .from("branch_products")
+      .select("product_id")
+      .eq("branch_id", scope.branchId)
+
+    const carriedIds = (carried ?? []).map((r: { product_id: string }) => r.product_id)
+    if (carriedIds.length === 0) return []
+    query = query.in("id", carriedIds)
+  }
+
+  const { data, error } = await query
 
   if (error) return []
 
