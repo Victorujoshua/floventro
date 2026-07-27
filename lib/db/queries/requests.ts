@@ -105,7 +105,7 @@ export async function getMyRequests(): Promise<MyRequest[]> {
   } = await supabase.auth.getUser()
   if (!user) return []
 
-  const { data, error } = await supabase
+  let myReqQuery = supabase
     .from("stock_requests")
     .select(
       "id, purpose, status, created_at, requested_by, reviewed_by, reviewed_at, review_note, stock_request_lines(id, quantity_requested, quantity_approved, products(id, sku, name))",
@@ -113,6 +113,12 @@ export async function getMyRequests(): Promise<MyRequest[]> {
     .eq("requested_by", user.id)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
+
+  if (scope.branchId) {
+    myReqQuery = myReqQuery.eq("branch_id", scope.branchId)
+  }
+
+  const { data, error } = await myReqQuery
 
   if (error || !data) return []
 
