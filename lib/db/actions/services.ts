@@ -161,6 +161,7 @@ export async function recordServiceUsageAction(
   if (error) {
     const msg: string = error.message ?? ""
     const lower = msg.toLowerCase()
+    console.error("[recordServiceUsageAction] RPC error:", msg)
 
     if (lower.includes("insufficient holding")) {
       const productMatch = msg.match(/insufficient holding for product ([0-9a-f-]{36})/i)
@@ -209,6 +210,12 @@ export async function recordServiceUsageAction(
         ok: false,
         error: "validation",
         message: "Add at least one product used in this service.",
+      }
+    if (lower.includes("cost_layers exhausted") || lower.includes("out of sync"))
+      return {
+        ok: false,
+        error: "cost_sync",
+        message: "This item's stock and cost records are out of sync. Please contact support.",
       }
 
     return { ok: false, error: "server", message: "Something went wrong. Please try again." }
