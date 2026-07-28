@@ -5,7 +5,7 @@ import { createAppServerClient } from "@/lib/supabase/app-server"
 import { TransfersClient } from "./transfers-client"
 
 export default async function TransfersPage() {
-  const scope = await requireRole("owner", "inventory")
+  const scope = await requireRole("owner", "inventory", "admin")
 
   // Owner at org-level (no branch entered) has no source branch — send them to /org.
   if (scope.role === "owner" && !scope.branchId) {

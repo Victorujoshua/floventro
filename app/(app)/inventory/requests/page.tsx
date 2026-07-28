@@ -3,7 +3,7 @@ import { getPendingRequests, getReviewedRequests } from "@/lib/db/queries/reques
 import { RequestsReviewClient } from "./requests-review-client"
 
 export default async function InventoryRequestsPage() {
-  await requireRole("owner", "inventory")
+  await requireRole("owner", "inventory", "admin")
 
   const [pendingRequests, reviewedRequests] = await Promise.all([
     getPendingRequests(),

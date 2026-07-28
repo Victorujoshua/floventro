@@ -1,7 +1,7 @@
 "use server"
 
 import { createAppServerClient } from "@/lib/supabase/app-server"
-import { requireOwner } from "@/lib/auth/guards"
+import { requireRole } from "@/lib/auth/guards"
 import { inviteSchema, type InviteInput } from "@/lib/validation/invites"
 import { sendInviteEmail } from "@/lib/email/zeptomail"
 
@@ -17,13 +17,24 @@ export async function inviteMemberAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }
   }
 
-  const scope = await requireOwner()
+  const scope = await requireRole("owner", "admin")
+
+  // Escalation guard: mirrors the RLS WITH CHECK for the admin path.
+  // Admins cannot invite other admins — only owners can assign the admin role.
+  if (scope.role === "admin" && parsed.data.role === "admin") {
+    return { ok: false, error: "Admins cannot invite other admins." }
+  }
+
   const supabase = await createAppServerClient()
 
-  // Resolve branchId
+  // Resolve branchId.
   let branchId: string | null = parsed.data.branchId ?? null
 
-  if (!branchId) {
+  if (scope.role === "admin") {
+    // Admin is always scoped to their one branch — force the invite there.
+    branchId = scope.branchId
+  } else if (!branchId) {
+    // Owner with no explicit branch selected — auto-resolve for single-branch orgs.
     const { data: branches } = await supabase
       .from("branches")
       .select("id")
@@ -62,7 +73,6 @@ export async function inviteMemberAction(
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.floventro.com"
   const acceptUrl = `${appUrl}/accept-invite/${(invite as { token: string }).token}`
 
-  // Get inviter name + org name for the email
   const { data: { user } } = await supabase.auth.getUser()
   const inviterName =
     (user?.user_metadata?.full_name as string) || user?.email || "Your team"
@@ -88,7 +98,7 @@ export async function inviteMemberAction(
 }
 
 export async function revokeInviteAction(inviteId: string): Promise<ActionResult> {
-  const scope = await requireOwner()
+  const scope = await requireRole("owner", "admin")
   const supabase = await createAppServerClient()
 
   const { error } = await supabase

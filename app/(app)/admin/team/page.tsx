@@ -1,11 +1,11 @@
-import { requireOwner } from "@/lib/auth/guards"
+import { requireRole } from "@/lib/auth/guards"
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { getMembers, getPendingInvites } from "@/lib/db/queries/team"
 import { getOrgBranches } from "@/lib/db/queries/vendors"
 import { TeamClient } from "./team-client"
 
 export default async function TeamPage() {
-  const scope = await requireOwner()
+  const scope = await requireRole("owner", "admin")
 
   const supabase = await createAppServerClient()
   const { data: org } = await supabase
@@ -26,6 +26,7 @@ export default async function TeamPage() {
       members={members}
       invites={invites}
       branches={branches}
+      canInviteAdmin={scope.role === "owner"}
     />
   )
 }

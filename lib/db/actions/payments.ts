@@ -17,7 +17,7 @@ export async function recordPaymentAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }
   }
 
-  await requireRole("owner", "inventory")
+  await requireRole("owner", "inventory", "admin")
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = await createAppServerClient() as any
 
@@ -56,6 +56,6 @@ export async function recordPaymentAction(
 }
 
 export async function getInvoicePaymentsAction(invoiceId: string) {
-  await requireRole("owner", "inventory")
+  await requireRole("owner", "inventory", "admin")
   return getInvoicePayments(invoiceId)
 }

@@ -118,7 +118,7 @@ export async function recordSalePaymentAction(
   method: string | null,
   note: string,
 ): Promise<{ ok: true; paymentStatus: string } | { ok: false; error: string; message?: string }> {
-  await requireRole("owner", "inventory")
+  await requireRole("owner", "inventory", "admin")
   const supabase = await createAppServerClient()
 
   const amountCents = Math.round(amountNaira * 100)

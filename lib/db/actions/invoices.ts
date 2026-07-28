@@ -17,7 +17,7 @@ export async function recordInvoiceAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }
   }
 
-  const scope = await requireRole("owner", "inventory")
+  const scope = await requireRole("owner", "inventory", "admin")
   const supabase = await createAppServerClient()
 
   // Resolve which branch this invoice belongs to.
@@ -76,7 +76,7 @@ export async function recordInvoiceAction(
 }
 
 export async function getInvoiceForReceivingAction(invoiceId: string) {
-  await requireRole("owner", "inventory")
+  await requireRole("owner", "inventory", "admin")
   return getInvoiceForReceiving(invoiceId)
 }
 
@@ -85,7 +85,7 @@ export async function receiveInvoiceStockAction(
   lines: { lineId: string; quantityReceived: number }[],
   note: string,
 ): Promise<{ ok: true; receiptStatus: string } | { ok: false; error: string; code?: string }> {
-  await requireRole("owner", "inventory")
+  await requireRole("owner", "inventory", "admin")
   const supabase = await createAppServerClient()
 
   const rpcLines = lines.map((l) => ({

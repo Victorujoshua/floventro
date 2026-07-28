@@ -16,7 +16,7 @@ export async function createVendorAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }
   }
 
-  const scope = await requireRole("owner", "inventory")
+  const scope = await requireRole("owner", "inventory", "admin")
   const supabase = await createAppServerClient()
 
   const { data, error } = await supabase
@@ -57,7 +57,7 @@ export async function updateVendorAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }
   }
 
-  const scope = await requireRole("owner", "inventory")
+  const scope = await requireRole("owner", "inventory", "admin")
   const supabase = await createAppServerClient()
 
   const { data, error } = await supabase
@@ -92,7 +92,7 @@ export async function updateVendorAction(
 }
 
 export async function deleteVendorAction(id: string): Promise<ActionResult> {
-  const scope = await requireRole("owner", "inventory")
+  const scope = await requireRole("owner", "inventory", "admin")
   const supabase = await createAppServerClient()
 
   const { error } = await supabase

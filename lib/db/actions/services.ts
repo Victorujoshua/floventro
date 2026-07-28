@@ -30,7 +30,7 @@ export async function createServiceTypeAction(
     }
   }
 
-  const scope = await requireRole("owner", "inventory")
+  const scope = await requireRole("owner", "inventory", "admin")
   const supabase = await createAppServerClient()
 
   const { data: authData } = await supabase.auth.getUser()
@@ -75,7 +75,7 @@ export async function updateServiceTypeAction(
     }
   }
 
-  await requireRole("owner", "inventory")
+  await requireRole("owner", "inventory", "admin")
   const supabase = await createAppServerClient()
 
   const { error } = await supabase

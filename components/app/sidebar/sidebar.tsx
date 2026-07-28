@@ -67,6 +67,17 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "Sales",              href: "/sales",              icon: ShoppingCart },
     { label: "Services performed", href: "/services-performed", icon: Sparkles },
   ],
+  admin: [
+    { label: "Dashboard",          href: "/dashboard",              icon: LayoutDashboard },
+    { label: "Products",           href: "/inventory/products",     icon: Package },
+    { label: "Vendors",            href: "/inventory/vendors",      icon: Truck },
+    { label: "Invoices",           href: "/inventory/invoices",     icon: FileText },
+    { label: "Requests",           href: "/requests",               icon: ClipboardList },
+    { label: "Stock requests",     href: "/inventory/requests",     icon: ClipboardCheck },
+    { label: "My Holding",         href: "/holding",                icon: Wallet },
+    { label: "Sales",              href: "/sales",                  icon: ShoppingCart },
+    { label: "Services performed", href: "/services-performed",     icon: Sparkles },
+  ],
 }
 
 const MANAGEMENT_MENU: Record<Role, NavItem[]> = {
@@ -85,6 +96,12 @@ const MANAGEMENT_MENU: Record<Role, NavItem[]> = {
   ],
   sales:        [],
   internal_use: [],
+  admin: [
+    { label: "Team",           href: "/admin/team",         icon: Users },
+    { label: "Staff holdings", href: "/inventory/holdings", icon: Layers },
+    { label: "Transfers",      href: "/inventory/transfers", icon: ArrowLeftRight },
+    { label: "Services",       href: "/inventory/services", icon: Sparkles },
+  ],
 }
 
 function NavBadge({ count }: { count: number }) {

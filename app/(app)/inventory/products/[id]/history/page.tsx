@@ -21,7 +21,7 @@ function formatDate(iso: string) {
 }
 
 export default async function ProductHistoryPage({ params }: Props) {
-  const scope = await requireRole("owner", "inventory")
+  const scope = await requireRole("owner", "inventory", "admin")
   const { id: productId } = await params
 
   const supabase = await createAppServerClient()

@@ -5,7 +5,7 @@ import { createAppServerClient } from "@/lib/supabase/app-server"
 import { InvoiceForm } from "../invoice-form"
 
 export default async function NewInvoicePage() {
-  const scope = await requireRole("owner", "inventory")
+  const scope = await requireRole("owner", "inventory", "admin")
 
   // Determine the effective branch for this form.
   let branchId = scope.branchId ?? null

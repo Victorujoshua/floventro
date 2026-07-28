@@ -219,6 +219,81 @@ export async function getNotifications(): Promise<NotificationItem[]> {
   return items
 }
 
+// ── Personal dashboard queries (sales / internal_use only) ──────────────────
+
+export async function getPersonalHoldingSummary() {
+  const scope = await getCurrentScope()
+  if (!scope) return { totalUnits: 0, productCount: 0 }
+
+  const supabase = await createAppServerClient()
+  const { data: authData } = await supabase.auth.getUser()
+  if (!authData?.user) return { totalUnits: 0, productCount: 0 }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("staff_holdings")
+    .select("quantity")
+    .eq("holder_user_id", authData.user.id)
+    .eq("organisation_id", scope.organisationId)
+    .gt("quantity", 0)
+
+  if (error || !data) return { totalUnits: 0, productCount: 0 }
+
+  return {
+    totalUnits: (data as { quantity: number }[]).reduce((sum, h) => sum + h.quantity, 0),
+    productCount: (data as unknown[]).length,
+  }
+}
+
+export async function getMyRecentSales(limit = 5) {
+  const scope = await getCurrentScope()
+  if (!scope) return [] as { id: string; sold_on: string; customer_name: string | null; total_cents: number; payment_status: string }[]
+
+  const supabase = await createAppServerClient()
+  const { data: authData } = await supabase.auth.getUser()
+  if (!authData?.user) return []
+
+  let query = supabase
+    .from("sales")
+    .select("id, sold_on, customer_name, total_cents, payment_status")
+    .eq("seller_user_id", authData.user.id)
+    .eq("organisation_id", scope.organisationId)
+    .order("sold_on", { ascending: false })
+    .limit(limit)
+
+  if (scope.branchId) {
+    query = query.eq("branch_id", scope.branchId)
+  }
+
+  const { data, error } = await query
+  if (error || !data) return []
+  return data as { id: string; sold_on: string; customer_name: string | null; total_cents: number; payment_status: string }[]
+}
+
+export async function getMyPendingRequestCount() {
+  const scope = await getCurrentScope()
+  if (!scope) return 0
+
+  const supabase = await createAppServerClient()
+  const { data: authData } = await supabase.auth.getUser()
+  if (!authData?.user) return 0
+
+  let query = supabase
+    .from("stock_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("requested_by", authData.user.id)
+    .eq("organisation_id", scope.organisationId)
+    .eq("status", "pending")
+
+  if (scope.branchId) {
+    query = query.eq("branch_id", scope.branchId)
+  }
+
+  const { count, error } = await query
+  if (error) return 0
+  return count ?? 0
+}
+
 export async function getLowStockProducts(limit = 5) {
   const scope = await getCurrentScope()
   if (!scope) return []

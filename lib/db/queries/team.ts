@@ -34,7 +34,50 @@ export async function getMembers(): Promise<Member[]> {
   if (!scope) return []
 
   const supabase = await createAppServerClient()
+  const adminClient = createAppServiceRoleClient()
 
+  // Admin callers cannot see owner rows (branch_id IS NULL) via RLS.
+  // Use the SECURITY DEFINER RPC to get the full team including org owners.
+  if (scope.role === "admin" && scope.branchId) {
+    const { data: rows, error } = await supabase.rpc("get_branch_members", {
+      p_branch_id: scope.branchId,
+    })
+    if (error || !rows) return []
+
+    const rpcRows = rows as {
+      id: string
+      user_id: string
+      role: string
+      branch_id: string | null
+      branch_name: string | null
+      created_at: string
+    }[]
+
+    const userIds = [...new Set(rpcRows.map((r) => r.user_id))]
+    const userInfos = await Promise.all(
+      userIds.map(async (uid) => {
+        const { data } = await adminClient.auth.admin.getUserById(uid)
+        return {
+          id: uid,
+          email: data.user?.email ?? "",
+          name: (data.user?.user_metadata?.full_name as string) ?? "",
+        }
+      }),
+    )
+    const userMap = new Map(userInfos.map((u) => [u.id, u]))
+
+    return rpcRows.map((r) => ({
+      id: r.id,
+      userId: r.user_id,
+      email: userMap.get(r.user_id)?.email ?? "",
+      name: userMap.get(r.user_id)?.name ?? "",
+      role: r.role,
+      branchName: r.branch_name,
+      createdAt: r.created_at,
+    }))
+  }
+
+  // Owner / inventory path: direct RLS-protected query.
   let query = supabase
     .from("memberships")
     .select("id, user_id, role, branch_id, created_at, branches(name)")
@@ -53,7 +96,6 @@ export async function getMembers(): Promise<Member[]> {
   if (error || !memberships) return []
 
   // Fetch emails + names for each member using service-role admin API
-  const adminClient = createAppServiceRoleClient()
   const userIds = [...new Set((memberships as { user_id: string }[]).map((m) => m.user_id))]
 
   const userInfos = await Promise.all(

@@ -17,7 +17,7 @@ export async function initiateTransferAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }
   }
 
-  const scope = await requireRole("owner", "inventory")
+  const scope = await requireRole("owner", "inventory", "admin")
 
   // Source is always the branch the caller is currently inside.
   if (!scope.branchId) {
@@ -90,7 +90,7 @@ export async function receiveTransferAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }
   }
 
-  await requireRole("owner", "inventory")
+  await requireRole("owner", "inventory", "admin")
   const supabase = await createAppServerClient()
 
   const { transferId, lines, note } = parsed.data
@@ -127,7 +127,7 @@ export async function cancelTransferAction(
 ): Promise<ActionResult> {
   if (!transferId) return { ok: false, error: "invalid", message: "Transfer ID required." }
 
-  await requireRole("owner", "inventory")
+  await requireRole("owner", "inventory", "admin")
   const supabase = await createAppServerClient()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

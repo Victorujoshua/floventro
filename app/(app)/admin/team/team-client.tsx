@@ -26,29 +26,33 @@ type Props = {
   members: Member[]
   invites: PendingInvite[]
   branches: Branch[]
+  canInviteAdmin: boolean
 }
 
 const SELECT_CLASS =
   "w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-violet-600/30 focus:border-violet-600 disabled:opacity-50"
 
-const ROLE_OPTIONS = [
-  { value: "inventory", label: "Inventory" },
-  { value: "sales", label: "Sales" },
-  { value: "internal_use", label: "Internal Use" },
+const ALL_ROLE_OPTIONS = [
+  { value: "inventory",     label: "Inventory" },
+  { value: "sales",         label: "Sales" },
+  { value: "internal_use",  label: "Internal Use" },
+  { value: "admin",         label: "Branch Admin" },
 ]
 
 const ROLE_LABELS: Record<string, string> = {
-  owner: "Owner",
-  inventory: "Inventory",
-  sales: "Sales",
-  internal_use: "Internal Use",
+  owner:         "Owner",
+  admin:         "Branch Admin",
+  inventory:     "Inventory",
+  sales:         "Sales",
+  internal_use:  "Internal Use",
 }
 
 function RoleBadge({ role }: { role: string }) {
   const styles: Record<string, string> = {
-    owner: "bg-tint-violet text-violet-700",
-    inventory: "bg-blue-50 text-blue-700",
-    sales: "bg-tint-success text-green-700",
+    owner:        "bg-tint-violet text-violet-700",
+    admin:        "bg-teal-50 text-teal-700",
+    inventory:    "bg-blue-50 text-blue-700",
+    sales:        "bg-tint-success text-green-700",
     internal_use: "bg-tint-amber text-amber-700",
   }
   const cls = styles[role] ?? "bg-neutral-100 text-neutral-600"
@@ -69,7 +73,7 @@ function formatDate(dateStr: string): string {
 
 type SuccessData = { acceptUrl: string; emailSent: boolean; email: string }
 
-export function TeamClient({ orgName, members, invites, branches }: Props) {
+export function TeamClient({ orgName, members, invites, branches, canInviteAdmin }: Props) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [successData, setSuccessData] = useState<SuccessData | null>(null)
@@ -377,7 +381,7 @@ export function TeamClient({ orgName, members, invites, branches }: Props) {
                   Role
                 </Label>
                 <select id="role" className={SELECT_CLASS} {...register("role")}>
-                  {ROLE_OPTIONS.map((opt) => (
+                  {(canInviteAdmin ? ALL_ROLE_OPTIONS : ALL_ROLE_OPTIONS.filter(o => o.value !== "admin")).map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
                     </option>

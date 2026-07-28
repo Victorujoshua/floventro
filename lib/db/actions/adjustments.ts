@@ -16,7 +16,7 @@ export async function adjustStockAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }
   }
 
-  const scope = await requireRole("owner", "inventory")
+  const scope = await requireRole("owner", "inventory", "admin")
   const supabase = await createAppServerClient()
 
   // Resolve branch (mirrors the invoice + request action pattern).

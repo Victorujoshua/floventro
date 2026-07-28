@@ -1,7 +1,7 @@
 import { cookies } from "next/headers"
 import { createAppServerClient } from "@/lib/supabase/app-server"
 
-export type Role = "owner" | "inventory" | "sales" | "internal_use"
+export type Role = "owner" | "admin" | "inventory" | "sales" | "internal_use"
 
 export type Scope = {
   userId: string
@@ -16,9 +16,10 @@ const COOKIE_ROLE = "floventro_role"
 
 const ROLE_PRIORITY: Record<Role, number> = {
   owner: 0,
-  inventory: 1,
-  sales: 2,
-  internal_use: 3,
+  admin: 1,
+  inventory: 2,
+  sales: 3,
+  internal_use: 4,
 }
 
 /**

@@ -5,7 +5,7 @@ import { getOrgBranches } from "@/lib/db/queries/vendors"
 import { ProductsClient } from "./products-client"
 
 export default async function ProductsPage() {
-  const scope = await requireRole("owner", "inventory")
+  const scope = await requireRole("owner", "inventory", "admin")
   const [rawProducts, branches] = await Promise.all([getProducts(), getOrgBranches()])
 
   // Resolve branch: scope-bound member → single branch → null (multi-branch owner sees all)

@@ -94,7 +94,7 @@ export async function reviewRequestAction(
   lines: { lineId: string; quantityApproved: number }[],
   note: string,
 ): Promise<ActionResult<{ status: string }>> {
-  await requireRole("owner", "inventory")
+  await requireRole("owner", "inventory", "admin")
   const supabase = await createAppServerClient()
 
   const { data, error } = await supabase.rpc("review_stock_request", {

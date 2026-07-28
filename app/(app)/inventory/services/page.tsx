@@ -3,7 +3,7 @@ import { getServiceTypes } from "@/lib/db/queries/services"
 import { ServicesClient } from "./services-client"
 
 export default async function ServicesPage() {
-  await requireRole("owner", "inventory")
+  await requireRole("owner", "inventory", "admin")
   const serviceTypes = await getServiceTypes()
   return <ServicesClient serviceTypes={serviceTypes} />
 }

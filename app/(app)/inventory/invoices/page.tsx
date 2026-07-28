@@ -5,7 +5,7 @@ import { FileText, Plus } from "lucide-react"
 import { InvoicesClient, type InvoiceRow } from "./invoices-client"
 
 export default async function InvoicesPage() {
-  await requireRole("owner", "inventory")
+  await requireRole("owner", "inventory", "admin")
   const invoices = await getInvoices()
 
   return (

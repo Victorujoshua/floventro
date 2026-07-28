@@ -16,7 +16,7 @@ export async function createProductAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }
   }
 
-  const scope = await requireRole("owner", "inventory")
+  const scope = await requireRole("owner", "inventory", "admin")
   const supabase = await createAppServerClient()
 
   const { data, error } = await supabase
@@ -52,7 +52,7 @@ export async function updateProductAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }
   }
 
-  const scope = await requireRole("owner", "inventory")
+  const scope = await requireRole("owner", "inventory", "admin")
   const supabase = await createAppServerClient()
 
   const { data, error } = await supabase
@@ -83,7 +83,7 @@ export async function updateProductAction(
 }
 
 export async function deleteProductAction(id: string): Promise<ActionResult> {
-  const scope = await requireRole("owner", "inventory")
+  const scope = await requireRole("owner", "inventory", "admin")
   const supabase = await createAppServerClient()
 
   const { error } = await supabase
