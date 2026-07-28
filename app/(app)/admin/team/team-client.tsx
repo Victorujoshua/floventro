@@ -19,13 +19,10 @@ import { inviteSchema, type InviteInput } from "@/lib/validation/invites"
 import { inviteMemberAction, revokeInviteAction } from "@/lib/db/actions/team"
 import type { Member, PendingInvite } from "@/lib/db/queries/team"
 
-type Branch = { id: string; name: string }
-
 type Props = {
   orgName: string
   members: Member[]
   invites: PendingInvite[]
-  branches: Branch[]
   canInviteAdmin: boolean
 }
 
@@ -73,15 +70,13 @@ function formatDate(dateStr: string): string {
 
 type SuccessData = { acceptUrl: string; emailSent: boolean; email: string }
 
-export function TeamClient({ orgName, members, invites, branches, canInviteAdmin }: Props) {
+export function TeamClient({ orgName, members, invites, canInviteAdmin }: Props) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [successData, setSuccessData] = useState<SuccessData | null>(null)
   const [copied, setCopied] = useState(false)
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null)
   const [revoking, setRevoking] = useState(false)
-
-  const defaultBranchId = branches.length === 1 ? branches[0].id : ""
 
   const {
     register,
@@ -91,11 +86,11 @@ export function TeamClient({ orgName, members, invites, branches, canInviteAdmin
     formState: { errors, isSubmitting },
   } = useForm<InviteInput>({
     resolver: zodResolver(inviteSchema),
-    defaultValues: { email: "", role: "inventory", branchId: defaultBranchId || undefined },
+    defaultValues: { email: "", role: "inventory" },
   })
 
   function openInvite() {
-    reset({ email: "", role: "inventory", branchId: defaultBranchId || undefined })
+    reset({ email: "", role: "inventory" })
     setSuccessData(null)
     setIsOpen(true)
   }
@@ -111,8 +106,6 @@ export function TeamClient({ orgName, members, invites, branches, canInviteAdmin
     if (!result.ok) {
       if (result.error === "already_invited") {
         setError("email", { message: "This person already has a pending invite." })
-      } else if (result.error === "branch_required") {
-        setError("branchId", { message: "Please select a branch." })
       } else {
         toast.error(result.error)
       }
@@ -346,7 +339,7 @@ export function TeamClient({ orgName, members, invites, branches, canInviteAdmin
                 <button
                   onClick={() => {
                     setSuccessData(null)
-                    reset({ email: "", role: "inventory", branchId: defaultBranchId || undefined })
+                    reset({ email: "", role: "inventory" })
                   }}
                   className="text-sm font-medium text-violet-700 hover:underline"
                 >
@@ -391,25 +384,6 @@ export function TeamClient({ orgName, members, invites, branches, canInviteAdmin
                   <p className="mt-1 text-xs text-red-600">{errors.role.message}</p>
                 )}
               </div>
-
-              {branches.length > 1 && (
-                <div>
-                  <Label htmlFor="branchId" className="text-sm font-medium text-neutral-700 mb-1.5 block">
-                    Branch
-                  </Label>
-                  <select id="branchId" className={SELECT_CLASS} {...register("branchId")}>
-                    <option value="">Select branch…</option>
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.branchId && (
-                    <p className="mt-1 text-xs text-red-600">{errors.branchId.message}</p>
-                  )}
-                </div>
-              )}
 
               <div className="flex justify-end gap-3 pt-2">
                 <Button

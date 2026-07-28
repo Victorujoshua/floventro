@@ -1,11 +1,16 @@
+import { redirect } from "next/navigation"
 import { requireRole } from "@/lib/auth/guards"
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { getMembers, getPendingInvites } from "@/lib/db/queries/team"
-import { getOrgBranches } from "@/lib/db/queries/vendors"
 import { TeamClient } from "./team-client"
 
 export default async function TeamPage() {
   const scope = await requireRole("owner", "admin")
+
+  // Inviting is branch-scoped — can't invite without being inside a branch.
+  if (!scope.branchId) {
+    redirect("/org")
+  }
 
   const supabase = await createAppServerClient()
   const { data: org } = await supabase
@@ -14,10 +19,9 @@ export default async function TeamPage() {
     .eq("id", scope.organisationId)
     .maybeSingle()
 
-  const [members, invites, branches] = await Promise.all([
+  const [members, invites] = await Promise.all([
     getMembers(),
     getPendingInvites(),
-    getOrgBranches(),
   ])
 
   return (
@@ -25,7 +29,6 @@ export default async function TeamPage() {
       orgName={org?.name ?? ""}
       members={members}
       invites={invites}
-      branches={branches}
       canInviteAdmin={scope.role === "owner"}
     />
   )

@@ -27,25 +27,10 @@ export async function inviteMemberAction(
 
   const supabase = await createAppServerClient()
 
-  // Resolve branchId.
-  let branchId: string | null = parsed.data.branchId ?? null
-
-  if (scope.role === "admin") {
-    // Admin is always scoped to their one branch — force the invite there.
-    branchId = scope.branchId
-  } else if (!branchId) {
-    // Owner with no explicit branch selected — auto-resolve for single-branch orgs.
-    const { data: branches } = await supabase
-      .from("branches")
-      .select("id")
-      .eq("organisation_id", scope.organisationId)
-      .is("deleted_at", null)
-
-    if (branches && branches.length === 1) {
-      branchId = branches[0].id
-    } else if (branches && branches.length > 1) {
-      return { ok: false, error: "branch_required" }
-    }
+  // Branch always comes from the current entered branch — never from the form.
+  const branchId = scope.branchId
+  if (!branchId) {
+    return { ok: false, error: "Enter a branch before inviting a team member." }
   }
 
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
