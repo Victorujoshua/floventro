@@ -15,6 +15,10 @@ export type BranchSummary = {
 export type OrgOverview = {
   revenueLast30dCents: number
   revenueAllTimeCents: number
+  profitLast30dCents: number | null
+  avgMarginPct: number | null
+  costDataComplete: boolean
+  missingCostProductCount: number
   // Pool stock + staff holdings + in-transit
   totalStockUnits: number
   // Breakdown for the card subtitle
@@ -116,7 +120,7 @@ export async function getOrgOverview(): Promise<OrgOverview> {
   const cutoff = since30dCutoff()
 
   // Run all queries in parallel. Errors are checked below before any processing.
-  const [branchRes, salesRes, productRes, requestRes, invoiceRes, staffRes, transferRes] =
+  const [branchRes, salesRes, productRes, requestRes, invoiceRes, staffRes, transferRes, cogsRes] =
     await Promise.all([
       // Bug 1 fix: select only columns that actually exist (no `address`)
       supabase
@@ -128,7 +132,7 @@ export async function getOrgOverview(): Promise<OrgOverview> {
 
       supabase
         .from("sales")
-        .select("branch_id, total_cents, created_at")
+        .select("branch_id, total_cents, created_at, sale_lines(id, product_id, line_total_cents)")
         .eq("organisation_id", scope.organisationId),
 
       supabase
@@ -168,6 +172,14 @@ export async function getOrgOverview(): Promise<OrgOverview> {
         .select("stock_transfer_lines(quantity_sent, quantity_received)")
         .eq("organisation_id", scope.organisationId)
         .eq("status", "in_transit"),
+
+      // Frozen COGS per sale_line — written at sale time.
+      // Pre-migration sale_lines have no row here → treated as unknown cost.
+      supabase
+        .from("cogs_allocations")
+        .select("reference_id, cogs_cents, cost_known")
+        .eq("organisation_id", scope.organisationId)
+        .eq("reference_type", "sale_line"),
     ])
 
   // Bug 3 fix: check errors explicitly — never let a failed query masquerade
@@ -200,13 +212,29 @@ export async function getOrgOverview(): Promise<OrgOverview> {
     console.error("[getOrgOverview] stock_transfers query failed", transferRes.error)
     throw transferRes.error
   }
+  if (cogsRes.error) {
+    console.error("[getOrgOverview] cogs_allocations query failed", cogsRes.error)
+    throw cogsRes.error
+  }
 
-  // ── Revenue aggregation ───────────────────────────────────────────────────
-  type RawSale = { branch_id: string; total_cents: number; created_at: string }
+  // ── COGS map ──────────────────────────────────────────────────────────────
+  type RawCogs = { reference_id: string; cogs_cents: number | null; cost_known: boolean }
+  const cogsMap = new Map<string, { cogsCents: number | null; costKnown: boolean }>()
+  for (const alloc of (cogsRes.data as unknown as RawCogs[]) ?? []) {
+    cogsMap.set(alloc.reference_id, { cogsCents: alloc.cogs_cents, costKnown: alloc.cost_known })
+  }
+
+  // ── Revenue + 30d COGS aggregation ───────────────────────────────────────
+  type RawSaleLine = { id: string; product_id: string; line_total_cents: number }
+  type RawSale = { branch_id: string; total_cents: number; created_at: string; sale_lines: RawSaleLine[] }
   const sales = salesRes.data as unknown as RawSale[]
 
   let revenueAllTimeCents = 0
   let revenueLast30dCents = 0
+  let revenueLast30dKnownCostCents = 0
+  let costLast30dKnownCents = 0
+  let hasAny30dCostData = false
+  const missingCostProductIds = new Set<string>()
   const branchRevMap = new Map<string, number>()
 
   for (const s of sales) {
@@ -214,8 +242,31 @@ export async function getOrgOverview(): Promise<OrgOverview> {
     if (s.created_at >= cutoff) {
       revenueLast30dCents += s.total_cents
       branchRevMap.set(s.branch_id, (branchRevMap.get(s.branch_id) ?? 0) + s.total_cents)
+
+      for (const line of s.sale_lines ?? []) {
+        const alloc = cogsMap.get(line.id)
+        const hasCost = alloc?.costKnown === true
+        const lineCost = hasCost ? (alloc!.cogsCents ?? null) : null
+        if (hasCost && lineCost !== null) {
+          revenueLast30dKnownCostCents += line.line_total_cents
+          costLast30dKnownCents += lineCost
+          hasAny30dCostData = true
+        } else {
+          missingCostProductIds.add(line.product_id)
+        }
+      }
     }
   }
+
+  const profitLast30dCents = hasAny30dCostData
+    ? revenueLast30dKnownCostCents - costLast30dKnownCents
+    : null
+  const avgMarginPct =
+    hasAny30dCostData && revenueLast30dKnownCostCents > 0
+      ? Math.round((profitLast30dCents! / revenueLast30dKnownCostCents) * 1000) / 10
+      : null
+  const costDataComplete = hasAny30dCostData && missingCostProductIds.size === 0
+  const missingCostProductCount = missingCostProductIds.size
 
   // ── Branch pool stock aggregation ─────────────────────────────────────────
   type RawProductStock = { branch_id: string; quantity: number }
@@ -273,6 +324,10 @@ export async function getOrgOverview(): Promise<OrgOverview> {
   return {
     revenueLast30dCents,
     revenueAllTimeCents,
+    profitLast30dCents,
+    avgMarginPct,
+    costDataComplete,
+    missingCostProductCount,
     totalStockUnits,
     poolStockUnits,
     heldByStaffUnits,

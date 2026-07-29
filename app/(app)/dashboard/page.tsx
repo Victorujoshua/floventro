@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { ArrowUpRight, Check, TrendingUp } from "lucide-react"
+import { ArrowUpRight, Check, TrendingUp, DollarSign, Percent } from "lucide-react"
 import { requireScope } from "@/lib/auth/guards"
 import {
   getStockSummary,
@@ -8,6 +8,7 @@ import {
   getRecentInvoices,
   getLowStockProducts,
   getStockReceivedSeries,
+  getBranchFinancials,
   getPersonalHoldingSummary,
   getMyRecentSales,
   getMyPendingRequestCount,
@@ -54,6 +55,7 @@ export default async function DashboardPage() {
     recentInvoices,
     lowStockProducts,
     stockSeries,
+    financials,
     personalHolding,
     myRecentSales,
     myPendingCount,
@@ -63,6 +65,7 @@ export default async function DashboardPage() {
     canSeeBranchData ? getRecentInvoices(5)      : Promise.resolve([]),
     canSeeBranchData ? getLowStockProducts(5)    : Promise.resolve([]),
     canSeeBranchData ? getStockReceivedSeries()  : Promise.resolve([]),
+    canSeeBranchData ? getBranchFinancials()     : Promise.resolve(null),
     canSeeBranchData ? Promise.resolve(null)     : getPersonalHoldingSummary(),
     canSeeBranchData ? Promise.resolve([])       : getMyRecentSales(5),
     canSeeBranchData ? Promise.resolve(0)        : getMyPendingRequestCount(),
@@ -80,6 +83,78 @@ export default async function DashboardPage() {
 
       {canSeeBranchData ? (
         <>
+          {/* ── Revenue + profit cards ───────────────────────────────────────── */}
+          {financials && (() => {
+            const hasPartialCost =
+              financials.profitLast30dCents !== null &&
+              !financials.costDataComplete &&
+              financials.missingCostProductCount > 0
+            return (
+              <div className="grid sm:grid-cols-3 gap-5">
+                <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
+                  <div className="flex items-start justify-between">
+                    <p className="text-xs uppercase tracking-wide text-neutral-500">Revenue (30d)</p>
+                    <TrendingUp className="h-4 w-4 text-violet-300" />
+                  </div>
+                  <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
+                    <span className="font-inter">₦</span>{formatNaira(financials.revenueLast30dCents)}
+                  </p>
+                  <p className="text-sm text-neutral-500 mt-1">last 30 days</p>
+                </div>
+
+                <div className="bg-tint-success rounded-2xl border border-neutral-200/60 p-6">
+                  <div className="flex items-start justify-between">
+                    <p className="text-xs uppercase tracking-wide text-neutral-500">Gross profit (30d)</p>
+                    <DollarSign className="h-4 w-4 text-green-400" />
+                  </div>
+                  {financials.profitLast30dCents === null ? (
+                    <>
+                      <p className="text-3xl font-semibold text-neutral-400 mt-3">—</p>
+                      <p className="text-sm text-neutral-500 mt-1">record vendor invoices to see profit</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
+                        <span className="font-inter">₦</span>{formatNaira(financials.profitLast30dCents)}
+                      </p>
+                      {hasPartialCost ? (
+                        <p className="text-sm text-amber-600 mt-1">
+                          partial — {financials.missingCostProductCount} product{financials.missingCostProductCount !== 1 ? "s" : ""} without cost data
+                        </p>
+                      ) : (
+                        <p className="text-sm text-neutral-500 mt-1">revenue minus vendor cost</p>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-2xl border border-neutral-200/60 p-6">
+                  <div className="flex items-start justify-between">
+                    <p className="text-xs uppercase tracking-wide text-neutral-500">Gross margin (30d)</p>
+                    <Percent className="h-4 w-4 text-neutral-300" />
+                  </div>
+                  {financials.avgMarginPct === null ? (
+                    <>
+                      <p className="text-3xl font-semibold text-neutral-400 mt-3">—</p>
+                      <p className="text-sm text-neutral-500 mt-1">no cost data yet</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
+                        {financials.avgMarginPct.toFixed(1)}%
+                      </p>
+                      {hasPartialCost ? (
+                        <p className="text-sm text-amber-600 mt-1">based on products with cost data</p>
+                      ) : (
+                        <p className="text-sm text-neutral-500 mt-1">gross margin</p>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
+
           {/* ── Branch-level metric cards ────────────────────────────────────── */}
           <div className="grid sm:grid-cols-3 gap-5">
             {/* Stock on hand */}

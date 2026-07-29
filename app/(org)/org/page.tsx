@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Package, TrendingUp, ClipboardList, CreditCard, AlertCircle, Check } from "lucide-react"
+import { Package, TrendingUp, ClipboardList, CreditCard, AlertCircle, Check, DollarSign, Percent } from "lucide-react"
 import { requireOwner } from "@/lib/auth/guards"
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { getOrgOverview } from "@/lib/db/queries/org"
@@ -32,8 +32,8 @@ export default async function OrgOverviewPage() {
         </p>
       </div>
 
-      {/* Metric cards */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Metric cards — row 1: financial */}
+      <div className="grid sm:grid-cols-3 gap-4">
         <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-5">
           <div className="flex items-start justify-between">
             <p className="text-xs uppercase tracking-wide text-neutral-500">Revenue (30d)</p>
@@ -47,6 +47,69 @@ export default async function OrgOverviewPage() {
           </p>
         </div>
 
+        {(() => {
+          const hasPartialCost =
+            overview.profitLast30dCents !== null &&
+            !overview.costDataComplete &&
+            overview.missingCostProductCount > 0
+          return (
+            <>
+              <div className="bg-tint-success rounded-2xl border border-neutral-200/60 p-5">
+                <div className="flex items-start justify-between">
+                  <p className="text-xs uppercase tracking-wide text-neutral-500">Gross profit (30d)</p>
+                  <DollarSign className="h-4 w-4 text-green-400" />
+                </div>
+                {overview.profitLast30dCents === null ? (
+                  <>
+                    <p className="text-2xl font-semibold text-neutral-400 mt-3">—</p>
+                    <p className="text-xs text-neutral-500 mt-1">record vendor invoices to see profit</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-2xl font-semibold text-neutral-950 tabular-nums mt-3">
+                      <span className="font-inter">₦</span>{formatNaira(overview.profitLast30dCents)}
+                    </p>
+                    {hasPartialCost ? (
+                      <p className="text-xs text-amber-600 mt-1">
+                        partial — {overview.missingCostProductCount} product{overview.missingCostProductCount !== 1 ? "s" : ""} without cost data
+                      </p>
+                    ) : (
+                      <p className="text-xs text-neutral-500 mt-1">revenue minus vendor cost</p>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="bg-white rounded-2xl border border-neutral-200/60 p-5">
+                <div className="flex items-start justify-between">
+                  <p className="text-xs uppercase tracking-wide text-neutral-500">Gross margin (30d)</p>
+                  <Percent className="h-4 w-4 text-neutral-300" />
+                </div>
+                {overview.avgMarginPct === null ? (
+                  <>
+                    <p className="text-2xl font-semibold text-neutral-400 mt-3">—</p>
+                    <p className="text-xs text-neutral-500 mt-1">no cost data yet</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-2xl font-semibold text-neutral-950 tabular-nums mt-3">
+                      {overview.avgMarginPct.toFixed(1)}%
+                    </p>
+                    {hasPartialCost ? (
+                      <p className="text-xs text-amber-600 mt-1">based on products with cost data</p>
+                    ) : (
+                      <p className="text-xs text-neutral-500 mt-1">gross margin</p>
+                    )}
+                  </>
+                )}
+              </div>
+            </>
+          )
+        })()}
+      </div>
+
+      {/* Metric cards — row 2: operations */}
+      <div className="grid sm:grid-cols-3 gap-4">
         <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-5">
           <div className="flex items-start justify-between">
             <p className="text-xs uppercase tracking-wide text-neutral-500">Total stock</p>

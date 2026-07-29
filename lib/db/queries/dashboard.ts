@@ -219,6 +219,101 @@ export async function getNotifications(): Promise<NotificationItem[]> {
   return items
 }
 
+// ── Branch financial summary (owner / admin / inventory) ─────────────────────
+
+export type BranchFinancials = {
+  revenueLast30dCents: number
+  profitLast30dCents: number | null
+  avgMarginPct: number | null
+  costDataComplete: boolean
+  missingCostProductCount: number
+}
+
+export async function getBranchFinancials(): Promise<BranchFinancials> {
+  const empty: BranchFinancials = {
+    revenueLast30dCents: 0,
+    profitLast30dCents: null,
+    avgMarginPct: null,
+    costDataComplete: false,
+    missingCostProductCount: 0,
+  }
+
+  const scope = await getCurrentScope()
+  if (!scope || !scope.branchId) return empty
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createAppServerClient()) as any
+  const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString()
+
+  // Sales and COGS fetched in parallel.
+  // Sales: branch-scoped + 30d window at the DB level so the set is identical.
+  // cogs_allocations: org-scoped (no date field); only lines from the 30d branch
+  // sales are looked up in the map, so extra rows are harmless.
+  const [salesRes, cogsRes] = await Promise.all([
+    supabase
+      .from("sales")
+      .select("total_cents, sale_lines(id, product_id, line_total_cents)")
+      .eq("organisation_id", scope.organisationId)
+      .eq("branch_id", scope.branchId)
+      .gte("created_at", cutoff),
+
+    supabase
+      .from("cogs_allocations")
+      .select("reference_id, cogs_cents, cost_known")
+      .eq("organisation_id", scope.organisationId)
+      .eq("reference_type", "sale_line"),
+  ])
+
+  if (salesRes.error || cogsRes.error) return empty
+
+  type RawCogs = { reference_id: string; cogs_cents: number | null; cost_known: boolean }
+  const cogsMap = new Map<string, { cogsCents: number | null; costKnown: boolean }>()
+  for (const alloc of (cogsRes.data as RawCogs[]) ?? []) {
+    cogsMap.set(alloc.reference_id, { cogsCents: alloc.cogs_cents, costKnown: alloc.cost_known })
+  }
+
+  type RawLine = { id: string; product_id: string; line_total_cents: number }
+  type RawSale = { total_cents: number; sale_lines: RawLine[] }
+
+  let revenueLast30dCents = 0
+  let revenueLast30dKnownCostCents = 0
+  let costLast30dKnownCents = 0
+  let hasAny30dCostData = false
+  const missingCostProductIds = new Set<string>()
+
+  for (const sale of (salesRes.data as RawSale[]) ?? []) {
+    revenueLast30dCents += sale.total_cents
+    for (const line of sale.sale_lines ?? []) {
+      const alloc = cogsMap.get(line.id)
+      const hasCost = alloc?.costKnown === true
+      const lineCost = hasCost ? (alloc!.cogsCents ?? null) : null
+      if (hasCost && lineCost !== null) {
+        revenueLast30dKnownCostCents += line.line_total_cents
+        costLast30dKnownCents += lineCost
+        hasAny30dCostData = true
+      } else {
+        missingCostProductIds.add(line.product_id)
+      }
+    }
+  }
+
+  const profitLast30dCents = hasAny30dCostData
+    ? revenueLast30dKnownCostCents - costLast30dKnownCents
+    : null
+  const avgMarginPct =
+    hasAny30dCostData && revenueLast30dKnownCostCents > 0
+      ? Math.round((profitLast30dCents! / revenueLast30dKnownCostCents) * 1000) / 10
+      : null
+
+  return {
+    revenueLast30dCents,
+    profitLast30dCents,
+    avgMarginPct,
+    costDataComplete: hasAny30dCostData && missingCostProductIds.size === 0,
+    missingCostProductCount: missingCostProductIds.size,
+  }
+}
+
 // ── Personal dashboard queries (sales / internal_use only) ──────────────────
 
 export async function getPersonalHoldingSummary() {
