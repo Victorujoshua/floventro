@@ -12,7 +12,7 @@ export async function getStockSummary() {
 
   const { data, error } = await supabase
     .from("products")
-    .select("reorder_point, product_stock(quantity)")
+    .select("reorder_point, product_stock(branch_id, quantity)")
     .eq("organisation_id", scope.organisationId)
     .is("deleted_at", null)
 
@@ -22,11 +22,11 @@ export async function getStockSummary() {
   let productsWithStock = 0
   let lowStockCount = 0
 
+  const branchId = scope.branchId
   for (const product of data) {
-    const qty = (product.product_stock as { quantity: number }[] ?? []).reduce(
-      (sum, s) => sum + s.quantity,
-      0,
-    )
+    const qty = (product.product_stock as { branch_id: string; quantity: number }[] ?? [])
+      .filter((s) => !branchId || s.branch_id === branchId)
+      .reduce((sum, s) => sum + s.quantity, 0)
     totalUnits += qty
     if (qty > 0) productsWithStock++
     if (product.reorder_point > 0 && qty <= product.reorder_point) lowStockCount++
@@ -167,7 +167,7 @@ export async function getNotifications(): Promise<NotificationItem[]> {
     notifInvoiceQuery,
     supabase
       .from("products")
-      .select("id, sku, name, reorder_point, product_stock(quantity)")
+      .select("id, sku, name, reorder_point, product_stock(branch_id, quantity)")
       .eq("organisation_id", scope.organisationId)
       .is("deleted_at", null)
       .gt("reorder_point", 0),
@@ -192,11 +192,11 @@ export async function getNotifications(): Promise<NotificationItem[]> {
     })
   }
 
+  const branchId = scope.branchId
   for (const p of productRes.data ?? []) {
-    const qty = (p.product_stock as { quantity: number }[] ?? []).reduce(
-      (s, r) => s + r.quantity,
-      0,
-    )
+    const qty = (p.product_stock as { branch_id: string; quantity: number }[] ?? [])
+      .filter((s) => !branchId || s.branch_id === branchId)
+      .reduce((s, r) => s + r.quantity, 0)
     if (qty > p.reorder_point) continue
     items.push({
       id: p.id,
@@ -302,20 +302,20 @@ export async function getLowStockProducts(limit = 5) {
 
   const { data, error } = await supabase
     .from("products")
-    .select("id, sku, name, reorder_point, product_stock(quantity)")
+    .select("id, sku, name, reorder_point, product_stock(branch_id, quantity)")
     .eq("organisation_id", scope.organisationId)
     .is("deleted_at", null)
     .gt("reorder_point", 0)
 
   if (error || !data) return []
 
+  const branchId = scope.branchId
   return data
     .map(({ product_stock, ...p }) => ({
       ...p,
-      quantity: (product_stock as { quantity: number }[] ?? []).reduce(
-        (sum, s) => sum + s.quantity,
-        0,
-      ),
+      quantity: (product_stock as { branch_id: string; quantity: number }[] ?? [])
+        .filter((s) => !branchId || s.branch_id === branchId)
+        .reduce((sum, s) => sum + s.quantity, 0),
     }))
     .filter((p) => p.quantity <= p.reorder_point)
     .sort((a, b) => a.quantity - b.quantity)

@@ -12,7 +12,7 @@ export async function getProducts() {
   let query = supabase
     .from("products")
     .select(
-      "id, sku, name, description, reorder_point, unit_cost_cents, default_price_cents, created_at, updated_at, product_stock(quantity)",
+      "id, sku, name, description, reorder_point, unit_cost_cents, default_price_cents, created_at, updated_at, product_stock(branch_id, quantity)",
     )
     .eq("organisation_id", scope.organisationId)
     .is("deleted_at", null)
@@ -36,7 +36,7 @@ export async function getProducts() {
   if (error) return []
 
   type RawProduct = {
-    product_stock: { quantity: number }[]
+    product_stock: { branch_id: string; quantity: number }[]
     id: string
     sku: string
     name: string
@@ -48,10 +48,13 @@ export async function getProducts() {
     updated_at: string
   }
 
-  // Sum product_stock quantities across all branches (correct for owner who spans all;
-  // for inventory members, RLS already filters to their branch only).
+  // When inside a branch, show only that branch's quantity.
+  // When at org level (branchId null), sum across all branches.
+  const branchId = scope.branchId
   return (data as RawProduct[]).map(({ product_stock, ...p }) => ({
     ...p,
-    stock: (product_stock ?? []).reduce((sum: number, s: { quantity: number }) => sum + s.quantity, 0),
+    stock: (product_stock ?? [])
+      .filter((s) => !branchId || s.branch_id === branchId)
+      .reduce((sum: number, s) => sum + s.quantity, 0),
   }))
 }
