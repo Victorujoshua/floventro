@@ -108,8 +108,18 @@ export async function reviewRequestAction(
   })
 
   if (error) {
+    console.error("[reviewRequestAction]", error)
     const msg = error.message
     const lower = msg.toLowerCase()
+
+    if (lower.includes("cost_layers exhausted") || lower.includes("out of sync")) {
+      return {
+        ok: false,
+        error: "server",
+        message:
+          "Cost data for one or more products is out of sync with stock levels. A branch manager must reconcile the cost layers before this request can be approved.",
+      }
+    }
 
     if (lower.includes("insufficient stock")) {
       const productMatch = msg.match(/insufficient stock for product ([0-9a-f-]{36})/i)

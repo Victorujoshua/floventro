@@ -579,6 +579,75 @@ export async function getOrgSales(): Promise<OrgSalesData> {
   }
 }
 
+// ── getBranchLedger ───────────────────────────────────────────────────────────
+
+export async function getBranchLedger(branchId: string, limit = 30): Promise<OrgLedgerRow[]> {
+  const scope = await getCurrentScope()
+  if (!scope) return []
+
+  const supabase = await createAppServerClient()
+
+  const { data, error } = await supabase
+    .from("stock_ledger")
+    .select("id, created_at, quantity_delta, reason, adjustment_reason, note, branch_id, product_id")
+    .eq("organisation_id", scope.organisationId)
+    .eq("branch_id", branchId)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error("[getBranchLedger] stock_ledger query failed", error)
+    return []
+  }
+
+  type RawRow = {
+    id: string
+    created_at: string
+    quantity_delta: number
+    reason: string
+    adjustment_reason: string | null
+    note: string | null
+    branch_id: string | null
+    product_id: string | null
+  }
+
+  const rows = data as unknown as RawRow[]
+
+  const productIds = [...new Set(rows.filter((r) => r.product_id).map((r) => r.product_id!))]
+  const productNameMap = new Map<string, { name: string; sku: string }>()
+  if (productIds.length > 0) {
+    const { data: products } = await supabase
+      .from("products")
+      .select("id, name, sku")
+      .in("id", productIds)
+    for (const p of (products ?? []) as { id: string; name: string; sku: string }[]) {
+      productNameMap.set(p.id, { name: p.name, sku: p.sku })
+    }
+  }
+
+  const { data: branchData } = await supabase
+    .from("branches")
+    .select("name")
+    .eq("id", branchId)
+    .maybeSingle()
+  const branchName = (branchData as { name: string } | null)?.name ?? "—"
+
+  return rows.map((row) => {
+    const product = row.product_id ? productNameMap.get(row.product_id) : null
+    return {
+      id: row.id,
+      createdAt: row.created_at,
+      productName: product?.name ?? "—",
+      productSku: product?.sku ?? "",
+      branchName,
+      reason: row.reason,
+      quantityDelta: row.quantity_delta,
+      movementLabel: resolveMovementLabel(row.reason, row.adjustment_reason),
+      note: row.note,
+    }
+  })
+}
+
 // ── getOrgLedger ──────────────────────────────────────────────────────────────
 
 export async function getOrgLedger(limit = 100): Promise<OrgLedgerRow[]> {

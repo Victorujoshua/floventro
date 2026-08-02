@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ShoppingCart, Wallet, Sparkles, Undo2 } from "lucide-react"
+import { Wallet, Undo2 } from "lucide-react"
 import Link from "next/link"
 import {
   Table,
@@ -12,36 +12,25 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { RecordSaleDialog } from "@/components/app/sales/record-sale-dialog"
-import { RecordServiceDialog } from "@/components/app/dialogs/record-service-dialog"
 import { ReturnToBranchDialog } from "@/components/app/dialogs/return-to-branch-dialog"
-import type { MyHolding } from "@/lib/db/queries/holdings"
+import type { MyHolding, ProductHoldingHistory } from "@/lib/db/queries/holdings"
 
 type Props = {
   holdings: MyHolding[]
+  history: ProductHoldingHistory[]
 }
 
-export function HoldingClient({ holdings }: Props) {
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+}
+
+export function HoldingClient({ holdings, history }: Props) {
+  const totalUnits = holdings.reduce((sum, h) => sum + h.quantity, 0)
+  const productCount = new Set(holdings.map((h) => h.productId)).size
   const router = useRouter()
-
-  const [sellProductId, setSellProductId] = useState<string | undefined>(undefined)
-  const [saleOpen, setSaleOpen] = useState(false)
-
-  const [serviceProductId, setServiceProductId] = useState<string | undefined>(undefined)
-  const [serviceOpen, setServiceOpen] = useState(false)
 
   const [returnHolding, setReturnHolding] = useState<MyHolding | null>(null)
   const [returnOpen, setReturnOpen] = useState(false)
-
-  function openSell(productId?: string) {
-    setSellProductId(productId)
-    setSaleOpen(true)
-  }
-
-  function openService(productId?: string) {
-    setServiceProductId(productId)
-    setServiceOpen(true)
-  }
 
   function openReturn(h: MyHolding) {
     setReturnHolding(h)
@@ -56,24 +45,6 @@ export function HoldingClient({ holdings }: Props) {
           <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">My Holding</h1>
           <p className="text-sm text-neutral-500 mt-1">Stock issued to you that you can sell or use</p>
         </div>
-        {holdings.length > 0 && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => openService(undefined)}
-              className="inline-flex items-center gap-2 rounded-md border border-neutral-300 px-4 h-10 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
-            >
-              <Sparkles className="h-4 w-4" />
-              Record service
-            </button>
-            <button
-              onClick={() => openSell(undefined)}
-              className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
-            >
-              <ShoppingCart className="h-4 w-4" />
-              New sale
-            </button>
-          </div>
-        )}
       </div>
 
       {holdings.length === 0 ? (
@@ -91,7 +62,19 @@ export function HoldingClient({ holdings }: Props) {
           </Link>
         </div>
       ) : (
-        <div className="rounded-2xl border border-neutral-200/60 bg-white overflow-hidden">
+        <>
+          {/* Total units stat strip */}
+          <div className="mb-4 flex items-center gap-3 rounded-xl border border-neutral-200/60 bg-neutral-50 px-5 py-3">
+            <p className="text-sm font-semibold text-neutral-950 tabular-nums">
+              {totalUnits.toLocaleString()} units
+            </p>
+            <span className="text-neutral-300">·</span>
+            <p className="text-sm text-neutral-500">
+              {productCount} product{productCount !== 1 ? "s" : ""} in holding
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-neutral-200/60 bg-white overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow className="bg-neutral-50">
@@ -118,50 +101,73 @@ export function HoldingClient({ holdings }: Props) {
                     {h.quantity}
                   </TableCell>
                   <TableCell className="py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => openReturn(h)}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 h-7 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
-                      >
-                        <Undo2 className="h-3 w-3" />
-                        Return
-                      </button>
-                      <button
-                        onClick={() => openService(h.productId)}
-                        className="inline-flex items-center gap-1.5 rounded-md bg-neutral-100 px-3 h-7 text-xs font-medium text-neutral-700 hover:bg-neutral-200 transition-colors"
-                      >
-                        <Sparkles className="h-3 w-3" />
-                        Service
-                      </button>
-                      <button
-                        onClick={() => openSell(h.productId)}
-                        className="inline-flex items-center gap-1.5 rounded-md bg-violet-50 px-3 h-7 text-xs font-medium text-violet-700 hover:bg-violet-100 transition-colors"
-                      >
-                        <ShoppingCart className="h-3 w-3" />
-                        Sell
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => openReturn(h)}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 h-7 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
+                    >
+                      <Undo2 className="h-3 w-3" />
+                      Return
+                    </button>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
+        </>
       )}
 
-      <RecordSaleDialog
-        open={saleOpen}
-        onOpenChange={(o) => { if (!o) { setSaleOpen(false); setSellProductId(undefined) } }}
-        onSuccess={() => router.refresh()}
-        initialProductId={sellProductId}
-      />
-
-      <RecordServiceDialog
-        open={serviceOpen}
-        onOpenChange={(o) => { if (!o) { setServiceOpen(false); setServiceProductId(undefined) } }}
-        onSuccess={() => router.refresh()}
-        initialProductId={serviceProductId}
-      />
+      {/* Movement history — per-product, newest first */}
+      {history.length > 0 && (
+        <div className="mt-6 space-y-5">
+          <h2 className="text-base font-semibold text-neutral-950">Movement history</h2>
+          {history.map((product) => (
+            <div key={product.productId} className="rounded-2xl border border-neutral-200/60 bg-white overflow-hidden">
+              <div className="px-6 py-4 border-b border-neutral-100">
+                <p className="text-sm font-semibold text-neutral-950">{product.productName}</p>
+                {product.productSku && (
+                  <p className="text-xs font-mono text-neutral-500 mt-0.5">{product.productSku}</p>
+                )}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-neutral-100 bg-neutral-50">
+                      <th className="px-6 py-2.5 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">Date</th>
+                      <th className="px-6 py-2.5 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">Movement</th>
+                      <th className="px-6 py-2.5 text-right text-xs font-medium text-neutral-500 uppercase tracking-wide">Change</th>
+                      <th className="px-6 py-2.5 text-right text-xs font-medium text-neutral-500 uppercase tracking-wide">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {product.movements.map((mv) => (
+                      <tr key={mv.id} className="hover:bg-neutral-50/60 transition-colors">
+                        <td className="px-6 py-3 text-sm text-neutral-500 whitespace-nowrap">
+                          {formatDate(mv.createdAt)}
+                        </td>
+                        <td className="px-6 py-3">
+                          <p className="text-sm text-neutral-950">{mv.movementLabel}</p>
+                          {mv.note && <p className="text-xs text-neutral-400 mt-0.5">{mv.note}</p>}
+                        </td>
+                        <td className="px-6 py-3 text-right">
+                          <span className={`font-mono tabular-nums text-sm font-medium ${mv.quantityDelta > 0 ? "text-green-600" : "text-red-600"}`}>
+                            {mv.quantityDelta > 0 ? `+${mv.quantityDelta}` : `${mv.quantityDelta}`}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3 text-right">
+                          <span className="font-mono tabular-nums text-sm text-neutral-500">
+                            {mv.balanceBefore.toLocaleString()} → {mv.balanceAfter.toLocaleString()}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <ReturnToBranchDialog
         open={returnOpen}

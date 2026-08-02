@@ -389,6 +389,212 @@ export async function getMyPendingRequestCount() {
   return count ?? 0
 }
 
+// ── Personal sales metrics (sales / internal_use — THIS user's sales only) ──
+
+export type MySalesMetrics = {
+  revenueLast30dCents: number
+  costKnownCents: number | null
+  profitLast30dCents: number | null
+  marginPct: number | null
+  costDataComplete: boolean
+  missingCostProductCount: number
+}
+
+export async function getMySalesMetrics(): Promise<MySalesMetrics> {
+  const empty: MySalesMetrics = {
+    revenueLast30dCents: 0,
+    costKnownCents: null,
+    profitLast30dCents: null,
+    marginPct: null,
+    costDataComplete: false,
+    missingCostProductCount: 0,
+  }
+
+  const scope = await getCurrentScope()
+  if (!scope) return empty
+
+  const supabase = await createAppServerClient()
+  const { data: authData } = await supabase.auth.getUser()
+  if (!authData?.user) return empty
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = supabase as any
+  const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString()
+
+  // Scope: seller_user_id = this user — identical to getMyRecentSales.
+  // Adding 30d created_at window and sale_lines for COGS join.
+  let salesQuery = client
+    .from("sales")
+    .select("total_cents, sale_lines(id, product_id, line_total_cents)")
+    .eq("seller_user_id", authData.user.id)
+    .eq("organisation_id", scope.organisationId)
+    .gte("created_at", cutoff)
+
+  if (scope.branchId) {
+    salesQuery = salesQuery.eq("branch_id", scope.branchId)
+  }
+
+  const [salesRes, cogsRes] = await Promise.all([
+    salesQuery,
+    client
+      .from("cogs_allocations")
+      .select("reference_id, cogs_cents, cost_known")
+      .eq("organisation_id", scope.organisationId)
+      .eq("reference_type", "sale_line"),
+  ])
+
+  if (salesRes.error || cogsRes.error) return empty
+
+  type RawCogs = { reference_id: string; cogs_cents: number | null; cost_known: boolean }
+  const cogsMap = new Map<string, { cogsCents: number | null; costKnown: boolean }>()
+  for (const alloc of (cogsRes.data as RawCogs[]) ?? []) {
+    cogsMap.set(alloc.reference_id, { cogsCents: alloc.cogs_cents, costKnown: alloc.cost_known })
+  }
+
+  type RawLine = { id: string; product_id: string; line_total_cents: number }
+  type RawSale = { total_cents: number; sale_lines: RawLine[] }
+
+  let revenueLast30dCents = 0
+  let revenueKnownCostCents = 0
+  let costKnownCentsAccum = 0
+  let hasAnyKnownCost = false
+  const missingCostProductIds = new Set<string>()
+
+  for (const sale of (salesRes.data as RawSale[]) ?? []) {
+    revenueLast30dCents += sale.total_cents
+    for (const line of sale.sale_lines ?? []) {
+      const alloc = cogsMap.get(line.id)
+      const hasCost = alloc?.costKnown === true
+      const lineCost = hasCost ? (alloc!.cogsCents ?? null) : null
+      if (hasCost && lineCost !== null) {
+        revenueKnownCostCents += line.line_total_cents
+        costKnownCentsAccum += lineCost
+        hasAnyKnownCost = true
+      } else {
+        missingCostProductIds.add(line.product_id)
+      }
+    }
+  }
+
+  const profitLast30dCents = hasAnyKnownCost ? revenueKnownCostCents - costKnownCentsAccum : null
+  const marginPct =
+    hasAnyKnownCost && revenueKnownCostCents > 0
+      ? Math.round((profitLast30dCents! / revenueKnownCostCents) * 1000) / 10
+      : null
+
+  return {
+    revenueLast30dCents,
+    costKnownCents: hasAnyKnownCost ? costKnownCentsAccum : null,
+    profitLast30dCents,
+    marginPct,
+    costDataComplete: hasAnyKnownCost && missingCostProductIds.size === 0,
+    missingCostProductCount: missingCostProductIds.size,
+  }
+}
+
+// ── Per-product stock performance (sales / internal_use — THIS user only) ────
+
+export type MyStockPerformanceRow = {
+  productId: string
+  name: string
+  sku: string
+  inHand: number
+  sold30d: number
+  sellThrough: number // 0-100
+}
+
+export async function getMyStockPerformance(): Promise<MyStockPerformanceRow[]> {
+  const scope = await getCurrentScope()
+  if (!scope) return []
+
+  const supabase = await createAppServerClient()
+  const { data: authData } = await supabase.auth.getUser()
+  if (!authData?.user) return []
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = supabase as any
+  const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString()
+
+  const [holdingsRes, salesRes] = await Promise.all([
+    // Set A: all holdings for this user — NO quantity>0 filter so sold-out rows appear
+    client
+      .from("staff_holdings")
+      .select("product_id, quantity, products(name, sku)")
+      .eq("holder_user_id", authData.user.id)
+      .eq("organisation_id", scope.organisationId),
+
+    // Set B: this user's 30d sales with per-line quantities
+    client
+      .from("sales")
+      .select("sale_lines(product_id, quantity, products(name, sku))")
+      .eq("seller_user_id", authData.user.id)
+      .eq("organisation_id", scope.organisationId)
+      .gte("created_at", cutoff),
+  ])
+
+  if (holdingsRes.error || salesRes.error) return []
+
+  type RawProduct = { name: string; sku: string } | { name: string; sku: string }[] | null
+  type RawHolding = { product_id: string; quantity: number; products: RawProduct }
+  type RawLine = { product_id: string; quantity: number; products: RawProduct }
+  type RawSale = { sale_lines: RawLine[] }
+
+  function resolveProduct(raw: RawProduct) {
+    if (!raw) return null
+    return Array.isArray(raw) ? (raw[0] ?? null) : raw
+  }
+
+  // Merge Set A and Set B into a single map keyed by product_id.
+  // staff_holdings has one row per (branch, holder, product) — sum across branches.
+  const merged = new Map<string, { name: string; sku: string; inHand: number; sold30d: number }>()
+
+  for (const row of (holdingsRes.data as RawHolding[]) ?? []) {
+    const p = resolveProduct(row.products)
+    const existing = merged.get(row.product_id)
+    if (existing) {
+      existing.inHand += row.quantity
+    } else {
+      merged.set(row.product_id, {
+        name: p?.name ?? "Unknown product",
+        sku: p?.sku ?? "",
+        inHand: row.quantity,
+        sold30d: 0,
+      })
+    }
+  }
+
+  for (const sale of (salesRes.data as RawSale[]) ?? []) {
+    for (const line of sale.sale_lines ?? []) {
+      const p = resolveProduct(line.products)
+      const existing = merged.get(line.product_id)
+      if (existing) {
+        existing.sold30d += line.quantity
+      } else {
+        merged.set(line.product_id, {
+          name: p?.name ?? "Unknown product",
+          sku: p?.sku ?? "",
+          inHand: 0,
+          sold30d: line.quantity,
+        })
+      }
+    }
+  }
+
+  return [...merged.entries()]
+    .map(([productId, row]) => {
+      const total = row.inHand + row.sold30d
+      return {
+        productId,
+        name: row.name,
+        sku: row.sku,
+        inHand: row.inHand,
+        sold30d: row.sold30d,
+        sellThrough: total > 0 ? Math.round((row.sold30d / total) * 100) : 0,
+      }
+    })
+    .sort((a, b) => b.sold30d - a.sold30d || b.inHand - a.inHand)
+}
+
 export async function getLowStockProducts(limit = 5) {
   const scope = await getCurrentScope()
   if (!scope) return []

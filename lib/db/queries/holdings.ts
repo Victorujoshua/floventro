@@ -2,6 +2,25 @@ import "server-only"
 import { createAppServerClient, createAppServiceRoleClient } from "@/lib/supabase/app-server"
 import { getCurrentScope } from "@/lib/auth/scope"
 
+export type HoldingMovementRow = {
+  id: string
+  createdAt: string
+  quantityDelta: number
+  balanceBefore: number
+  balanceAfter: number
+  movementLabel: string
+  reason: string
+  note: string | null
+}
+
+export type ProductHoldingHistory = {
+  productId: string
+  productName: string
+  productSku: string
+  movements: HoldingMovementRow[]  // newest-first for display
+  finalBalance: number              // last balanceAfter — must equal staff_holdings.quantity
+}
+
 export type MyHolding = {
   productId: string
   productName: string
@@ -154,4 +173,97 @@ export async function getBranchHoldings(branchId: string | null): Promise<Holder
   return [...groupMap.values()].sort((a, b) =>
     (a.holderName || a.holderEmail).localeCompare(b.holderName || b.holderEmail)
   )
+}
+
+// ── Per-product holding movement history (this user only) ────────────────────
+
+export async function getMyHoldingHistory(): Promise<ProductHoldingHistory[]> {
+  const scope = await getCurrentScope()
+  if (!scope) return []
+
+  const supabase = await createAppServerClient()
+  const { data: authData } = await supabase.auth.getUser()
+  if (!authData?.user) return []
+
+  // Explicit holder_user_id filter is REQUIRED — RLS only gates by branch_id,
+  // so without this filter a branch member would read all branch ledger rows.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("stock_ledger")
+    .select("id, product_id, quantity_delta, reason, note, created_at, products(name, sku)")
+    .eq("holder_user_id", authData.user.id)
+    .eq("organisation_id", scope.organisationId)
+    .order("product_id", { ascending: true })
+    .order("created_at", { ascending: true })
+
+  if (error || !data) return []
+
+  type RawRow = {
+    id: string
+    product_id: string
+    quantity_delta: number
+    reason: string
+    note: string | null
+    created_at: string
+    products: { name: string; sku: string } | { name: string; sku: string }[] | null
+  }
+
+  function resolveProductInfo(raw: RawRow["products"]) {
+    if (!raw) return null
+    return Array.isArray(raw) ? (raw[0] ?? null) : raw
+  }
+
+  function toMovementLabel(reason: string): string {
+    switch (reason) {
+      case "issue_to_holding": return "Issued to holding"
+      case "sale":             return "Sold from holding"
+      case "usage":            return "Used in service"
+      case "return_to_branch": return "Returned to branch"
+      default:                 return reason
+    }
+  }
+
+  // Group by product_id, accumulate running balance oldest-first.
+  // All rows carry holder_user_id = user.id (enforced by the query filter above +
+  // the stock_ledger_holder_consistency CHECK constraint), so the balance
+  // accumulation is unconditional — no branch/holder split needed.
+  const productMap = new Map<string, {
+    productName: string
+    productSku: string
+    rows: HoldingMovementRow[]
+    balance: number
+  }>()
+
+  for (const row of data as RawRow[]) {
+    const p = resolveProductInfo(row.products)
+    if (!productMap.has(row.product_id)) {
+      productMap.set(row.product_id, {
+        productName: p?.name ?? "Unknown product",
+        productSku: p?.sku ?? "",
+        rows: [],
+        balance: 0,
+      })
+    }
+    const entry = productMap.get(row.product_id)!
+    const balanceBefore = entry.balance
+    entry.balance += row.quantity_delta
+    entry.rows.push({
+      id: row.id,
+      createdAt: row.created_at,
+      quantityDelta: row.quantity_delta,
+      balanceBefore,
+      balanceAfter: entry.balance,
+      movementLabel: toMovementLabel(row.reason),
+      reason: row.reason,
+      note: row.note,
+    })
+  }
+
+  return [...productMap.entries()].map(([productId, entry]) => ({
+    productId,
+    productName: entry.productName,
+    productSku: entry.productSku,
+    movements: [...entry.rows].reverse(),  // newest first for display
+    finalBalance: entry.balance,           // invariant: must equal staff_holdings.quantity
+  }))
 }

@@ -12,6 +12,8 @@ import {
   getPersonalHoldingSummary,
   getMyRecentSales,
   getMyPendingRequestCount,
+  getMySalesMetrics,
+  getMyStockPerformance,
 } from "@/lib/db/queries/dashboard"
 import { formatNaira } from "@/lib/format/money"
 import { StockChart } from "./stock-chart"
@@ -59,6 +61,8 @@ export default async function DashboardPage() {
     personalHolding,
     myRecentSales,
     myPendingCount,
+    mySalesMetrics,
+    myStockPerformance,
   ] = await Promise.all([
     canSeeBranchData ? getStockSummary()        : Promise.resolve(null),
     canSeeBranchData ? getPayablesSummary()      : Promise.resolve(null),
@@ -69,6 +73,8 @@ export default async function DashboardPage() {
     canSeeBranchData ? Promise.resolve(null)     : getPersonalHoldingSummary(),
     canSeeBranchData ? Promise.resolve([])       : getMyRecentSales(5),
     canSeeBranchData ? Promise.resolve(0)        : getMyPendingRequestCount(),
+    canSeeBranchData ? Promise.resolve(null)     : getMySalesMetrics(),
+    canSeeBranchData ? Promise.resolve([])       : getMyStockPerformance(),
   ])
 
   return (
@@ -357,6 +363,78 @@ export default async function DashboardPage() {
             </div>
           </div>
 
+          {/* My sales metrics — Revenue / COGS / Gross margin (30d) */}
+          {mySalesMetrics && (() => {
+            const hasPartialCost =
+              mySalesMetrics.marginPct !== null &&
+              !mySalesMetrics.costDataComplete &&
+              mySalesMetrics.missingCostProductCount > 0
+            return (
+              <div className="grid sm:grid-cols-3 gap-5">
+                <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
+                  <div className="flex items-start justify-between">
+                    <p className="text-xs uppercase tracking-wide text-neutral-500">Revenue (30d)</p>
+                    <TrendingUp className="h-4 w-4 text-violet-300" />
+                  </div>
+                  <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
+                    <span className="font-inter">₦</span>{formatNaira(mySalesMetrics.revenueLast30dCents)}
+                  </p>
+                  <p className="text-sm text-neutral-500 mt-1">your sales, last 30 days</p>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-neutral-200/60 p-6">
+                  <div className="flex items-start justify-between">
+                    <p className="text-xs uppercase tracking-wide text-neutral-500">COGS (30d)</p>
+                    <DollarSign className="h-4 w-4 text-neutral-300" />
+                  </div>
+                  {mySalesMetrics.costKnownCents === null ? (
+                    <>
+                      <p className="text-3xl font-semibold text-neutral-400 mt-3">—</p>
+                      <p className="text-sm text-neutral-500 mt-1">no cost data yet</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
+                        <span className="font-inter">₦</span>{formatNaira(mySalesMetrics.costKnownCents)}
+                      </p>
+                      {hasPartialCost ? (
+                        <p className="text-sm text-amber-600 mt-1">
+                          partial — {mySalesMetrics.missingCostProductCount} product{mySalesMetrics.missingCostProductCount !== 1 ? "s" : ""} without cost data
+                        </p>
+                      ) : (
+                        <p className="text-sm text-neutral-500 mt-1">cost of goods sold</p>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-2xl border border-neutral-200/60 p-6">
+                  <div className="flex items-start justify-between">
+                    <p className="text-xs uppercase tracking-wide text-neutral-500">Gross margin (30d)</p>
+                    <Percent className="h-4 w-4 text-neutral-300" />
+                  </div>
+                  {mySalesMetrics.marginPct === null ? (
+                    <>
+                      <p className="text-3xl font-semibold text-neutral-400 mt-3">—</p>
+                      <p className="text-sm text-neutral-500 mt-1">no cost data yet</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
+                        {mySalesMetrics.marginPct.toFixed(1)}%
+                      </p>
+                      {hasPartialCost ? (
+                        <p className="text-sm text-amber-600 mt-1">based on products with cost data</p>
+                      ) : (
+                        <p className="text-sm text-neutral-500 mt-1">gross margin</p>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
+
           {/* My recent sales */}
           <div className="bg-white rounded-2xl border border-neutral-200/60 p-6 max-w-xl">
             <div className="flex items-center justify-between mb-4">
@@ -386,6 +464,57 @@ export default async function DashboardPage() {
                   </li>
                 ))}
               </ul>
+            )}
+          </div>
+
+          {/* Stock performance — per-product: in hand, sold 30d, sell-through */}
+          <div className="bg-white rounded-2xl border border-neutral-200/60 p-6">
+            <div className="mb-4">
+              <h2 className="text-base font-semibold text-neutral-950">Stock performance</h2>
+              <p className="text-xs text-neutral-500 mt-0.5">Your holdings and sales activity — last 30 days</p>
+            </div>
+            {(myStockPerformance as { productId: string; name: string; sku: string; inHand: number; sold30d: number; sellThrough: number }[]).length === 0 ? (
+              <p className="text-sm text-neutral-500">No stock activity yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-neutral-100">
+                      <th className="pb-2 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">Product</th>
+                      <th className="pb-2 text-right text-xs font-medium text-neutral-500 uppercase tracking-wide">In hand</th>
+                      <th className="pb-2 text-right text-xs font-medium text-neutral-500 uppercase tracking-wide">Sold (30d)</th>
+                      <th className="pb-2 text-right text-xs font-medium text-neutral-500 uppercase tracking-wide pr-0">Sell-through</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {(myStockPerformance as { productId: string; name: string; sku: string; inHand: number; sold30d: number; sellThrough: number }[]).map((row) => (
+                      <tr key={row.productId}>
+                        <td className="py-2.5 pr-6">
+                          <p className="font-medium text-neutral-950">{row.name}</p>
+                          {row.sku && <p className="text-xs text-neutral-500 font-mono">{row.sku}</p>}
+                        </td>
+                        <td className="py-2.5 pr-6 text-right tabular-nums text-neutral-700">
+                          {row.inHand.toLocaleString()}
+                        </td>
+                        <td className="py-2.5 pr-6 text-right tabular-nums text-neutral-700">
+                          {row.sold30d.toLocaleString()}
+                        </td>
+                        <td className="py-2.5 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="relative h-1.5 w-16 rounded-full bg-neutral-100 overflow-hidden">
+                              <div
+                                className="absolute inset-y-0 left-0 rounded-full bg-violet-400"
+                                style={{ width: `${row.sellThrough}%` }}
+                              />
+                            </div>
+                            <span className="tabular-nums text-neutral-700 w-9 text-right">{row.sellThrough}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </>

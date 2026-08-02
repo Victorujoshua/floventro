@@ -16,6 +16,7 @@ export type ServiceRecordRow = {
   id: string
   performedOn: string
   serviceTypeName: string
+  performedByUserId: string
   performedByLabel: string
   customerName: string | null
   serviceFeeCents: number | null
@@ -194,6 +195,7 @@ export async function getServiceRecords(): Promise<ServiceRecordRow[]> {
     id: row.id,
     performedOn: row.performed_on,
     serviceTypeName: resolveServiceTypeName(row.service_types),
+    performedByUserId: row.performed_by,
     performedByLabel: performerMap.get(row.performed_by) ?? row.performed_by,
     customerName: row.customer_name,
     serviceFeeCents: row.service_fee_cents,
@@ -228,6 +230,7 @@ export async function getServiceRecordById(id: string): Promise<ServiceRecordDet
     id: row.id,
     performedOn: row.performed_on,
     serviceTypeName: resolveServiceTypeName(row.service_types),
+    performedByUserId: row.performed_by,
     performedByLabel: performerMap.get(row.performed_by) ?? row.performed_by,
     customerName: row.customer_name,
     customerPhone: row.customer_phone,

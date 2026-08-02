@@ -19,6 +19,7 @@ import {
   Sparkles,
   ArrowLeftRight,
   GitBranch,
+  BarChart2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Role } from "@/lib/auth/scope"
@@ -54,11 +55,11 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "Services performed", href: "/services-performed",     icon: Sparkles },
   ],
   sales: [
-    { label: "Dashboard",          href: "/dashboard",          icon: LayoutDashboard },
-    { label: "Requests",           href: "/requests",           icon: ClipboardList },
-    { label: "My Holding",         href: "/holding",            icon: Wallet },
-    { label: "Sales",              href: "/sales",              icon: ShoppingCart },
-    { label: "Services performed", href: "/services-performed", icon: Sparkles },
+    { label: "Dashboard",  href: "/dashboard", icon: LayoutDashboard },
+    { label: "Requests",   href: "/requests",  icon: ClipboardList },
+    { label: "My Holding", href: "/holding",   icon: Wallet },
+    { label: "Sales",      href: "/sales",     icon: ShoppingCart },
+    { label: "Report",     href: "/report",    icon: BarChart2 },
   ],
   internal_use: [
     { label: "Dashboard",          href: "/dashboard",          icon: LayoutDashboard },
@@ -66,6 +67,7 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "My Holding",         href: "/holding",            icon: Wallet },
     { label: "Sales",              href: "/sales",              icon: ShoppingCart },
     { label: "Services performed", href: "/services-performed", icon: Sparkles },
+    { label: "Report",             href: "/report",             icon: BarChart2 },
   ],
   admin: [
     { label: "Dashboard",          href: "/dashboard",              icon: LayoutDashboard },
@@ -88,11 +90,13 @@ const MANAGEMENT_MENU: Record<Role, NavItem[]> = {
     { label: "Staff holdings", href: "/inventory/holdings",          icon: Layers },
     { label: "Transfers",      href: "/inventory/transfers",         icon: ArrowLeftRight },
     { label: "Services",       href: "/inventory/services",          icon: Sparkles },
+    { label: "Report",         href: "/report",                      icon: BarChart2 },
   ],
   inventory: [
     { label: "Staff holdings", href: "/inventory/holdings",          icon: Layers },
     { label: "Transfers",      href: "/inventory/transfers",         icon: ArrowLeftRight },
     { label: "Services",       href: "/inventory/services",          icon: Sparkles },
+    { label: "Report",         href: "/report",                      icon: BarChart2 },
   ],
   sales:        [],
   internal_use: [],
@@ -101,6 +105,7 @@ const MANAGEMENT_MENU: Record<Role, NavItem[]> = {
     { label: "Staff holdings", href: "/inventory/holdings", icon: Layers },
     { label: "Transfers",      href: "/inventory/transfers", icon: ArrowLeftRight },
     { label: "Services",       href: "/inventory/services", icon: Sparkles },
+    { label: "Report",         href: "/report",             icon: BarChart2 },
   ],
 }
 
