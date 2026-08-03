@@ -30,6 +30,7 @@ type NavItem = {
   href: string
   icon: React.ElementType
   badge?: number
+  feature?: string
 }
 
 const MAIN_MENU: Record<Role, NavItem[]> = {
@@ -43,7 +44,7 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "My Holding",         href: "/holding",                icon: Wallet },
     { label: "Sales",              href: "/sales",                  icon: ShoppingCart },
     { label: "Services performed", href: "/services-performed",     icon: Sparkles },
-    { label: "Fulfilment",         href: "/fulfilment",             icon: PackageCheck },
+    { label: "Fulfilment",         href: "/fulfilment",             icon: PackageCheck, feature: "fulfilment" },
   ],
   inventory: [
     { label: "Dashboard",          href: "/dashboard",              icon: LayoutDashboard },
@@ -55,7 +56,7 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "My Holding",         href: "/holding",                icon: Wallet },
     { label: "Sales",              href: "/sales",                  icon: ShoppingCart },
     { label: "Services performed", href: "/services-performed",     icon: Sparkles },
-    { label: "Fulfilment",         href: "/fulfilment",             icon: PackageCheck },
+    { label: "Fulfilment",         href: "/fulfilment",             icon: PackageCheck, feature: "fulfilment" },
   ],
   sales: [
     { label: "Dashboard",  href: "/dashboard",  icon: LayoutDashboard },
@@ -83,7 +84,7 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "My Holding",         href: "/holding",                icon: Wallet },
     { label: "Sales",              href: "/sales",                  icon: ShoppingCart },
     { label: "Services performed", href: "/services-performed",     icon: Sparkles },
-    { label: "Fulfilment",         href: "/fulfilment",             icon: PackageCheck },
+    { label: "Fulfilment",         href: "/fulfilment",             icon: PackageCheck, feature: "fulfilment" },
   ],
 }
 
@@ -154,12 +155,15 @@ type Props = {
   role: Role
   pastDueCount: number
   pendingRequestsCount: number
+  hiddenFeatures: string[]
 }
 
-export function Sidebar({ role, pastDueCount, pendingRequestsCount }: Props) {
+export function Sidebar({ role, pastDueCount, pendingRequestsCount, hiddenFeatures }: Props) {
   const pathname = usePathname()
 
-  const mainItems = (MAIN_MENU[role] ?? MAIN_MENU.owner).map((item) => {
+  const mainItems = (MAIN_MENU[role] ?? MAIN_MENU.owner)
+    .filter((item) => !item.feature || !hiddenFeatures.includes(item.feature))
+    .map((item) => {
     if (item.href === "/inventory/invoices") return { ...item, badge: pastDueCount }
     if (item.href === "/inventory/requests") return { ...item, badge: pendingRequestsCount }
     return item

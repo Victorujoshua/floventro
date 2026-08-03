@@ -5,6 +5,7 @@ import { AppHeader } from "@/components/app/header/app-header"
 import type { WorkspaceMembership } from "@/components/app/header/app-header"
 import { getNotifications } from "@/lib/db/queries/dashboard"
 import { getPendingRequestCount } from "@/lib/db/queries/requests"
+import { getHiddenFeatures } from "@/lib/db/queries/features"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const scope = await getCurrentScope()
@@ -15,13 +16,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const supabase = await createAppServerClient()
 
-  const [orgResult, userResult, notifications, rawMemberships, pendingRequestsCount] =
+  const [orgResult, userResult, notifications, rawMemberships, pendingRequestsCount, hiddenFeatures] =
     await Promise.all([
       supabase.from("organisations").select("name").eq("id", scope.organisationId).maybeSingle(),
       supabase.auth.getUser(),
       getNotifications(),
       getUserMemberships(),
       getPendingRequestCount(),
+      getHiddenFeatures(scope.branchId, scope.role),
     ])
 
   const user = userResult.data.user
@@ -65,7 +67,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-neutral-50">
-      <Sidebar role={scope.role} pastDueCount={pastDueCount} pendingRequestsCount={pendingRequestsCount} />
+      <Sidebar role={scope.role} pastDueCount={pastDueCount} pendingRequestsCount={pendingRequestsCount} hiddenFeatures={hiddenFeatures} />
       <div className="ml-60 flex flex-1 flex-col min-w-0">
         <AppHeader
           orgName={orgResult.data?.name ?? ""}

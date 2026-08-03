@@ -1,11 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
 import { CheckCircle2, Pencil } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { setFeatureVisibilityAction } from "@/lib/db/actions/features"
+import type { Role } from "@/lib/auth/scope"
 import {
   Dialog,
   DialogContent,
@@ -19,6 +22,91 @@ import { Button } from "@/components/ui/button"
 import { payoutAccountSchema, type PayoutAccountInput } from "@/lib/validation/settings"
 import { updateBranchPayoutAccountAction } from "@/lib/db/actions/settings"
 import type { BranchWithPayout } from "@/lib/db/queries/settings"
+
+// ── Feature visibility section ────────────────────────────────────────────────
+
+const TOGGLEABLE_ROLES: Array<{ key: "sales" | "inventory" | "internal_use"; label: string }> = [
+  { key: "sales",        label: "Sales" },
+  { key: "inventory",    label: "Inventory" },
+  { key: "internal_use", label: "Internal use" },
+]
+
+function FeatureVisibilitySection({
+  hiddenFeatures,
+}: {
+  hiddenFeatures: Array<{ feature: string; role: string }>
+}) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [isUpdating, setIsUpdating] = useState(false)
+  const busy = isPending || isUpdating
+
+  async function handleToggle(feature: string, role: string, currentlyHidden: boolean) {
+    setIsUpdating(true)
+    const result = await setFeatureVisibilityAction(feature, role, !currentlyHidden)
+    setIsUpdating(false)
+    if (!result.ok) {
+      toast.error(result.error)
+      return
+    }
+    startTransition(() => router.refresh())
+  }
+
+  const hiddenRoles = hiddenFeatures
+    .filter((h) => h.feature === "fulfilment")
+    .map((h) => h.role)
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight text-neutral-950">Feature visibility</h2>
+        <p className="text-sm text-neutral-500 mt-1">
+          Control which roles can access each feature in this branch.
+          Owner and admin always have access and cannot be toggled.
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-neutral-200 bg-white overflow-hidden">
+        <div className="px-5 py-4 border-b border-neutral-100 bg-neutral-50">
+          <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Feature</p>
+        </div>
+        <div className="px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-neutral-900">Fulfilment</p>
+              <p className="text-xs text-neutral-400 mt-0.5">
+                Order fulfilment workflow — packing, shipping, delivery
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+              {TOGGLEABLE_ROLES.map(({ key, label }) => {
+                const isHidden = hiddenRoles.includes(key)
+                return (
+                  <button
+                    key={key}
+                    onClick={() => handleToggle("fulfilment", key, isHidden)}
+                    disabled={busy}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md border px-3 h-8 text-xs font-medium transition-colors disabled:opacity-60",
+                      isHidden
+                        ? "bg-neutral-50 border-neutral-200 text-neutral-500 hover:bg-neutral-100"
+                        : "bg-violet-50 border-violet-200 text-violet-700 hover:bg-violet-100",
+                    )}
+                  >
+                    {label}
+                    <span className={cn("text-[10px]", isHidden ? "text-neutral-400" : "text-violet-400")}>
+                      {isHidden ? "hidden" : "visible"}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── Edit dialog ───────────────────────────────────────────────────────────────
 
@@ -132,17 +220,21 @@ function EditPayoutDialog({
 
 type Props = {
   branch: BranchWithPayout
+  userRole: Role
+  hiddenFeatures: Array<{ feature: string; role: string }>
 }
 
-export function SettingsClient({ branch }: Props) {
+export function SettingsClient({ branch, userRole, hiddenFeatures }: Props) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
+  const isOwner = userRole === "owner"
 
   const { accountName, accountNumber, bankName } = branch.payout
   const hasOverride = !!(accountName || accountNumber || bankName)
 
   return (
     <div className="max-w-2xl space-y-10">
+      {/* Payout — visible to owner and admin; edit button owner-only */}
       <div>
         <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">
           {branch.name} payout account
@@ -174,24 +266,31 @@ export function SettingsClient({ branch }: Props) {
           )}
         </div>
 
-        <button
-          onClick={() => setEditing(true)}
-          className="shrink-0 inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 h-8 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
-        >
-          <Pencil className="h-3 w-3" />
-          {hasOverride ? "Edit" : "Override"}
-        </button>
+        {isOwner && (
+          <button
+            onClick={() => setEditing(true)}
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 h-8 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
+          >
+            <Pencil className="h-3 w-3" />
+            {hasOverride ? "Edit" : "Override"}
+          </button>
+        )}
       </div>
 
-      <EditPayoutDialog
-        branch={branch}
-        open={editing}
-        onClose={() => setEditing(false)}
-        onSuccess={() => {
-          setEditing(false)
-          router.refresh()
-        }}
-      />
+      {isOwner && (
+        <EditPayoutDialog
+          branch={branch}
+          open={editing}
+          onClose={() => setEditing(false)}
+          onSuccess={() => {
+            setEditing(false)
+            router.refresh()
+          }}
+        />
+      )}
+
+      {/* Feature visibility — owner and admin can toggle */}
+      <FeatureVisibilitySection hiddenFeatures={hiddenFeatures} />
     </div>
   )
 }

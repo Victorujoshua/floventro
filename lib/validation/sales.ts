@@ -11,9 +11,17 @@ export const saleSchema = z.object({
   customerPhone: z.string().max(40).optional().or(z.literal("")),
   soldOn: z.string().min(1, "Date is required"),
   note: z.string().max(500).optional().or(z.literal("")),
-  paymentMethod: z.enum(["cash", "pos", "bank_transfer", "cheque", "other"]).optional(),
+  paymentMethod: z.enum(["cash", "pos", "bank_transfer", "cheque", "other"]).optional().or(z.literal("")),
   paymentStatus: z.enum(["paid", "unpaid"]),
   lines: z.array(saleLineSchema).min(1, "Add at least one product"),
+}).superRefine((data, ctx) => {
+  if (data.paymentStatus === "paid" && !data.paymentMethod) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["paymentMethod"],
+      message: "Select how the sale was paid",
+    })
+  }
 })
 
 export const salePaymentSchema = z.object({
