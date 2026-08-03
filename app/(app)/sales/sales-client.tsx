@@ -439,6 +439,22 @@ export function SalesClient({ sales }: Props) {
 
               {/* Payment summary */}
               <div className="rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-3 space-y-2">
+                {detailSale.vatCents > 0 && (
+                  <>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-neutral-500">Subtotal</span>
+                      <span className="tabular-nums text-neutral-700">
+                        <span className="font-inter">₦</span>{formatNaira(detailSale.subtotalCents)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-neutral-500">VAT ({detailSale.vatRate ?? 0}%)</span>
+                      <span className="tabular-nums text-neutral-500">
+                        <span className="font-inter">₦</span>{formatNaira(detailSale.vatCents)}
+                      </span>
+                    </div>
+                  </>
+                )}
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-neutral-500">Total</span>
                   <span className="font-semibold tabular-nums text-neutral-950">

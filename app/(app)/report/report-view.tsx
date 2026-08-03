@@ -318,6 +318,8 @@ async function exportXLS(data: ReportData) {
       Date: s.soldOn,
       Seller: s.sellerLabel,
       Customer: s.customerName ?? "",
+      "Subtotal (₦)": n(s.subtotalCents),
+      "VAT (₦)": n(s.vatCents),
       "Total (₦)": n(s.totalCents),
       "Amount Paid (₦)": n(s.amountPaidCents),
       "Payment Method": s.paymentMethod ?? "",

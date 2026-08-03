@@ -252,7 +252,7 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
   const [salesRes, cogsRes] = await Promise.all([
     supabase
       .from("sales")
-      .select("total_cents, sale_lines(id, product_id, line_total_cents)")
+      .select("subtotal_cents, sale_lines(id, product_id, line_total_cents)")
       .eq("organisation_id", scope.organisationId)
       .eq("branch_id", scope.branchId)
       .gte("created_at", cutoff),
@@ -273,7 +273,7 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
   }
 
   type RawLine = { id: string; product_id: string; line_total_cents: number }
-  type RawSale = { total_cents: number; sale_lines: RawLine[] }
+  type RawSale = { subtotal_cents: number; sale_lines: RawLine[] }
 
   let revenueLast30dCents = 0
   let revenueLast30dKnownCostCents = 0
@@ -282,7 +282,7 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
   const missingCostProductIds = new Set<string>()
 
   for (const sale of (salesRes.data as RawSale[]) ?? []) {
-    revenueLast30dCents += sale.total_cents
+    revenueLast30dCents += sale.subtotal_cents
     for (const line of sale.sale_lines ?? []) {
       const alloc = cogsMap.get(line.id)
       const hasCost = alloc?.costKnown === true
@@ -425,7 +425,7 @@ export async function getMySalesMetrics(): Promise<MySalesMetrics> {
   // Adding 30d created_at window and sale_lines for COGS join.
   let salesQuery = client
     .from("sales")
-    .select("total_cents, sale_lines(id, product_id, line_total_cents)")
+    .select("subtotal_cents, sale_lines(id, product_id, line_total_cents)")
     .eq("seller_user_id", authData.user.id)
     .eq("organisation_id", scope.organisationId)
     .gte("created_at", cutoff)
@@ -452,7 +452,7 @@ export async function getMySalesMetrics(): Promise<MySalesMetrics> {
   }
 
   type RawLine = { id: string; product_id: string; line_total_cents: number }
-  type RawSale = { total_cents: number; sale_lines: RawLine[] }
+  type RawSale = { subtotal_cents: number; sale_lines: RawLine[] }
 
   let revenueLast30dCents = 0
   let revenueKnownCostCents = 0
@@ -461,7 +461,7 @@ export async function getMySalesMetrics(): Promise<MySalesMetrics> {
   const missingCostProductIds = new Set<string>()
 
   for (const sale of (salesRes.data as RawSale[]) ?? []) {
-    revenueLast30dCents += sale.total_cents
+    revenueLast30dCents += sale.subtotal_cents
     for (const line of sale.sale_lines ?? []) {
       const alloc = cogsMap.get(line.id)
       const hasCost = alloc?.costKnown === true

@@ -66,6 +66,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
       note: "",
       paymentMethod: undefined,
       paymentStatus: "paid",
+      vatRate: 7.5,
       lines: [{ productId: initialProductId ?? "", quantity: 1, unitPriceNaira: 0 }],
     },
   })
@@ -74,12 +75,15 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
   const watchedLines = watch("lines")
   const soldOn = watch("soldOn")
   const paymentStatus = watch("paymentStatus")
+  const watchedVatRate = watch("vatRate") ?? 7.5
 
   const isFutureDate = soldOn && soldOn > todayLocal()
 
-  const grandTotalNaira = (watchedLines ?? []).reduce((sum, line) => {
-    return sum + (line.quantity || 0) * (line.unitPriceNaira || 0)
+  const subtotalCents = (watchedLines ?? []).reduce((sum, line) => {
+    return sum + Math.round((line.quantity || 0) * (line.unitPriceNaira || 0) * 100)
   }, 0)
+  const vatCentsComputed = Math.round(subtotalCents * watchedVatRate / 100)
+  const totalCentsComputed = subtotalCents + vatCentsComputed
 
   useEffect(() => {
     if (!open) return
@@ -117,6 +121,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
       note: "",
       paymentMethod: undefined,
       paymentStatus: "paid",
+      vatRate: 7.5,
       lines: [{ productId: initialProductId ?? "", quantity: 1, unitPriceNaira: 0 }],
     })
     setSubmitError(null)
@@ -288,13 +293,40 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
             )}
           </div>
 
-          {/* Grand total */}
-          <div className="rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-3 flex items-center justify-between">
-            <p className="text-sm font-medium text-neutral-700">Total</p>
-            <p className="text-base font-semibold tabular-nums text-neutral-950">
-              <span className="font-inter">₦</span>
-              {formatNaira(Math.round(grandTotalNaira * 100))}
-            </p>
+          {/* Subtotal / VAT / Total */}
+          <div className="rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-3 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-neutral-500">Subtotal</span>
+              <span className="tabular-nums text-neutral-700">
+                <span className="font-inter">₦</span>
+                {formatNaira(subtotalCents)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-1.5">
+                <span className="text-neutral-500">VAT</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.01}
+                  className="w-14 h-7 rounded-md border border-neutral-300 bg-white px-2 text-sm text-neutral-950 tabular-nums text-center focus:outline-none focus:ring-1 focus:ring-violet-700 focus:border-violet-700"
+                  {...register("vatRate", { valueAsNumber: true })}
+                />
+                <span className="text-neutral-500 text-xs">%</span>
+              </div>
+              <span className="tabular-nums text-neutral-500">
+                <span className="font-inter">₦</span>
+                {formatNaira(vatCentsComputed)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between pt-1.5 border-t border-neutral-200">
+              <p className="text-sm font-medium text-neutral-700">Total</p>
+              <p className="text-base font-semibold tabular-nums text-neutral-950">
+                <span className="font-inter">₦</span>
+                {formatNaira(totalCentsComputed)}
+              </p>
+            </div>
           </div>
 
           {/* Customer */}

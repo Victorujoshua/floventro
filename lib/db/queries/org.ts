@@ -132,7 +132,7 @@ export async function getOrgOverview(): Promise<OrgOverview> {
 
       supabase
         .from("sales")
-        .select("branch_id, total_cents, created_at, sale_lines(id, product_id, line_total_cents)")
+        .select("branch_id, subtotal_cents, created_at, sale_lines(id, product_id, line_total_cents)")
         .eq("organisation_id", scope.organisationId),
 
       supabase
@@ -226,7 +226,7 @@ export async function getOrgOverview(): Promise<OrgOverview> {
 
   // ── Revenue + 30d COGS aggregation ───────────────────────────────────────
   type RawSaleLine = { id: string; product_id: string; line_total_cents: number }
-  type RawSale = { branch_id: string; total_cents: number; created_at: string; sale_lines: RawSaleLine[] }
+  type RawSale = { branch_id: string; subtotal_cents: number; created_at: string; sale_lines: RawSaleLine[] }
   const sales = salesRes.data as unknown as RawSale[]
 
   let revenueAllTimeCents = 0
@@ -238,10 +238,10 @@ export async function getOrgOverview(): Promise<OrgOverview> {
   const branchRevMap = new Map<string, number>()
 
   for (const s of sales) {
-    revenueAllTimeCents += s.total_cents
+    revenueAllTimeCents += s.subtotal_cents
     if (s.created_at >= cutoff) {
-      revenueLast30dCents += s.total_cents
-      branchRevMap.set(s.branch_id, (branchRevMap.get(s.branch_id) ?? 0) + s.total_cents)
+      revenueLast30dCents += s.subtotal_cents
+      branchRevMap.set(s.branch_id, (branchRevMap.get(s.branch_id) ?? 0) + s.subtotal_cents)
 
       for (const line of s.sale_lines ?? []) {
         const alloc = cogsMap.get(line.id)
@@ -365,7 +365,7 @@ export async function getOrgSales(): Promise<OrgSalesData> {
     supabase
       .from("sales")
       .select(
-        "id, branch_id, total_cents, created_at, sold_on, customer_name, sale_lines(id, product_id, quantity, line_total_cents, products(id, name, sku))",
+        "id, branch_id, subtotal_cents, total_cents, created_at, sold_on, customer_name, sale_lines(id, product_id, quantity, line_total_cents, products(id, name, sku))",
       )
       .eq("organisation_id", scope.organisationId)
       .order("created_at", { ascending: false }),
@@ -416,6 +416,7 @@ export async function getOrgSales(): Promise<OrgSalesData> {
   type RawSale = {
     id: string
     branch_id: string
+    subtotal_cents: number
     total_cents: number
     created_at: string
     sold_on: string
@@ -456,15 +457,15 @@ export async function getOrgSales(): Promise<OrgSalesData> {
   const productAgg = new Map<string, ProdAgg>()
 
   for (const sale of sales) {
-    revenueAllTimeCents += sale.total_cents
+    revenueAllTimeCents += sale.subtotal_cents
     const isLast30d = sale.created_at >= cutoff
 
     if (isLast30d) {
-      revenueLast30dCents += sale.total_cents
+      revenueLast30dCents += sale.subtotal_cents
       if (!branchAgg.has(sale.branch_id)) {
         branchAgg.set(sale.branch_id, { revenueCents: 0, knownCostCents: 0, hasAnyCostData: false })
       }
-      branchAgg.get(sale.branch_id)!.revenueCents += sale.total_cents
+      branchAgg.get(sale.branch_id)!.revenueCents += sale.subtotal_cents
     }
 
     for (const line of sale.sale_lines ?? []) {

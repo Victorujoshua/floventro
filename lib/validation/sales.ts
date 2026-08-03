@@ -13,6 +13,7 @@ export const saleSchema = z.object({
   note: z.string().max(500).optional().or(z.literal("")),
   paymentMethod: z.enum(["cash", "pos", "bank_transfer", "cheque", "other"]).optional().or(z.literal("")),
   paymentStatus: z.enum(["paid", "unpaid"]),
+  vatRate: z.number().min(0, "VAT rate cannot be negative").max(100, "VAT rate cannot exceed 100").optional(),
   lines: z.array(saleLineSchema).min(1, "Add at least one product"),
 }).superRefine((data, ctx) => {
   if (data.paymentStatus === "paid" && !data.paymentMethod) {
