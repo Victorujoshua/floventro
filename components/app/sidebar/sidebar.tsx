@@ -20,6 +20,7 @@ import {
   ArrowLeftRight,
   GitBranch,
   BarChart2,
+  PackageCheck,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Role } from "@/lib/auth/scope"
@@ -42,6 +43,7 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "My Holding",         href: "/holding",                icon: Wallet },
     { label: "Sales",              href: "/sales",                  icon: ShoppingCart },
     { label: "Services performed", href: "/services-performed",     icon: Sparkles },
+    { label: "Fulfilment",         href: "/fulfilment",             icon: PackageCheck },
   ],
   inventory: [
     { label: "Dashboard",          href: "/dashboard",              icon: LayoutDashboard },
@@ -53,13 +55,15 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "My Holding",         href: "/holding",                icon: Wallet },
     { label: "Sales",              href: "/sales",                  icon: ShoppingCart },
     { label: "Services performed", href: "/services-performed",     icon: Sparkles },
+    { label: "Fulfilment",         href: "/fulfilment",             icon: PackageCheck },
   ],
   sales: [
-    { label: "Dashboard",  href: "/dashboard", icon: LayoutDashboard },
-    { label: "Requests",   href: "/requests",  icon: ClipboardList },
-    { label: "My Holding", href: "/holding",   icon: Wallet },
-    { label: "Sales",      href: "/sales",     icon: ShoppingCart },
-    { label: "Report",     href: "/report",    icon: BarChart2 },
+    { label: "Dashboard",  href: "/dashboard",  icon: LayoutDashboard },
+    { label: "Requests",   href: "/requests",   icon: ClipboardList },
+    { label: "My Holding", href: "/holding",    icon: Wallet },
+    { label: "Sales",      href: "/sales",      icon: ShoppingCart },
+    { label: "Fulfilment", href: "/fulfilment", icon: PackageCheck },
+    { label: "Report",     href: "/report",     icon: BarChart2 },
   ],
   internal_use: [
     { label: "Dashboard",          href: "/dashboard",          icon: LayoutDashboard },
@@ -79,6 +83,7 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "My Holding",         href: "/holding",                icon: Wallet },
     { label: "Sales",              href: "/sales",                  icon: ShoppingCart },
     { label: "Services performed", href: "/services-performed",     icon: Sparkles },
+    { label: "Fulfilment",         href: "/fulfilment",             icon: PackageCheck },
   ],
 }
 
