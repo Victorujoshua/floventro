@@ -133,7 +133,10 @@ export function ServicesPerformedClient({ records }: Props) {
                     {record.performedByLabel}
                   </TableCell>
                   <TableCell className="text-sm text-neutral-500 py-3.5">
-                    {record.customerName ?? <span className="text-neutral-300">—</span>}
+                    <span>{record.customerName ?? <span className="text-neutral-300">—</span>}</span>
+                    {record.memberId && (
+                      <span className="block text-xs font-mono text-neutral-400">{record.memberId}</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3.5 text-right">
                     {record.consumptionCount}
@@ -199,6 +202,18 @@ export function ServicesPerformedClient({ records }: Props) {
                     <span className="text-neutral-950 font-mono tabular-nums">
                       {detailRecord.customerPhone}
                     </span>
+                  </div>
+                )}
+                {detailRecord.memberId && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-neutral-500">Member ID</span>
+                    <span className="text-neutral-950 font-mono">{detailRecord.memberId}</span>
+                  </div>
+                )}
+                {detailRecord.clientEmail && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-neutral-500">Email</span>
+                    <span className="text-neutral-950">{detailRecord.clientEmail}</span>
                   </div>
                 )}
                 {detailRecord.serviceFeeCents != null && (

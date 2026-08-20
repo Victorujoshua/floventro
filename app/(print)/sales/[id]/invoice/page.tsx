@@ -111,7 +111,7 @@ export default async function InvoicePage({ params }: Props) {
           <thead>
             <tr className="border-b border-neutral-200">
               <th className="text-left pb-3 text-[10px] font-medium text-neutral-400 uppercase tracking-[0.12em]">
-                Product
+                Description
               </th>
               <th className="text-right pb-3 text-[10px] font-medium text-neutral-400 uppercase tracking-[0.12em] w-14">
                 Qty
@@ -146,6 +146,25 @@ export default async function InvoicePage({ params }: Props) {
                 </td>
               </tr>
             ))}
+            {invoice.serviceLines.map((line) => (
+              <tr key={line.id}>
+                <td className="py-3.5">
+                  <p className="font-medium text-neutral-950">{line.serviceName}</p>
+                  <p className="text-xs text-neutral-400 mt-0.5">Service</p>
+                </td>
+                <td className="py-3.5 text-right tabular-nums text-neutral-700">
+                  {line.quantity}
+                </td>
+                <td className="py-3.5 text-right tabular-nums text-neutral-700">
+                  <span className="font-inter">₦</span>
+                  {formatNaira(line.unitPriceCents)}
+                </td>
+                <td className="py-3.5 text-right tabular-nums font-semibold text-neutral-950">
+                  <span className="font-inter">₦</span>
+                  {formatNaira(line.lineTotalCents)}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
 
@@ -156,9 +175,18 @@ export default async function InvoicePage({ params }: Props) {
               <span>Subtotal</span>
               <span className="tabular-nums">
                 <span className="font-inter">₦</span>
-                {formatNaira(invoice.totalCents)}
+                {formatNaira(invoice.subtotalCents)}
               </span>
             </div>
+            {invoice.vatCents > 0 && (
+              <div className="flex justify-between text-sm text-neutral-500 mb-1.5">
+                <span>VAT{invoice.vatRate != null ? ` (${invoice.vatRate}%)` : ""}</span>
+                <span className="tabular-nums">
+                  <span className="font-inter">₦</span>
+                  {formatNaira(invoice.vatCents)}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between text-base font-bold text-neutral-950 border-t border-neutral-300 pt-2.5 mt-2.5">
               <span>Total</span>
               <span className="tabular-nums">

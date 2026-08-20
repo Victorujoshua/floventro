@@ -40,6 +40,33 @@ export async function createProductAction(
     return { ok: false, error: error.message }
   }
 
+  // List the new product in branch_products immediately so branch-scoped viewers see it.
+  // Mirrors the on-stock-arrival inserts in receive_invoice_stock / receive_transfer.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bp = supabase as any
+  if (scope.branchId) {
+    await bp.from("branch_products").upsert(
+      { organisation_id: scope.organisationId, branch_id: scope.branchId, product_id: data.id },
+      { onConflict: "branch_id,product_id", ignoreDuplicates: true },
+    )
+  } else {
+    const { data: branches } = await supabase
+      .from("branches")
+      .select("id")
+      .eq("organisation_id", scope.organisationId)
+      .is("deleted_at", null)
+    if (branches && (branches as { id: string }[]).length > 0) {
+      await bp.from("branch_products").upsert(
+        (branches as { id: string }[]).map((b) => ({
+          organisation_id: scope.organisationId,
+          branch_id: b.id,
+          product_id: data.id,
+        })),
+        { onConflict: "branch_id,product_id", ignoreDuplicates: true },
+      )
+    }
+  }
+
   return { ok: true, data: { id: data.id } }
 }
 

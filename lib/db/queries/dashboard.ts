@@ -223,6 +223,7 @@ export async function getNotifications(): Promise<NotificationItem[]> {
 
 export type BranchFinancials = {
   revenueLast30dCents: number
+  serviceRevenueLast30dCents: number
   profitLast30dCents: number | null
   avgMarginPct: number | null
   costDataComplete: boolean
@@ -232,6 +233,7 @@ export type BranchFinancials = {
 export async function getBranchFinancials(): Promise<BranchFinancials> {
   const empty: BranchFinancials = {
     revenueLast30dCents: 0,
+    serviceRevenueLast30dCents: 0,
     profitLast30dCents: null,
     avgMarginPct: null,
     costDataComplete: false,
@@ -252,7 +254,7 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
   const [salesRes, cogsRes] = await Promise.all([
     supabase
       .from("sales")
-      .select("subtotal_cents, sale_lines(id, product_id, line_total_cents)")
+      .select("subtotal_cents, service_revenue_cents, sale_lines(id, product_id, line_total_cents)")
       .eq("organisation_id", scope.organisationId)
       .eq("branch_id", scope.branchId)
       .gte("created_at", cutoff),
@@ -273,9 +275,10 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
   }
 
   type RawLine = { id: string; product_id: string; line_total_cents: number }
-  type RawSale = { subtotal_cents: number; sale_lines: RawLine[] }
+  type RawSale = { subtotal_cents: number; service_revenue_cents: number; sale_lines: RawLine[] }
 
   let revenueLast30dCents = 0
+  let serviceRevenueLast30dCents = 0
   let revenueLast30dKnownCostCents = 0
   let costLast30dKnownCents = 0
   let hasAny30dCostData = false
@@ -283,6 +286,7 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
 
   for (const sale of (salesRes.data as RawSale[]) ?? []) {
     revenueLast30dCents += sale.subtotal_cents
+    serviceRevenueLast30dCents += sale.service_revenue_cents ?? 0
     for (const line of sale.sale_lines ?? []) {
       const alloc = cogsMap.get(line.id)
       const hasCost = alloc?.costKnown === true
@@ -307,6 +311,7 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
 
   return {
     revenueLast30dCents,
+    serviceRevenueLast30dCents,
     profitLast30dCents,
     avgMarginPct,
     costDataComplete: hasAny30dCostData && missingCostProductIds.size === 0,
@@ -393,6 +398,7 @@ export async function getMyPendingRequestCount() {
 
 export type MySalesMetrics = {
   revenueLast30dCents: number
+  serviceRevenueLast30dCents: number
   costKnownCents: number | null
   profitLast30dCents: number | null
   marginPct: number | null
@@ -403,6 +409,7 @@ export type MySalesMetrics = {
 export async function getMySalesMetrics(): Promise<MySalesMetrics> {
   const empty: MySalesMetrics = {
     revenueLast30dCents: 0,
+    serviceRevenueLast30dCents: 0,
     costKnownCents: null,
     profitLast30dCents: null,
     marginPct: null,
@@ -425,7 +432,7 @@ export async function getMySalesMetrics(): Promise<MySalesMetrics> {
   // Adding 30d created_at window and sale_lines for COGS join.
   let salesQuery = client
     .from("sales")
-    .select("subtotal_cents, sale_lines(id, product_id, line_total_cents)")
+    .select("subtotal_cents, service_revenue_cents, sale_lines(id, product_id, line_total_cents)")
     .eq("seller_user_id", authData.user.id)
     .eq("organisation_id", scope.organisationId)
     .gte("created_at", cutoff)
@@ -452,9 +459,10 @@ export async function getMySalesMetrics(): Promise<MySalesMetrics> {
   }
 
   type RawLine = { id: string; product_id: string; line_total_cents: number }
-  type RawSale = { subtotal_cents: number; sale_lines: RawLine[] }
+  type RawSale = { subtotal_cents: number; service_revenue_cents: number; sale_lines: RawLine[] }
 
   let revenueLast30dCents = 0
+  let serviceRevenueLast30dCents = 0
   let revenueKnownCostCents = 0
   let costKnownCentsAccum = 0
   let hasAnyKnownCost = false
@@ -462,6 +470,7 @@ export async function getMySalesMetrics(): Promise<MySalesMetrics> {
 
   for (const sale of (salesRes.data as RawSale[]) ?? []) {
     revenueLast30dCents += sale.subtotal_cents
+    serviceRevenueLast30dCents += sale.service_revenue_cents ?? 0
     for (const line of sale.sale_lines ?? []) {
       const alloc = cogsMap.get(line.id)
       const hasCost = alloc?.costKnown === true
@@ -484,6 +493,7 @@ export async function getMySalesMetrics(): Promise<MySalesMetrics> {
 
   return {
     revenueLast30dCents,
+    serviceRevenueLast30dCents,
     costKnownCents: hasAnyKnownCost ? costKnownCentsAccum : null,
     profitLast30dCents,
     marginPct,
@@ -621,4 +631,73 @@ export async function getLowStockProducts(limit = 5) {
     .filter((p) => p.quantity <= p.reorder_point)
     .sort((a, b) => a.quantity - b.quantity)
     .slice(0, limit)
+}
+
+export type MyServiceMetrics = {
+  sessionCount: number
+  totalItemsUsed: number
+  distinctProductsUsed: number
+  namedClientsCount: number
+  topItems: { name: string; qty: number }[]
+}
+
+export async function getMyServiceMetrics(): Promise<MyServiceMetrics> {
+  const empty: MyServiceMetrics = {
+    sessionCount: 0,
+    totalItemsUsed: 0,
+    distinctProductsUsed: 0,
+    namedClientsCount: 0,
+    topItems: [],
+  }
+
+  const scope = await getCurrentScope()
+  if (!scope) return empty
+
+  const supabase = await createAppServerClient()
+  const { data: authData } = await supabase.auth.getUser()
+  if (!authData?.user) return empty
+
+  const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("service_records")
+    .select("id, customer_name, service_consumption(product_id, quantity, products(name))")
+    .eq("organisation_id", scope.organisationId)
+    .eq("performed_by", authData.user.id)
+    .gte("performed_on", cutoff)
+
+  if (error || !data) {
+    console.error("[getMyServiceMetrics]", error)
+    return empty
+  }
+
+  type ConsumptionRow = { product_id: string; quantity: number; products: { name: string } | null }
+  type RecordRow = { id: string; customer_name: string | null; service_consumption: ConsumptionRow[] }
+
+  const records = data as RecordRow[]
+  const productQtyMap = new Map<string, { name: string; qty: number }>()
+  let totalItemsUsed = 0
+  const namedClientsSet = new Set<string>()
+
+  for (const record of records) {
+    if (record.customer_name) namedClientsSet.add(record.customer_name.trim())
+    for (const c of record.service_consumption ?? []) {
+      totalItemsUsed += c.quantity
+      const existing = productQtyMap.get(c.product_id)
+      if (existing) {
+        existing.qty += c.quantity
+      } else {
+        productQtyMap.set(c.product_id, { name: c.products?.name ?? c.product_id, qty: c.quantity })
+      }
+    }
+  }
+
+  return {
+    sessionCount: records.length,
+    totalItemsUsed,
+    distinctProductsUsed: productQtyMap.size,
+    namedClientsCount: namedClientsSet.size,
+    topItems: [...productQtyMap.values()].sort((a, b) => b.qty - a.qty).slice(0, 5),
+  }
 }

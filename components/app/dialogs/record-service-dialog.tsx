@@ -56,6 +56,8 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
       serviceTypeId: "",
       customerName: "",
       customerPhone: "",
+      memberId: "",
+      clientEmail: "",
       performedOn: todayLocal(),
       serviceFeeNaira: undefined,
       note: "",
@@ -102,6 +104,8 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
       serviceTypeId: "",
       customerName: "",
       customerPhone: "",
+      memberId: "",
+      clientEmail: "",
       performedOn: todayLocal(),
       serviceFeeNaira: undefined,
       note: "",
@@ -280,19 +284,44 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
             </div>
           )}
 
-          {/* Customer */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="customerName">
-                Customer name <span className="text-neutral-400 font-normal">(optional)</span>
-              </Label>
-              <Input id="customerName" placeholder="Walk-in" {...register("customerName")} />
+          {/* Client details */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="customerName">
+                  Client name <span className="text-red-500">*</span>
+                </Label>
+                <Input id="customerName" placeholder="Jane Doe" {...register("customerName")} />
+                {errors.customerName && (
+                  <p className="text-xs text-red-500">{errors.customerName.message}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="customerPhone">
+                  Phone <span className="text-red-500">*</span>
+                </Label>
+                <Input id="customerPhone" placeholder="08012345678" {...register("customerPhone")} />
+                {errors.customerPhone && (
+                  <p className="text-xs text-red-500">{errors.customerPhone.message}</p>
+                )}
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="customerPhone">
-                Phone <span className="text-neutral-400 font-normal">(optional)</span>
-              </Label>
-              <Input id="customerPhone" placeholder="08012345678" {...register("customerPhone")} />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="memberId">
+                  Member ID <span className="text-neutral-400 font-normal">(optional)</span>
+                </Label>
+                <Input id="memberId" placeholder="MEM-0001" {...register("memberId")} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="clientEmail">
+                  Email <span className="text-neutral-400 font-normal">(optional)</span>
+                </Label>
+                <Input id="clientEmail" type="email" placeholder="jane@example.com" {...register("clientEmail")} />
+                {errors.clientEmail && (
+                  <p className="text-xs text-red-500">{errors.clientEmail.message}</p>
+                )}
+              </div>
             </div>
           </div>
 

@@ -8,7 +8,9 @@ import { Plus, Trash2 } from "lucide-react"
 import { saleSchema, type SaleInput } from "@/lib/validation/sales"
 import { recordSaleAction } from "@/lib/db/actions/sales"
 import { getMyHoldingsAction } from "@/lib/db/actions/holdings"
+import { getActiveServiceTypesAction } from "@/lib/db/actions/services"
 import type { MyHolding } from "@/lib/db/queries/holdings"
+import type { ServiceType } from "@/lib/db/queries/services"
 import { formatNaira } from "@/lib/format/money"
 import {
   Dialog,
@@ -45,6 +47,7 @@ function todayLocal() {
 
 export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProductId }: Props) {
   const [holdings, setHoldings] = useState<MyHolding[]>([])
+  const [catalogServices, setCatalogServices] = useState<ServiceType[]>([])
   const [loadingHoldings, setLoadingHoldings] = useState(false)
   const [holdingsError, setHoldingsError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -68,20 +71,28 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
       paymentStatus: "paid",
       vatRate: 7.5,
       lines: [{ productId: initialProductId ?? "", quantity: 1, unitPriceNaira: 0 }],
+      serviceLines: [],
     },
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: "lines" })
+  const { fields: svcFields, append: appendSvc, remove: removeSvc } = useFieldArray({ control, name: "serviceLines" })
+
   const watchedLines = watch("lines")
+  const watchedSvcLines = watch("serviceLines")
   const soldOn = watch("soldOn")
   const paymentStatus = watch("paymentStatus")
   const watchedVatRate = watch("vatRate") ?? 7.5
 
   const isFutureDate = soldOn && soldOn > todayLocal()
 
-  const subtotalCents = (watchedLines ?? []).reduce((sum, line) => {
+  const productSubtotalCents = (watchedLines ?? []).reduce((sum, line) => {
     return sum + Math.round((line.quantity || 0) * (line.unitPriceNaira || 0) * 100)
   }, 0)
+  const serviceSubtotalCents = (watchedSvcLines ?? []).reduce((sum, line) => {
+    return sum + Math.round((line.quantity || 0) * (line.unitPriceNaira || 0) * 100)
+  }, 0)
+  const subtotalCents = productSubtotalCents + serviceSubtotalCents
   const vatCentsComputed = Math.round(subtotalCents * watchedVatRate / 100)
   const totalCentsComputed = subtotalCents + vatCentsComputed
 
@@ -90,10 +101,11 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
     let cancelled = false
     setLoadingHoldings(true)
     setHoldingsError(null)
-    getMyHoldingsAction()
-      .then((h) => {
+    Promise.all([getMyHoldingsAction(), getActiveServiceTypesAction()])
+      .then(([h, cs]) => {
         if (cancelled) return
         setHoldings(h)
+        setCatalogServices(cs)
         if (initialProductId) {
           const holding = h.find((x) => x.productId === initialProductId)
           if (holding) {
@@ -123,6 +135,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
       paymentStatus: "paid",
       vatRate: 7.5,
       lines: [{ productId: initialProductId ?? "", quantity: 1, unitPriceNaira: 0 }],
+      serviceLines: [],
     })
     setSubmitError(null)
     setHoldingsError(null)
@@ -142,6 +155,15 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
   function getHoldingForLine(index: number): MyHolding | undefined {
     const pid = watchedLines?.[index]?.productId
     return holdings.find((h) => h.productId === pid)
+  }
+
+  function handleServiceChange(index: number, serviceTypeId: string) {
+    setValue(`serviceLines.${index}.serviceTypeId`, serviceTypeId)
+    const svc = catalogServices.find((s) => s.id === serviceTypeId)
+    if (svc) {
+      setValue(`serviceLines.${index}.serviceName`, svc.name)
+      setValue(`serviceLines.${index}.unitPriceNaira`, svc.defaultPriceCents / 100)
+    }
   }
 
   async function onSubmit(values: SaleInput) {
@@ -164,7 +186,8 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 pt-1">
-          {/* Lines */}
+
+          {/* ── Products ── */}
           <div className="space-y-3">
             <Label>Products sold</Label>
             {loadingHoldings ? (
@@ -177,11 +200,10 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
                   onClick={() => {
                     setHoldingsError(null)
                     setLoadingHoldings(true)
-                    getMyHoldingsAction()
-                      .then((h) => { setHoldings(h) })
+                    Promise.all([getMyHoldingsAction(), getActiveServiceTypesAction()])
+                      .then(([h, cs]) => { setHoldings(h); setCatalogServices(cs) })
                       .catch((err: unknown) => {
-                        console.error("holdings retry failed", err)
-                        setHoldingsError("Could not load your holding: " + ((err as Error)?.message ?? "unknown"))
+                        setHoldingsError("Could not load: " + ((err as Error)?.message ?? "unknown"))
                       })
                       .finally(() => setLoadingHoldings(false))
                   }}
@@ -191,7 +213,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
                 </button>
               </div>
             ) : holdings.length === 0 ? (
-              <p className="text-sm text-neutral-500">You have no stock in your holding to sell.</p>
+              <p className="text-sm text-neutral-500">You have no stock in your holding.</p>
             ) : (
               fields.map((field, index) => {
                 const holding = getHoldingForLine(index)
@@ -281,7 +303,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
               })
             )}
 
-            {holdings.length > 0 && usedProductIds.size < holdings.length && (
+            {!loadingHoldings && !holdingsError && holdings.length > 0 && usedProductIds.size < holdings.length && (
               <button
                 type="button"
                 onClick={() => append({ productId: "", quantity: 1, unitPriceNaira: 0 })}
@@ -293,8 +315,137 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
             )}
           </div>
 
-          {/* Subtotal / VAT / Total */}
+          {/* ── Services ── */}
+          {!loadingHoldings && !holdingsError && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Services</Label>
+                <span className="text-xs text-neutral-400">Optional</span>
+              </div>
+
+              {catalogServices.length === 0 && svcFields.length === 0 ? (
+                <p className="text-xs text-neutral-400">
+                  No services in your catalog yet — add them in Admin → Services.
+                </p>
+              ) : (
+                <>
+                  {svcFields.map((field, index) => {
+                    const currentServiceTypeId = watchedSvcLines?.[index]?.serviceTypeId ?? ""
+                    return (
+                      <div key={field.id} className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 space-y-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Service</Label>
+                          <select
+                            className={SELECT_CLASS}
+                            value={currentServiceTypeId}
+                            onChange={(e) => handleServiceChange(index, e.target.value)}
+                          >
+                            <option value="">Select a service…</option>
+                            {catalogServices.map((svc) => (
+                              <option key={svc.id} value={svc.id}>{svc.name}</option>
+                            ))}
+                          </select>
+                          {/* Hidden inputs to register serviceTypeId and serviceName with RHF */}
+                          <input type="hidden" {...register(`serviceLines.${index}.serviceTypeId`)} />
+                          <input type="hidden" {...register(`serviceLines.${index}.serviceName`)} />
+                          {errors.serviceLines?.[index]?.serviceTypeId && (
+                            <p className="text-xs text-red-500">{errors.serviceLines[index]?.serviceTypeId?.message}</p>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label htmlFor={`svc-qty-${index}`} className="text-xs">Quantity</Label>
+                            <Input
+                              id={`svc-qty-${index}`}
+                              type="number"
+                              min={1}
+                              placeholder="1"
+                              className="h-9 text-sm tabular-nums"
+                              {...register(`serviceLines.${index}.quantity`, { valueAsNumber: true })}
+                            />
+                            {errors.serviceLines?.[index]?.quantity && (
+                              <p className="text-xs text-red-500">{errors.serviceLines[index]?.quantity?.message}</p>
+                            )}
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor={`svc-price-${index}`} className="text-xs">
+                              Price (<span className="font-inter">₦</span>)
+                            </Label>
+                            <Input
+                              id={`svc-price-${index}`}
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              placeholder="0.00"
+                              className="h-9 text-sm tabular-nums"
+                              {...register(`serviceLines.${index}.unitPriceNaira`, { valueAsNumber: true })}
+                            />
+                            {errors.serviceLines?.[index]?.unitPriceNaira && (
+                              <p className="text-xs text-red-500">{errors.serviceLines[index]?.unitPriceNaira?.message}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-neutral-500">
+                            Line total:{" "}
+                            <span className="font-medium tabular-nums text-neutral-950">
+                              <span className="font-inter">₦</span>
+                              {formatNaira(Math.round((watchedSvcLines?.[index]?.quantity || 0) * (watchedSvcLines?.[index]?.unitPriceNaira || 0) * 100))}
+                            </span>
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => removeSvc(index)}
+                            className="text-neutral-400 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {catalogServices.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => appendSvc({ serviceTypeId: "", serviceName: "", quantity: 1, unitPriceNaira: 0 })}
+                      className="flex items-center gap-1.5 text-sm text-violet-700 hover:text-violet-800 transition-colors"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add service
+                    </button>
+                  )}
+                </>
+              )}
+
+              {errors.lines?.root && (
+                <p className="text-xs text-red-500">{errors.lines.root.message}</p>
+              )}
+            </div>
+          )}
+
+          {/* ── Subtotal / VAT / Total ── */}
           <div className="rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-3 space-y-2">
+            {serviceSubtotalCents > 0 && (
+              <>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-neutral-500">Products</span>
+                  <span className="tabular-nums text-neutral-700">
+                    <span className="font-inter">₦</span>
+                    {formatNaira(productSubtotalCents)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-neutral-500">Services</span>
+                  <span className="tabular-nums text-neutral-700">
+                    <span className="font-inter">₦</span>
+                    {formatNaira(serviceSubtotalCents)}
+                  </span>
+                </div>
+              </>
+            )}
             <div className="flex items-center justify-between text-sm">
               <span className="text-neutral-500">Subtotal</span>
               <span className="tabular-nums text-neutral-700">
@@ -329,7 +480,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
             </div>
           </div>
 
-          {/* Customer */}
+          {/* ── Customer ── */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="customerName">Customer name <span className="text-neutral-400 font-normal">(optional)</span></Label>
@@ -341,7 +492,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
             </div>
           </div>
 
-          {/* Payment toggle */}
+          {/* ── Payment toggle ── */}
           <div className="space-y-1.5">
             <Label>Payment</Label>
             <div className="grid grid-cols-2 rounded-md border border-neutral-300 overflow-hidden">
@@ -370,7 +521,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
             </div>
           </div>
 
-          {/* Date + Payment method (method hidden when on account) */}
+          {/* ── Date + Payment method ── */}
           <div className={`grid gap-3 ${paymentStatus === "paid" ? "grid-cols-2" : "grid-cols-1"}`}>
             <div className="space-y-1.5">
               <Label htmlFor="soldOn">Sale date</Label>
@@ -397,7 +548,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
             )}
           </div>
 
-          {/* Note */}
+          {/* ── Note ── */}
           <div className="space-y-1.5">
             <Label htmlFor="note">Note <span className="text-neutral-400 font-normal">(optional)</span></Label>
             <textarea
@@ -409,7 +560,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
             />
           </div>
 
-          {/* Submit error */}
+          {/* ── Submit error ── */}
           {submitError && (
             <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">
               {submitError}
@@ -421,7 +572,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
           <Button
             type="submit"
             form=""
-            disabled={isSubmitting || loadingHoldings || !!holdingsError || holdings.length === 0}
+            disabled={isSubmitting || loadingHoldings || !!holdingsError}
             onClick={handleSubmit(onSubmit)}
             className="bg-violet-700 hover:bg-violet-800 text-white rounded-md"
           >

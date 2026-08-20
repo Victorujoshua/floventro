@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { ArrowUpRight, Check, TrendingUp, DollarSign, Percent } from "lucide-react"
+import { ArrowUpRight, Check, TrendingUp, DollarSign, Percent, Layers, Package, Users } from "lucide-react"
 import { requireScope } from "@/lib/auth/guards"
 import {
   getStockSummary,
@@ -14,6 +14,7 @@ import {
   getMyPendingRequestCount,
   getMySalesMetrics,
   getMyStockPerformance,
+  getMyServiceMetrics,
 } from "@/lib/db/queries/dashboard"
 import { formatNaira } from "@/lib/format/money"
 import { StockChart } from "./stock-chart"
@@ -50,6 +51,9 @@ export default async function DashboardPage() {
   // sales / internal_use see only their own personal activity.
   const canSeeBranchData =
     scope.role === "owner" || scope.role === "admin" || scope.role === "inventory"
+  const canSeeFinancials = scope.role === "owner" || scope.role === "admin"
+  const canSeePersonalSalesMetrics = scope.role === "sales"
+  const canSeeServiceMetrics = scope.role === "internal_use"
 
   const [
     stock,
@@ -63,18 +67,20 @@ export default async function DashboardPage() {
     myPendingCount,
     mySalesMetrics,
     myStockPerformance,
+    myServiceMetrics,
   ] = await Promise.all([
     canSeeBranchData ? getStockSummary()        : Promise.resolve(null),
     canSeeBranchData ? getPayablesSummary()      : Promise.resolve(null),
     canSeeBranchData ? getRecentInvoices(5)      : Promise.resolve([]),
     canSeeBranchData ? getLowStockProducts(5)    : Promise.resolve([]),
     canSeeBranchData ? getStockReceivedSeries()  : Promise.resolve([]),
-    canSeeBranchData ? getBranchFinancials()     : Promise.resolve(null),
+    canSeeFinancials ? getBranchFinancials()      : Promise.resolve(null),
     canSeeBranchData ? Promise.resolve(null)     : getPersonalHoldingSummary(),
     canSeeBranchData ? Promise.resolve([])       : getMyRecentSales(5),
     canSeeBranchData ? Promise.resolve(0)        : getMyPendingRequestCount(),
-    canSeeBranchData ? Promise.resolve(null)     : getMySalesMetrics(),
+    canSeePersonalSalesMetrics ? getMySalesMetrics() : Promise.resolve(null),
     canSeeBranchData ? Promise.resolve([])       : getMyStockPerformance(),
+    canSeeServiceMetrics ? getMyServiceMetrics() : Promise.resolve(null),
   ])
 
   return (
@@ -363,6 +369,46 @@ export default async function DashboardPage() {
             </div>
           </div>
 
+          {/* Service provider metrics for internal_use (30d) */}
+          {myServiceMetrics && (
+            <div className="grid sm:grid-cols-3 gap-5">
+              <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
+                <div className="flex items-start justify-between">
+                  <p className="text-xs uppercase tracking-wide text-neutral-500">Sessions (30d)</p>
+                  <Layers className="h-4 w-4 text-violet-300" />
+                </div>
+                <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
+                  {myServiceMetrics.sessionCount.toLocaleString()}
+                </p>
+                <p className="text-sm text-neutral-500 mt-1">services performed</p>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-neutral-200/60 p-6">
+                <div className="flex items-start justify-between">
+                  <p className="text-xs uppercase tracking-wide text-neutral-500">Items used (30d)</p>
+                  <Package className="h-4 w-4 text-neutral-300" />
+                </div>
+                <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
+                  {myServiceMetrics.totalItemsUsed.toLocaleString()}
+                </p>
+                <p className="text-sm text-neutral-500 mt-1">
+                  {myServiceMetrics.distinctProductsUsed} product{myServiceMetrics.distinctProductsUsed !== 1 ? "s" : ""}
+                </p>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-neutral-200/60 p-6">
+                <div className="flex items-start justify-between">
+                  <p className="text-xs uppercase tracking-wide text-neutral-500">Named clients (30d)</p>
+                  <Users className="h-4 w-4 text-neutral-300" />
+                </div>
+                <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
+                  {myServiceMetrics.namedClientsCount.toLocaleString()}
+                </p>
+                <p className="text-sm text-neutral-500 mt-1">clients with a name recorded</p>
+              </div>
+            </div>
+          )}
+
           {/* My sales metrics — Revenue / COGS / Gross margin (30d) */}
           {mySalesMetrics && (() => {
             const hasPartialCost =
@@ -370,7 +416,7 @@ export default async function DashboardPage() {
               !mySalesMetrics.costDataComplete &&
               mySalesMetrics.missingCostProductCount > 0
             return (
-              <div className="grid sm:grid-cols-3 gap-5">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
                   <div className="flex items-start justify-between">
                     <p className="text-xs uppercase tracking-wide text-neutral-500">Revenue (30d)</p>
@@ -403,6 +449,30 @@ export default async function DashboardPage() {
                         </p>
                       ) : (
                         <p className="text-sm text-neutral-500 mt-1">cost of goods sold</p>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div className="bg-tint-success rounded-2xl border border-neutral-200/60 p-6">
+                  <div className="flex items-start justify-between">
+                    <p className="text-xs uppercase tracking-wide text-neutral-500">Gross profit (30d)</p>
+                    <DollarSign className="h-4 w-4 text-green-400" />
+                  </div>
+                  {mySalesMetrics.profitLast30dCents === null ? (
+                    <>
+                      <p className="text-3xl font-semibold text-neutral-400 mt-3">—</p>
+                      <p className="text-sm text-neutral-500 mt-1">no cost data yet</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
+                        <span className="font-inter">₦</span>{formatNaira(mySalesMetrics.profitLast30dCents)}
+                      </p>
+                      {hasPartialCost ? (
+                        <p className="text-sm text-amber-600 mt-1">based on products with cost data</p>
+                      ) : (
+                        <p className="text-sm text-neutral-500 mt-1">gross profit</p>
                       )}
                     </>
                   )}

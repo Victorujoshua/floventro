@@ -47,6 +47,13 @@ export async function recordSaleAction(input: SaleInput): Promise<ActionResult<{
     unit_price_cents: Math.round(l.unitPriceNaira * 100),
   }))
 
+  const pServiceLines = (parsed.data.serviceLines ?? []).map((l) => ({
+    service_type_id: l.serviceTypeId || null,
+    service_name: l.serviceName,
+    quantity: l.quantity,
+    unit_price_cents: Math.round(l.unitPriceNaira * 100),
+  }))
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any).rpc("record_sale", {
     p_branch_id: branchId,
@@ -58,6 +65,7 @@ export async function recordSaleAction(input: SaleInput): Promise<ActionResult<{
     p_payment_status: parsed.data.paymentStatus,
     p_lines: pLines,
     p_vat_rate: parsed.data.vatRate ?? 7.5,
+    p_service_lines: pServiceLines,
   })
 
   if (error) {
@@ -97,8 +105,8 @@ export async function recordSaleAction(input: SaleInput): Promise<ActionResult<{
 
     if (lower.includes("not authorised"))
       return { ok: false, error: "not_allowed", message: "You are not authorised to record sales in this branch." }
-    if (lower.includes("at least one line"))
-      return { ok: false, error: "validation", message: "Add at least one product to the sale." }
+    if (lower.includes("at least one product or service"))
+      return { ok: false, error: "validation", message: "Add at least one product or service to the sale." }
     if (lower.includes("cost_layers exhausted") || lower.includes("out of sync"))
       return {
         ok: false,

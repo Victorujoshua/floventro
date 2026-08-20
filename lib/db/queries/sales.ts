@@ -13,6 +13,7 @@ export type SaleRow = {
   paymentStatus: string
   amountPaidCents: number
   subtotalCents: number
+  serviceRevenueCents: number
   vatRate: number | null
   vatCents: number
   totalCents: number
@@ -30,9 +31,19 @@ export type SaleLine = {
   lineTotalCents: number
 }
 
+export type SaleServiceLine = {
+  id: string
+  serviceTypeId: string | null
+  serviceName: string
+  quantity: number
+  unitPriceCents: number
+  lineTotalCents: number
+}
+
 export type SaleDetail = SaleRow & {
   note: string | null
   lines: SaleLine[]
+  serviceLines: SaleServiceLine[]
 }
 
 type RawSaleRow = {
@@ -45,6 +56,7 @@ type RawSaleRow = {
   payment_status: string
   amount_paid_cents: number
   subtotal_cents: number
+  service_revenue_cents: number
   vat_rate: number | null
   vat_cents: number
   total_cents: number
@@ -61,6 +73,15 @@ type RawSaleLineRow = {
   products: { name: string; sku: string } | { name: string; sku: string }[] | null
 }
 
+type RawSaleServiceLineRow = {
+  id: string
+  service_type_id: string | null
+  service_name: string
+  quantity: number
+  unit_price_cents: number
+  line_total_cents: number
+}
+
 type RawSaleDetail = {
   id: string
   sold_on: string
@@ -71,12 +92,14 @@ type RawSaleDetail = {
   payment_status: string
   amount_paid_cents: number
   subtotal_cents: number
+  service_revenue_cents: number
   vat_rate: number | null
   vat_cents: number
   total_cents: number
   note: string | null
   created_at: string
   sale_lines: RawSaleLineRow[]
+  sale_service_lines: RawSaleServiceLineRow[]
 }
 
 function resolveProduct(raw: RawSaleLineRow["products"]): { name: string; sku: string } | null {
@@ -108,7 +131,7 @@ export async function getSales(): Promise<SaleRow[]> {
 
   let query = supabase
     .from("sales")
-    .select("id, sold_on, seller_user_id, customer_name, customer_phone, payment_method, payment_status, amount_paid_cents, subtotal_cents, vat_rate, vat_cents, total_cents, created_at, sale_lines(count)")
+    .select("id, sold_on, seller_user_id, customer_name, customer_phone, payment_method, payment_status, amount_paid_cents, subtotal_cents, service_revenue_cents, vat_rate, vat_cents, total_cents, created_at, sale_lines(count)")
     .eq("organisation_id", scope.organisationId)
     .order("created_at", { ascending: false })
     .limit(100)
@@ -136,6 +159,7 @@ export async function getSales(): Promise<SaleRow[]> {
     paymentStatus: row.payment_status,
     amountPaidCents: row.amount_paid_cents,
     subtotalCents: row.subtotal_cents,
+    serviceRevenueCents: row.service_revenue_cents ?? 0,
     vatRate: row.vat_rate,
     vatCents: row.vat_cents,
     totalCents: row.total_cents,
@@ -153,7 +177,7 @@ export async function getSaleById(id: string): Promise<SaleDetail | null> {
 
   const { data, error } = await supabase
     .from("sales")
-    .select("id, sold_on, seller_user_id, customer_name, customer_phone, payment_method, payment_status, amount_paid_cents, subtotal_cents, vat_rate, vat_cents, total_cents, note, created_at, sale_lines(id, product_id, quantity, unit_price_cents, line_total_cents, products(name, sku))")
+    .select("id, sold_on, seller_user_id, customer_name, customer_phone, payment_method, payment_status, amount_paid_cents, subtotal_cents, service_revenue_cents, vat_rate, vat_cents, total_cents, note, created_at, sale_lines(id, product_id, quantity, unit_price_cents, line_total_cents, products(name, sku)), sale_service_lines(id, service_type_id, service_name, quantity, unit_price_cents, line_total_cents)")
     .eq("id", id)
     .eq("organisation_id", scope.organisationId)
     .maybeSingle()
@@ -174,6 +198,7 @@ export async function getSaleById(id: string): Promise<SaleDetail | null> {
     paymentStatus: row.payment_status,
     amountPaidCents: row.amount_paid_cents,
     subtotalCents: row.subtotal_cents,
+    serviceRevenueCents: row.service_revenue_cents ?? 0,
     vatRate: row.vat_rate,
     vatCents: row.vat_cents,
     totalCents: row.total_cents,
@@ -192,5 +217,13 @@ export async function getSaleById(id: string): Promise<SaleDetail | null> {
         lineTotalCents: l.line_total_cents,
       }
     }),
+    serviceLines: ((row.sale_service_lines ?? []) as RawSaleServiceLineRow[]).map((l) => ({
+      id: l.id,
+      serviceTypeId: l.service_type_id,
+      serviceName: l.service_name,
+      quantity: l.quantity,
+      unitPriceCents: l.unit_price_cents,
+      lineTotalCents: l.line_total_cents,
+    })),
   }
 }

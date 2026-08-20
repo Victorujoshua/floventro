@@ -30,7 +30,7 @@ export async function createServiceTypeAction(
     }
   }
 
-  const scope = await requireRole("owner", "inventory", "admin")
+  const scope = await requireRole("owner", "inventory", "admin", "sales")
   const supabase = await createAppServerClient()
 
   const { data: authData } = await supabase.auth.getUser()
@@ -42,6 +42,7 @@ export async function createServiceTypeAction(
       organisation_id: scope.organisationId,
       name: parsed.data.name.trim(),
       description: parsed.data.description?.trim() || null,
+      default_price_cents: Math.round(parsed.data.defaultPriceNaira * 100),
       is_active: parsed.data.isActive,
       created_by: authData.user.id,
     })
@@ -49,6 +50,7 @@ export async function createServiceTypeAction(
     .single()
 
   if (error) {
+    console.error("[createServiceTypeAction]", error)
     if (error.message?.includes("unique") || error.code === "23505") {
       return {
         ok: false,
@@ -75,7 +77,7 @@ export async function updateServiceTypeAction(
     }
   }
 
-  await requireRole("owner", "inventory", "admin")
+  await requireRole("owner", "inventory", "admin", "sales")
   const supabase = await createAppServerClient()
 
   const { error } = await supabase
@@ -83,11 +85,13 @@ export async function updateServiceTypeAction(
     .update({
       name: parsed.data.name.trim(),
       description: parsed.data.description?.trim() || null,
+      default_price_cents: Math.round(parsed.data.defaultPriceNaira * 100),
       is_active: parsed.data.isActive,
     })
     .eq("id", id)
 
   if (error) {
+    console.error("[updateServiceTypeAction]", error)
     if (error.message?.includes("unique") || error.code === "23505") {
       return {
         ok: false,
@@ -156,6 +160,8 @@ export async function recordServiceUsageAction(
     p_service_fee_cents: serviceFeeCents,
     p_note: parsed.data.note || null,
     p_lines: pLines,
+    p_member_id: parsed.data.memberId || null,
+    p_client_email: parsed.data.clientEmail || null,
   })
 
   if (error) {
@@ -222,6 +228,26 @@ export async function recordServiceUsageAction(
   }
 
   return { ok: true, data: { recordId: data as string } }
+}
+
+export async function toggleServiceTypeAction(
+  id: string,
+  isActive: boolean,
+): Promise<ActionResult> {
+  await requireRole("owner", "inventory", "admin", "sales")
+  const supabase = await createAppServerClient()
+
+  const { error } = await supabase
+    .from("service_types")
+    .update({ is_active: isActive })
+    .eq("id", id)
+
+  if (error) {
+    console.error("[toggleServiceTypeAction]", error)
+    return { ok: false, error: "server", message: "Something went wrong. Please try again." }
+  }
+
+  return { ok: true, data: null }
 }
 
 export async function getServiceRecordDetailAction(

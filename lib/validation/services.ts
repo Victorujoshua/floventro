@@ -3,6 +3,7 @@ import { z } from "zod"
 export const serviceTypeSchema = z.object({
   name: z.string().min(1, "Name required").max(120),
   description: z.string().max(500).optional().or(z.literal("")),
+  defaultPriceNaira: z.number().min(0, "Price must be 0 or more"),
   isActive: z.boolean(),
 })
 
@@ -13,8 +14,10 @@ export const serviceUsageLineSchema = z.object({
 
 export const serviceUsageSchema = z.object({
   serviceTypeId: z.string().uuid("Select a service"),
-  customerName: z.string().max(120).optional().or(z.literal("")),
-  customerPhone: z.string().max(40).optional().or(z.literal("")),
+  customerName: z.string().min(1, "Client name is required").max(120),
+  customerPhone: z.string().min(1, "Phone is required").max(40),
+  memberId: z.string().max(50).optional().or(z.literal("")),
+  clientEmail: z.string().email("Invalid email format").max(120).optional().or(z.literal("")),
   performedOn: z.string().min(1, "Date is required"),
   serviceFeeNaira: z.number().min(0).optional(),
   note: z.string().max(500).optional().or(z.literal("")),

@@ -1,9 +1,5 @@
-import { requireRole } from "@/lib/auth/guards"
-import { getServiceTypes } from "@/lib/db/queries/services"
-import { ServicesClient } from "./services-client"
+import { redirect } from "next/navigation"
 
-export default async function ServicesPage() {
-  await requireRole("owner", "inventory", "admin")
-  const serviceTypes = await getServiceTypes()
-  return <ServicesClient serviceTypes={serviceTypes} />
+export default function ServicesPage() {
+  redirect("/admin/services")
 }

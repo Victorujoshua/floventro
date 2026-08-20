@@ -8,6 +8,7 @@ export type ServiceType = {
   id: string
   name: string
   description: string | null
+  defaultPriceCents: number
   isActive: boolean
   createdAt: string
 }
@@ -19,6 +20,7 @@ export type ServiceRecordRow = {
   performedByUserId: string
   performedByLabel: string
   customerName: string | null
+  memberId: string | null
   serviceFeeCents: number | null
   consumptionCount: number
   createdAt: string
@@ -34,6 +36,7 @@ export type ServiceConsumptionLine = {
 
 export type ServiceRecordDetail = ServiceRecordRow & {
   customerPhone: string | null
+  clientEmail: string | null
   note: string | null
   lines: ServiceConsumptionLine[]
 }
@@ -44,6 +47,7 @@ type RawServiceType = {
   id: string
   name: string
   description: string | null
+  default_price_cents: number
   is_active: boolean
   created_at: string
 }
@@ -53,6 +57,7 @@ type RawServiceRecord = {
   performed_on: string
   performed_by: string
   customer_name: string | null
+  member_id: string | null
   service_fee_cents: number | null
   created_at: string
   service_types: { name: string } | { name: string }[] | null
@@ -72,6 +77,8 @@ type RawServiceRecordDetail = {
   performed_by: string
   customer_name: string | null
   customer_phone: string | null
+  member_id: string | null
+  client_email: string | null
   service_fee_cents: number | null
   note: string | null
   created_at: string
@@ -121,7 +128,7 @@ export async function getServiceTypes(): Promise<ServiceType[]> {
 
   const { data, error } = await supabase
     .from("service_types")
-    .select("id, name, description, is_active, created_at")
+    .select("id, name, description, default_price_cents, is_active, created_at")
     .eq("organisation_id", scope.organisationId)
     .is("deleted_at", null)
     .order("name", { ascending: true })
@@ -132,6 +139,7 @@ export async function getServiceTypes(): Promise<ServiceType[]> {
     id: row.id,
     name: row.name,
     description: row.description,
+    defaultPriceCents: row.default_price_cents,
     isActive: row.is_active,
     createdAt: row.created_at,
   }))
@@ -146,7 +154,7 @@ export async function getActiveServiceTypes(): Promise<ServiceType[]> {
 
   const { data, error } = await supabase
     .from("service_types")
-    .select("id, name, description, is_active, created_at")
+    .select("id, name, description, default_price_cents, is_active, created_at")
     .eq("organisation_id", scope.organisationId)
     .eq("is_active", true)
     .is("deleted_at", null)
@@ -158,6 +166,7 @@ export async function getActiveServiceTypes(): Promise<ServiceType[]> {
     id: row.id,
     name: row.name,
     description: row.description,
+    defaultPriceCents: row.default_price_cents,
     isActive: row.is_active,
     createdAt: row.created_at,
   }))
@@ -173,7 +182,7 @@ export async function getServiceRecords(): Promise<ServiceRecordRow[]> {
   let query = supabase
     .from("service_records")
     .select(
-      "id, performed_on, performed_by, customer_name, service_fee_cents, created_at, service_types(name), service_consumption(count)",
+      "id, performed_on, performed_by, customer_name, member_id, service_fee_cents, created_at, service_types(name), service_consumption(count)",
     )
     .eq("organisation_id", scope.organisationId)
     .order("created_at", { ascending: false })
@@ -198,6 +207,7 @@ export async function getServiceRecords(): Promise<ServiceRecordRow[]> {
     performedByUserId: row.performed_by,
     performedByLabel: performerMap.get(row.performed_by) ?? row.performed_by,
     customerName: row.customer_name,
+    memberId: row.member_id,
     serviceFeeCents: row.service_fee_cents,
     consumptionCount:
       (row.service_consumption as unknown as { count: number }[])?.[0]?.count ?? 0,
@@ -215,7 +225,7 @@ export async function getServiceRecordById(id: string): Promise<ServiceRecordDet
   const { data, error } = await supabase
     .from("service_records")
     .select(
-      "id, performed_on, performed_by, customer_name, customer_phone, service_fee_cents, note, created_at, service_types(name), service_consumption(id, product_id, quantity, products(name, sku))",
+      "id, performed_on, performed_by, customer_name, customer_phone, member_id, client_email, service_fee_cents, note, created_at, service_types(name), service_consumption(id, product_id, quantity, products(name, sku))",
     )
     .eq("id", id)
     .eq("organisation_id", scope.organisationId)
@@ -234,6 +244,8 @@ export async function getServiceRecordById(id: string): Promise<ServiceRecordDet
     performedByLabel: performerMap.get(row.performed_by) ?? row.performed_by,
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
+    memberId: row.member_id,
+    clientEmail: row.client_email,
     serviceFeeCents: row.service_fee_cents,
     note: row.note,
     consumptionCount: row.service_consumption.length,

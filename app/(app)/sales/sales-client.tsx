@@ -417,25 +417,49 @@ export function SalesClient({ sales }: Props) {
                 )}
               </div>
 
-              {/* Lines */}
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">Products</p>
-                <div className="rounded-lg border border-neutral-100 overflow-hidden divide-y divide-neutral-50">
-                  {detailSale.lines.map((line) => (
-                    <div key={line.id} className="flex items-center justify-between px-4 py-3">
-                      <div>
-                        <p className="text-sm text-neutral-950">{line.productName}</p>
-                        <p className="text-xs font-mono text-neutral-400">
-                          {line.productSku} · {line.quantity} × <span className="font-inter">₦</span>{formatNaira(line.unitPriceCents)}
-                        </p>
+              {/* Product lines */}
+              {detailSale.lines.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">Products</p>
+                  <div className="rounded-lg border border-neutral-100 overflow-hidden divide-y divide-neutral-50">
+                    {detailSale.lines.map((line) => (
+                      <div key={line.id} className="flex items-center justify-between px-4 py-3">
+                        <div>
+                          <p className="text-sm text-neutral-950">{line.productName}</p>
+                          <p className="text-xs font-mono text-neutral-400">
+                            {line.productSku} · {line.quantity} × <span className="font-inter">₦</span>{formatNaira(line.unitPriceCents)}
+                          </p>
+                        </div>
+                        <span className="text-sm font-mono tabular-nums font-medium text-neutral-950">
+                          <span className="font-inter">₦</span>{formatNaira(line.lineTotalCents)}
+                        </span>
                       </div>
-                      <span className="text-sm font-mono tabular-nums font-medium text-neutral-950">
-                        <span className="font-inter">₦</span>{formatNaira(line.lineTotalCents)}
-                      </span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Service lines */}
+              {detailSale.serviceLines.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">Services</p>
+                  <div className="rounded-lg border border-neutral-100 overflow-hidden divide-y divide-neutral-50">
+                    {detailSale.serviceLines.map((line) => (
+                      <div key={line.id} className="flex items-center justify-between px-4 py-3">
+                        <div>
+                          <p className="text-sm text-neutral-950">{line.serviceName}</p>
+                          <p className="text-xs font-mono text-neutral-400">
+                            {line.quantity} × <span className="font-inter">₦</span>{formatNaira(line.unitPriceCents)}
+                          </p>
+                        </div>
+                        <span className="text-sm font-mono tabular-nums font-medium text-neutral-950">
+                          <span className="font-inter">₦</span>{formatNaira(line.lineTotalCents)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Payment summary */}
               <div className="rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-3 space-y-2">
