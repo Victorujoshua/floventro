@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Sparkles, TrendingUp } from "lucide-react"
+import { Plus, Sparkles, Trash2, TrendingUp } from "lucide-react"
 import { toast } from "sonner"
 import {
   Table,
@@ -20,7 +20,12 @@ import {
 } from "@/components/ui/dialog"
 import { RecordServiceDialog } from "@/components/app/dialogs/record-service-dialog"
 import type { ServiceRecordRow, ServiceRecordDetail, JobCostingSessionRow } from "@/lib/db/queries/services"
-import { getServiceRecordDetailAction } from "@/lib/db/actions/services"
+import type { MyHolding } from "@/lib/db/queries/holdings"
+import {
+  getServiceRecordDetailAction,
+  addServiceConsumptionAction,
+} from "@/lib/db/actions/services"
+import { getMyHoldingsAction } from "@/lib/db/actions/holdings"
 import { formatNaira } from "@/lib/format/money"
 
 type Props = {
@@ -28,6 +33,8 @@ type Props = {
   jobCostingSessions: JobCostingSessionRow[]
   role: string
 }
+
+type ConsumptionLine = { productId: string; quantity: number }
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString("en-NG", {
@@ -128,7 +135,13 @@ function JobCostingPanel({
 
 // ── Job-costing sessions table (internal_use profitability view) ───────────
 
-function JobCostingSessionsSection({ sessions }: { sessions: JobCostingSessionRow[] }) {
+function JobCostingSessionsSection({
+  sessions,
+  onRowClick,
+}: {
+  sessions: JobCostingSessionRow[]
+  onRowClick: (id: string) => void
+}) {
   if (sessions.length === 0) return null
 
   return (
@@ -164,7 +177,11 @@ function JobCostingSessionsSection({ sessions }: { sessions: JobCostingSessionRo
               const isPositive = profitCents != null && profitCents >= 0
 
               return (
-                <TableRow key={s.id} className="hover:bg-neutral-50/60 transition-colors">
+                <TableRow
+                  key={s.id}
+                  className="hover:bg-neutral-50/60 transition-colors cursor-pointer"
+                  onClick={() => onRowClick(s.id)}
+                >
                   <TableCell className="text-sm text-neutral-700 py-3.5">{formatDate(s.performedOn)}</TableCell>
                   <TableCell className="text-sm font-medium text-neutral-950 py-3.5">{s.serviceTypeName}</TableCell>
                   <TableCell className="text-sm text-neutral-500 py-3.5">{s.customerName ?? <Dash />}</TableCell>
@@ -180,7 +197,7 @@ function JobCostingSessionsSection({ sessions }: { sessions: JobCostingSessionRo
                         )}
                       </>
                     ) : (
-                      <Dash />
+                      <span className="text-xs font-sans text-amber-600">pending →</span>
                     )}
                   </TableCell>
                   <TableCell className={`text-sm font-mono tabular-nums py-3.5 text-right font-medium ${profitCents == null ? "text-neutral-400" : isPositive ? "text-emerald-700" : "text-red-600"}`}>
@@ -208,9 +225,29 @@ export function ServicesPerformedClient({ records, jobCostingSessions, role }: P
   const [detailOpen, setDetailOpen]         = useState(false)
   const [loadingDetail, setLoadingDetail]   = useState(false)
 
+  // Add-items state (Step 2 consumption entry)
+  const [showAddItems, setShowAddItems]             = useState(false)
+  const [holdings, setHoldings]                     = useState<MyHolding[]>([])
+  const [loadingHoldings, setLoadingHoldings]       = useState(false)
+  const [holdingsError, setHoldingsError]           = useState<string | null>(null)
+  const [consumptionLines, setConsumptionLines]     = useState<ConsumptionLine[]>([{ productId: "", quantity: 1 }])
+  const [addItemsError, setAddItemsError]           = useState<string | null>(null)
+  const [addItemsSubmitting, setAddItemsSubmitting] = useState(false)
+
+  function resetAddItems() {
+    setShowAddItems(false)
+    setHoldings([])
+    setLoadingHoldings(false)
+    setHoldingsError(null)
+    setConsumptionLines([{ productId: "", quantity: 1 }])
+    setAddItemsError(null)
+    setAddItemsSubmitting(false)
+  }
+
   async function openDetail(id: string) {
     setLoadingDetail(true)
     setDetailOpen(true)
+    resetAddItems()
     const detail = await getServiceRecordDetailAction(id)
     setLoadingDetail(false)
     if (!detail) {
@@ -219,6 +256,43 @@ export function ServicesPerformedClient({ records, jobCostingSessions, role }: P
       return
     }
     setDetailRecord(detail)
+  }
+
+  async function handleOpenAddItems() {
+    setLoadingHoldings(true)
+    setHoldingsError(null)
+    setShowAddItems(true)
+    try {
+      const h = await getMyHoldingsAction()
+      setHoldings(h)
+      if (h.length === 0) setHoldingsError("You have no items in your holding.")
+    } catch {
+      setHoldingsError("Could not load your holdings. Please try again.")
+    } finally {
+      setLoadingHoldings(false)
+    }
+  }
+
+  async function handleSubmitAddItems() {
+    if (!detailRecord) return
+    const valid = consumptionLines.filter((l) => l.productId && l.quantity > 0)
+    if (valid.length === 0) {
+      setAddItemsError("Add at least one product with a valid quantity.")
+      return
+    }
+    setAddItemsSubmitting(true)
+    setAddItemsError(null)
+    const res = await addServiceConsumptionAction(detailRecord.id, valid)
+    setAddItemsSubmitting(false)
+    if (!res.ok) {
+      setAddItemsError(res.message ?? "Something went wrong.")
+      return
+    }
+    const updated = await getServiceRecordDetailAction(detailRecord.id)
+    if (updated) setDetailRecord(updated)
+    resetAddItems()
+    router.refresh()
+    toast.success("Items recorded.")
   }
 
   return (
@@ -293,7 +367,13 @@ export function ServicesPerformedClient({ records, jobCostingSessions, role }: P
                     )}
                   </TableCell>
                   <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3.5 text-right">
-                    {record.consumptionCount}
+                    {record.consumptionCount === 0 ? (
+                      <span className="text-xs font-sans font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
+                        pending
+                      </span>
+                    ) : (
+                      record.consumptionCount
+                    )}
                   </TableCell>
                   <TableCell className="text-sm font-mono tabular-nums text-neutral-950 py-3.5 text-right">
                     {record.serviceFeeCents != null ? (
@@ -311,14 +391,14 @@ export function ServicesPerformedClient({ records, jobCostingSessions, role }: P
 
       {/* Job-costing profitability list — internal_use only */}
       {role === "internal_use" && (
-        <JobCostingSessionsSection sessions={jobCostingSessions} />
+        <JobCostingSessionsSection sessions={jobCostingSessions} onRowClick={openDetail} />
       )}
 
       {/* Detail modal */}
       <Dialog
         open={detailOpen}
         onOpenChange={(o) => {
-          if (!o) { setDetailOpen(false); setDetailRecord(null) }
+          if (!o) { setDetailOpen(false); setDetailRecord(null); resetAddItems() }
         }}
       >
         <DialogContent>
@@ -385,22 +465,123 @@ export function ServicesPerformedClient({ records, jobCostingSessions, role }: P
 
               {/* Products used */}
               <div className="space-y-2">
-                <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">
-                  Products used
-                </p>
-                <div className="rounded-lg border border-neutral-100 overflow-hidden divide-y divide-neutral-50">
-                  {detailRecord.lines.map((line) => (
-                    <div key={line.id} className="flex items-center justify-between px-4 py-3">
-                      <div>
-                        <p className="text-sm text-neutral-950">{line.productName}</p>
-                        <p className="text-xs font-mono text-neutral-400">{line.productSku}</p>
-                      </div>
-                      <span className="text-sm font-mono tabular-nums text-neutral-700">
-                        {line.quantity} used
-                      </span>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">
+                    Products used
+                  </p>
+                  {detailRecord.lines.length === 0 && !showAddItems && role === "internal_use" && (
+                    <button
+                      onClick={handleOpenAddItems}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-violet-700 hover:text-violet-900 transition-colors"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add items used
+                    </button>
+                  )}
                 </div>
+
+                {detailRecord.lines.length > 0 ? (
+                  <div className="rounded-lg border border-neutral-100 overflow-hidden divide-y divide-neutral-50">
+                    {detailRecord.lines.map((line) => (
+                      <div key={line.id} className="flex items-center justify-between px-4 py-3">
+                        <div>
+                          <p className="text-sm text-neutral-950">{line.productName}</p>
+                          <p className="text-xs font-mono text-neutral-400">{line.productSku}</p>
+                        </div>
+                        <span className="text-sm font-mono tabular-nums text-neutral-700">
+                          {line.quantity} used
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : showAddItems ? (
+                  <div className="space-y-3">
+                    {loadingHoldings ? (
+                      <p className="text-sm text-neutral-500">Loading your holdings…</p>
+                    ) : holdingsError ? (
+                      <p className="text-sm text-amber-600">{holdingsError}</p>
+                    ) : (
+                      <>
+                        <div className="space-y-2">
+                          {consumptionLines.map((line, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <select
+                                value={line.productId}
+                                onChange={(e) => {
+                                  const next = [...consumptionLines]
+                                  next[idx] = { ...next[idx], productId: e.target.value }
+                                  setConsumptionLines(next)
+                                }}
+                                className="flex-1 h-9 rounded-md border border-neutral-200 bg-white px-3 text-sm text-neutral-950 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                              >
+                                <option value="">Select product</option>
+                                {holdings.map((h) => (
+                                  <option key={h.productId} value={h.productId}>
+                                    {h.productName} ({h.productSku}) — {h.quantity} in hand
+                                  </option>
+                                ))}
+                              </select>
+                              <input
+                                type="number"
+                                min={1}
+                                value={line.quantity}
+                                onChange={(e) => {
+                                  const next = [...consumptionLines]
+                                  next[idx] = { ...next[idx], quantity: parseInt(e.target.value, 10) || 1 }
+                                  setConsumptionLines(next)
+                                }}
+                                className="w-20 h-9 rounded-md border border-neutral-200 bg-white px-3 text-sm text-neutral-950 text-center focus:outline-none focus:ring-2 focus:ring-violet-500"
+                              />
+                              {consumptionLines.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setConsumptionLines(consumptionLines.filter((_, i) => i !== idx))
+                                  }
+                                  className="p-1.5 text-neutral-400 hover:text-red-500 transition-colors"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setConsumptionLines([...consumptionLines, { productId: "", quantity: 1 }])
+                          }
+                          className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-800 transition-colors"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Add another
+                        </button>
+                        {addItemsError && (
+                          <p className="text-sm text-red-600">{addItemsError}</p>
+                        )}
+                        <div className="flex items-center gap-3 pt-1">
+                          <button
+                            type="button"
+                            onClick={handleSubmitAddItems}
+                            disabled={addItemsSubmitting}
+                            className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-9 text-sm font-medium text-white hover:bg-violet-800 disabled:opacity-50 transition-colors"
+                          >
+                            {addItemsSubmitting ? "Recording…" : "Record items used"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={resetAddItems}
+                            className="text-sm text-neutral-500 hover:text-neutral-800 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-400 py-2">No products recorded for this session.</p>
+                )}
               </div>
 
               {/* Job costing (only when session_revenue is set) */}

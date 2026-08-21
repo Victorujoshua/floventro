@@ -1,17 +1,15 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useForm, useFieldArray } from "react-hook-form"
+import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
-import { Plus, Trash2, UserRound } from "lucide-react"
-import { serviceUsageSchema, type ServiceUsageInput } from "@/lib/validation/services"
-import { recordServiceUsageAction, getActiveServiceTypesAction } from "@/lib/db/actions/services"
-import { getMyHoldingsAction } from "@/lib/db/actions/holdings"
+import { UserRound } from "lucide-react"
+import { serviceSessionSchema, type ServiceSessionInput } from "@/lib/validation/services"
+import { createServiceSessionAction, getActiveServiceTypesAction } from "@/lib/db/actions/services"
 import { getClientActivePlansAction } from "@/lib/db/actions/plans"
 import { createClientAction } from "@/lib/db/actions/clients"
 import { ClientSearch } from "@/components/app/clients/client-search"
-import type { MyHolding } from "@/lib/db/queries/holdings"
 import type { ServiceType } from "@/lib/db/queries/services"
 import type { ClientActivePlan } from "@/lib/db/queries/plans"
 import type { Client } from "@/lib/db/queries/clients"
@@ -30,7 +28,6 @@ type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess: () => void
-  initialProductId?: string
 }
 
 const SELECT_CLASS =
@@ -40,34 +37,32 @@ function todayLocal() {
   return new Date().toLocaleDateString("en-CA")
 }
 
-export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProductId }: Props) {
-  const [holdings, setHoldings]           = useState<MyHolding[]>([])
+export function RecordServiceDialog({ open, onOpenChange, onSuccess }: Props) {
   const [serviceTypes, setServiceTypes]   = useState<ServiceType[]>([])
   const [loadError, setLoadError]         = useState<string | null>(null)
   const [loading, setLoading]             = useState(false)
   const [submitError, setSubmitError]     = useState<string | null>(null)
 
   // ── Client + plan state ────────────────────────────────────────────────────
-  const [selectedClient, setSelectedClient]     = useState<Client | null>(null)
-  const [clientPlans, setClientPlans]           = useState<ClientActivePlan[]>([])
-  const [loadingPlans, setLoadingPlans]         = useState(false)
-  const [showQuickCreate, setShowQuickCreate]   = useState(false)
-  const [newClientName, setNewClientName]       = useState("")
-  const [newClientPhone, setNewClientPhone]     = useState("")
+  const [selectedClient, setSelectedClient]       = useState<Client | null>(null)
+  const [clientPlans, setClientPlans]             = useState<ClientActivePlan[]>([])
+  const [loadingPlans, setLoadingPlans]           = useState(false)
+  const [showQuickCreate, setShowQuickCreate]     = useState(false)
+  const [newClientName, setNewClientName]         = useState("")
+  const [newClientPhone, setNewClientPhone]       = useState("")
   const [newClientMemberId, setNewClientMemberId] = useState("")
-  const [newClientError, setNewClientError]     = useState<string | null>(null)
-  const [newClientSaving, setNewClientSaving]   = useState(false)
+  const [newClientError, setNewClientError]       = useState<string | null>(null)
+  const [newClientSaving, setNewClientSaving]     = useState(false)
 
   const {
     register,
-    control,
     handleSubmit,
     watch,
     setValue,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<ServiceUsageInput>({
-    resolver: zodResolver(serviceUsageSchema),
+  } = useForm<ServiceSessionInput>({
+    resolver: zodResolver(serviceSessionSchema),
     defaultValues: {
       serviceTypeId:   "",
       customerName:    "",
@@ -77,41 +72,31 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
       performedOn:     todayLocal(),
       serviceFeeNaira: undefined,
       note:            "",
-      lines:           [{ productId: initialProductId ?? "", quantity: 1 }],
       clientId:        "",
       clientPlanId:    "",
     },
   })
 
-  const { fields, append, remove } = useFieldArray({ control, name: "lines" })
-  const watchedLines   = watch("lines")
-  const watchedPlanId  = watch("clientPlanId")
-  const performedOn    = watch("performedOn")
-  const isFutureDate   = performedOn && performedOn > todayLocal()
+  const watchedPlanId = watch("clientPlanId")
+  const performedOn   = watch("performedOn")
+  const isFutureDate  = performedOn && performedOn > todayLocal()
+  const hasPlan       = !!watchedPlanId
 
-  // Load holdings + service types when dialog opens
+  // Load service types when dialog opens
   useEffect(() => {
     if (!open) return
     let cancelled = false
     setLoading(true)
     setLoadError(null)
-    Promise.all([getMyHoldingsAction(), getActiveServiceTypesAction()])
-      .then(([h, st]) => {
-        if (cancelled) return
-        setHoldings(h)
-        setServiceTypes(st)
-        if (initialProductId) {
-          const holding = h.find((x) => x.productId === initialProductId)
-          if (holding) setValue("lines.0.productId", holding.productId)
-        }
-      })
+    getActiveServiceTypesAction()
+      .then((st) => { if (!cancelled) setServiceTypes(st) })
       .catch((err: unknown) => {
         if (cancelled) return
         setLoadError("Could not load data: " + ((err as Error)?.message ?? "unknown"))
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [open, initialProductId, setValue])
+  }, [open])
 
   // Load active plans when a client is selected
   useEffect(() => {
@@ -123,7 +108,6 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
     }
     setValue("clientId", selectedClient.id)
     setValue("clientPlanId", "")
-    // Auto-fill customer name and member ID from selected client
     setValue("customerName", selectedClient.name)
     if (selectedClient.memberId) setValue("memberId", selectedClient.memberId)
 
@@ -156,7 +140,6 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
       performedOn:     todayLocal(),
       serviceFeeNaira: undefined,
       note:            "",
-      lines:           [{ productId: initialProductId ?? "", quantity: 1 }],
       clientId:        "",
       clientPlanId:    "",
     })
@@ -192,25 +175,19 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
     setNewClientName(""); setNewClientPhone(""); setNewClientMemberId("")
   }
 
-  const usedProductIds = new Set((watchedLines ?? []).map((l) => l.productId).filter(Boolean))
-
-  function getHoldingForLine(index: number): MyHolding | undefined {
-    return holdings.find((h) => h.productId === watchedLines?.[index]?.productId)
-  }
-
-  async function onSubmit(values: ServiceUsageInput) {
+  async function onSubmit(values: ServiceSessionInput) {
     setSubmitError(null)
-    const result = await recordServiceUsageAction(values)
+    const result = await createServiceSessionAction(values)
     if (!result.ok) {
       setSubmitError(result.message ?? result.error)
       return
     }
-    toast.success("Service recorded")
+    toast.success("Service booked")
     handleClose()
     onSuccess()
   }
 
-  const cannotSubmit = loading || !!loadError || holdings.length === 0 || serviceTypes.length === 0
+  const cannotSubmit = loading || !!loadError || serviceTypes.length === 0
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
@@ -232,8 +209,8 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
                   type="button"
                   onClick={() => {
                     setLoadError(null); setLoading(true)
-                    Promise.all([getMyHoldingsAction(), getActiveServiceTypesAction()])
-                      .then(([h, st]) => { setHoldings(h); setServiceTypes(st) })
+                    getActiveServiceTypesAction()
+                      .then((st) => setServiceTypes(st))
                       .catch((err: unknown) => setLoadError("Could not load data: " + ((err as Error)?.message ?? "unknown")))
                       .finally(() => setLoading(false))
                   }}
@@ -258,83 +235,6 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
               </>
             )}
           </div>
-
-          {/* Products used */}
-          {!loading && !loadError && holdings.length > 0 && (
-            <div className="space-y-3">
-              <Label>Products used</Label>
-              {fields.map((field, index) => {
-                const holding = getHoldingForLine(index)
-                const currentProductId = watchedLines?.[index]?.productId ?? ""
-                const availableOptions = holdings.filter(
-                  (h) => !usedProductIds.has(h.productId) || h.productId === currentProductId,
-                )
-                return (
-                  <div key={field.id} className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 space-y-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Product</Label>
-                      <select
-                        className={SELECT_CLASS}
-                        value={currentProductId}
-                        onChange={(e) => setValue(`lines.${index}.productId`, e.target.value)}
-                      >
-                        <option value="">Select a product…</option>
-                        {availableOptions.map((h) => (
-                          <option key={h.productId} value={h.productId}>
-                            {h.productName} ({h.productSku}) — {h.quantity} held
-                          </option>
-                        ))}
-                      </select>
-                      {holding && (
-                        <p className="text-xs text-neutral-500">
-                          You hold <span className="font-medium tabular-nums">{holding.quantity}</span> units
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 space-y-1.5">
-                        <Label htmlFor={`qty-${index}`} className="text-xs">Quantity used</Label>
-                        <Input
-                          id={`qty-${index}`}
-                          type="number"
-                          min={1}
-                          max={holding?.quantity}
-                          placeholder="1"
-                          className="h-9 text-sm tabular-nums"
-                          {...register(`lines.${index}.quantity`, { valueAsNumber: true })}
-                        />
-                        {errors.lines?.[index]?.quantity && (
-                          <p className="text-xs text-red-500">{errors.lines[index]?.quantity?.message}</p>
-                        )}
-                      </div>
-                      {fields.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => remove(index)}
-                          className="mt-5 text-neutral-400 hover:text-red-500 transition-colors"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-              {usedProductIds.size < holdings.length && (
-                <button
-                  type="button"
-                  onClick={() => append({ productId: "", quantity: 1 })}
-                  className="flex items-center gap-1.5 text-sm text-violet-700 hover:text-violet-800 transition-colors"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add product
-                </button>
-              )}
-              {errors.lines?.root && (
-                <p className="text-xs text-red-500">{errors.lines.root.message}</p>
-              )}
-            </div>
-          )}
 
           {/* ── Client (optional) ───────────────────────────────────────────────── */}
           <div className="space-y-3">
@@ -490,8 +390,8 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
             </div>
           </div>
 
-          {/* Date + Service fee */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Date + Service fee (fee hidden when a plan is selected) */}
+          <div className={hasPlan ? "" : "grid grid-cols-2 gap-3"}>
             <div className="space-y-1.5">
               <Label htmlFor="performedOn">Date performed</Label>
               <Input id="performedOn" type="date" {...register("performedOn")} />
@@ -502,22 +402,24 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
                 <p className="text-xs text-red-500">{errors.performedOn.message}</p>
               )}
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="serviceFeeNaira">
-                Service fee (<span className="font-inter">₦</span>){" "}
-                <span className="text-neutral-400 font-normal">(optional)</span>
-              </Label>
-              <Input
-                id="serviceFeeNaira"
-                type="number"
-                min={0}
-                step="0.01"
-                placeholder="0.00"
-                className="h-9 text-sm tabular-nums"
-                {...register("serviceFeeNaira", { valueAsNumber: true })}
-              />
-              <p className="text-xs text-neutral-400">What the client paid for the service</p>
-            </div>
+            {!hasPlan && (
+              <div className="space-y-1.5">
+                <Label htmlFor="serviceFeeNaira">
+                  Service fee (<span className="font-inter">₦</span>){" "}
+                  <span className="text-neutral-400 font-normal">(optional)</span>
+                </Label>
+                <Input
+                  id="serviceFeeNaira"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder="0.00"
+                  className="h-9 text-sm tabular-nums"
+                  {...register("serviceFeeNaira", { valueAsNumber: true })}
+                />
+                <p className="text-xs text-neutral-400">What the client paid for the service</p>
+              </div>
+            )}
           </div>
 
           {/* Note */}
