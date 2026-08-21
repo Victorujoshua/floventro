@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Sparkles } from "lucide-react"
+import { Sparkles, TrendingUp } from "lucide-react"
 import { toast } from "sonner"
 import {
   Table,
@@ -19,12 +19,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { RecordServiceDialog } from "@/components/app/dialogs/record-service-dialog"
-import type { ServiceRecordRow, ServiceRecordDetail } from "@/lib/db/queries/services"
+import type { ServiceRecordRow, ServiceRecordDetail, JobCostingSessionRow } from "@/lib/db/queries/services"
 import { getServiceRecordDetailAction } from "@/lib/db/actions/services"
 import { formatNaira } from "@/lib/format/money"
 
 type Props = {
   records: ServiceRecordRow[]
+  jobCostingSessions: JobCostingSessionRow[]
+  role: string
 }
 
 function formatDate(d: string) {
@@ -35,12 +37,176 @@ function formatDate(d: string) {
   })
 }
 
-export function ServicesPerformedClient({ records }: Props) {
+function nairaCell(cents: number) {
+  return (
+    <>
+      <span className="font-inter">₦</span>
+      {formatNaira(cents)}
+    </>
+  )
+}
+
+function Dash() {
+  return <span className="text-neutral-300">—</span>
+}
+
+// ── Job-costing detail panel (inside the service detail modal) ─────────────
+
+function JobCostingPanel({
+  sessionRevenueCents,
+  totalCogsCents,
+  costFullyKnown,
+}: {
+  sessionRevenueCents: number | null
+  totalCogsCents: number | null
+  costFullyKnown: boolean
+}) {
+  if (sessionRevenueCents == null) return null
+
+  const profitCents =
+    totalCogsCents != null ? sessionRevenueCents - totalCogsCents : null
+  const profitPct =
+    profitCents != null && sessionRevenueCents > 0
+      ? (profitCents / sessionRevenueCents) * 100
+      : null
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">
+        Job costing — plan session
+      </p>
+      <div className="rounded-lg border border-violet-100 bg-violet-50/40 px-4 py-3 space-y-2">
+        <div className="flex justify-between text-sm">
+          <span className="text-neutral-500">Revenue (plan share)</span>
+          <span className="font-mono tabular-nums font-medium text-neutral-950">
+            {nairaCell(sessionRevenueCents)}
+          </span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-neutral-500">
+            Cost of items used
+            {!costFullyKnown && (
+              <span className="ml-1.5 text-xs text-amber-600">(partial)</span>
+            )}
+          </span>
+          <span className="font-mono tabular-nums text-neutral-950">
+            {totalCogsCents != null ? nairaCell(totalCogsCents) : <Dash />}
+          </span>
+        </div>
+        <div className="border-t border-violet-100 pt-2 flex justify-between text-sm">
+          <span className="text-neutral-700 font-medium">Profit</span>
+          <span
+            className={`font-mono tabular-nums font-medium ${
+              profitCents == null
+                ? "text-neutral-400"
+                : profitCents >= 0
+                ? "text-emerald-700"
+                : "text-red-600"
+            }`}
+          >
+            {profitCents != null ? nairaCell(profitCents) : <Dash />}
+          </span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-neutral-500">Profit %</span>
+          <span
+            className={`font-mono tabular-nums ${
+              profitPct == null
+                ? "text-neutral-400"
+                : profitPct >= 0
+                ? "text-emerald-700"
+                : "text-red-600"
+            }`}
+          >
+            {profitPct != null ? `${profitPct.toFixed(1)}%` : <Dash />}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Job-costing sessions table (internal_use profitability view) ───────────
+
+function JobCostingSessionsSection({ sessions }: { sessions: JobCostingSessionRow[] }) {
+  if (sessions.length === 0) return null
+
+  return (
+    <div className="mt-10">
+      <div className="flex items-center gap-2 mb-4">
+        <TrendingUp className="h-4 w-4 text-violet-600" />
+        <h2 className="text-base font-semibold text-neutral-950">Plan session profitability</h2>
+      </div>
+      <p className="text-sm text-neutral-500 mb-4">
+        Your plan-linked sessions with cost and profit breakdown.
+      </p>
+      <div className="rounded-2xl border border-neutral-200/60 bg-white overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-neutral-50">
+              <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Date</TableHead>
+              <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Service</TableHead>
+              <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Client</TableHead>
+              <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">Revenue</TableHead>
+              <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">Cost</TableHead>
+              <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">Profit</TableHead>
+              <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">Margin</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sessions.map((s) => {
+              const profitCents =
+                s.totalCogsCents != null ? s.sessionRevenueCents - s.totalCogsCents : null
+              const profitPct =
+                profitCents != null && s.sessionRevenueCents > 0
+                  ? (profitCents / s.sessionRevenueCents) * 100
+                  : null
+              const isPositive = profitCents != null && profitCents >= 0
+
+              return (
+                <TableRow key={s.id} className="hover:bg-neutral-50/60 transition-colors">
+                  <TableCell className="text-sm text-neutral-700 py-3.5">{formatDate(s.performedOn)}</TableCell>
+                  <TableCell className="text-sm font-medium text-neutral-950 py-3.5">{s.serviceTypeName}</TableCell>
+                  <TableCell className="text-sm text-neutral-500 py-3.5">{s.customerName ?? <Dash />}</TableCell>
+                  <TableCell className="text-sm font-mono tabular-nums text-neutral-950 py-3.5 text-right">
+                    {nairaCell(s.sessionRevenueCents)}
+                  </TableCell>
+                  <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3.5 text-right">
+                    {s.totalCogsCents != null ? (
+                      <>
+                        {nairaCell(s.totalCogsCents)}
+                        {!s.costFullyKnown && (
+                          <span className="block text-xs text-amber-500 font-sans">partial</span>
+                        )}
+                      </>
+                    ) : (
+                      <Dash />
+                    )}
+                  </TableCell>
+                  <TableCell className={`text-sm font-mono tabular-nums py-3.5 text-right font-medium ${profitCents == null ? "text-neutral-400" : isPositive ? "text-emerald-700" : "text-red-600"}`}>
+                    {profitCents != null ? nairaCell(profitCents) : <Dash />}
+                  </TableCell>
+                  <TableCell className={`text-sm font-mono tabular-nums py-3.5 text-right ${profitPct == null ? "text-neutral-400" : isPositive ? "text-emerald-700" : "text-red-600"}`}>
+                    {profitPct != null ? `${profitPct.toFixed(1)}%` : <Dash />}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  )
+}
+
+// ── Main client ────────────────────────────────────────────────────────────
+
+export function ServicesPerformedClient({ records, jobCostingSessions, role }: Props) {
   const router = useRouter()
   const [newServiceOpen, setNewServiceOpen] = useState(false)
-  const [detailRecord, setDetailRecord] = useState<ServiceRecordDetail | null>(null)
-  const [detailOpen, setDetailOpen] = useState(false)
-  const [loadingDetail, setLoadingDetail] = useState(false)
+  const [detailRecord, setDetailRecord]     = useState<ServiceRecordDetail | null>(null)
+  const [detailOpen, setDetailOpen]         = useState(false)
+  const [loadingDetail, setLoadingDetail]   = useState(false)
 
   async function openDetail(id: string) {
     setLoadingDetail(true)
@@ -96,24 +262,12 @@ export function ServicesPerformedClient({ records }: Props) {
           <Table>
             <TableHeader>
               <TableRow className="bg-neutral-50">
-                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
-                  Date
-                </TableHead>
-                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
-                  Service
-                </TableHead>
-                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
-                  Performed by
-                </TableHead>
-                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
-                  Customer
-                </TableHead>
-                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">
-                  Products used
-                </TableHead>
-                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">
-                  Fee
-                </TableHead>
+                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Date</TableHead>
+                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Service</TableHead>
+                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Performed by</TableHead>
+                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Customer</TableHead>
+                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">Products used</TableHead>
+                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">Fee</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -143,10 +297,7 @@ export function ServicesPerformedClient({ records }: Props) {
                   </TableCell>
                   <TableCell className="text-sm font-mono tabular-nums text-neutral-950 py-3.5 text-right">
                     {record.serviceFeeCents != null ? (
-                      <>
-                        <span className="font-inter">₦</span>
-                        {formatNaira(record.serviceFeeCents)}
-                      </>
+                      <>{nairaCell(record.serviceFeeCents)}</>
                     ) : (
                       <span className="text-neutral-300">—</span>
                     )}
@@ -158,14 +309,16 @@ export function ServicesPerformedClient({ records }: Props) {
         </div>
       )}
 
+      {/* Job-costing profitability list — internal_use only */}
+      {role === "internal_use" && (
+        <JobCostingSessionsSection sessions={jobCostingSessions} />
+      )}
+
       {/* Detail modal */}
       <Dialog
         open={detailOpen}
         onOpenChange={(o) => {
-          if (!o) {
-            setDetailOpen(false)
-            setDetailRecord(null)
-          }
+          if (!o) { setDetailOpen(false); setDetailRecord(null) }
         }}
       >
         <DialogContent>
@@ -199,9 +352,7 @@ export function ServicesPerformedClient({ records }: Props) {
                 {detailRecord.customerPhone && (
                   <div className="flex justify-between text-sm">
                     <span className="text-neutral-500">Phone</span>
-                    <span className="text-neutral-950 font-mono tabular-nums">
-                      {detailRecord.customerPhone}
-                    </span>
+                    <span className="text-neutral-950 font-mono tabular-nums">{detailRecord.customerPhone}</span>
                   </div>
                 )}
                 {detailRecord.memberId && (
@@ -220,8 +371,7 @@ export function ServicesPerformedClient({ records }: Props) {
                   <div className="flex justify-between text-sm">
                     <span className="text-neutral-500">Service fee</span>
                     <span className="text-neutral-950 font-mono tabular-nums font-medium">
-                      <span className="font-inter">₦</span>
-                      {formatNaira(detailRecord.serviceFeeCents)}
+                      {nairaCell(detailRecord.serviceFeeCents)}
                     </span>
                   </div>
                 )}
@@ -252,6 +402,13 @@ export function ServicesPerformedClient({ records }: Props) {
                   ))}
                 </div>
               </div>
+
+              {/* Job costing (only when session_revenue is set) */}
+              <JobCostingPanel
+                sessionRevenueCents={detailRecord.sessionRevenueCents}
+                totalCogsCents={detailRecord.totalCogsCents}
+                costFullyKnown={detailRecord.costFullyKnown}
+              />
             </div>
           ) : null}
         </DialogContent>

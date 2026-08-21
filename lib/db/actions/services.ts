@@ -7,8 +7,9 @@ import type { ServiceTypeInput, ServiceUsageInput } from "@/lib/validation/servi
 import {
   getActiveServiceTypes,
   getServiceRecordById,
+  getMyJobCostingSessions,
 } from "@/lib/db/queries/services"
-import type { ServiceType, ServiceRecordDetail } from "@/lib/db/queries/services"
+import type { ServiceType, ServiceRecordDetail, JobCostingSessionRow } from "@/lib/db/queries/services"
 
 type ActionResult<T = null> =
   | { ok: true; data: T }
@@ -162,6 +163,8 @@ export async function recordServiceUsageAction(
     p_lines: pLines,
     p_member_id: parsed.data.memberId || null,
     p_client_email: parsed.data.clientEmail || null,
+    p_client_id: parsed.data.clientId || null,
+    p_client_plan_id: parsed.data.clientPlanId || null,
   })
 
   if (error) {
@@ -217,6 +220,18 @@ export async function recordServiceUsageAction(
         error: "validation",
         message: "Add at least one product used in this service.",
       }
+    if (lower.includes("plan exhausted"))
+      return {
+        ok: false,
+        error: "plan_exhausted",
+        message: "This subscription has no sessions remaining.",
+      }
+    if (lower.includes("client plan not found"))
+      return {
+        ok: false,
+        error: "plan_not_found",
+        message: "The selected subscription could not be found. Please refresh and try again.",
+      }
     if (lower.includes("cost_layers exhausted") || lower.includes("out of sync"))
       return {
         ok: false,
@@ -255,4 +270,9 @@ export async function getServiceRecordDetailAction(
 ): Promise<ServiceRecordDetail | null> {
   await requireScope()
   return getServiceRecordById(id)
+}
+
+export async function getMyJobCostingSessionsAction(): Promise<JobCostingSessionRow[]> {
+  await requireScope()
+  return getMyJobCostingSessions()
 }

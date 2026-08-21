@@ -76,10 +76,10 @@ export default async function DashboardPage() {
     canSeeBranchData ? getStockReceivedSeries()  : Promise.resolve([]),
     canSeeFinancials ? getBranchFinancials()      : Promise.resolve(null),
     canSeeBranchData ? Promise.resolve(null)     : getPersonalHoldingSummary(),
-    canSeeBranchData ? Promise.resolve([])       : getMyRecentSales(5),
+    canSeePersonalSalesMetrics ? getMyRecentSales(5) : Promise.resolve([]),
     canSeeBranchData ? Promise.resolve(0)        : getMyPendingRequestCount(),
     canSeePersonalSalesMetrics ? getMySalesMetrics() : Promise.resolve(null),
-    canSeeBranchData ? Promise.resolve([])       : getMyStockPerformance(),
+    canSeePersonalSalesMetrics ? getMyStockPerformance() : Promise.resolve([]),
     canSeeServiceMetrics ? getMyServiceMetrics() : Promise.resolve(null),
   ])
 
@@ -506,7 +506,7 @@ export default async function DashboardPage() {
           })()}
 
           {/* My recent sales */}
-          <div className="bg-white rounded-2xl border border-neutral-200/60 p-6 max-w-xl">
+          {canSeePersonalSalesMetrics && <div className="bg-white rounded-2xl border border-neutral-200/60 p-6 max-w-xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-neutral-950">My recent sales</h2>
               <Link href="/sales" className="text-xs text-violet-700 hover:underline">
@@ -535,10 +535,10 @@ export default async function DashboardPage() {
                 ))}
               </ul>
             )}
-          </div>
+          </div>}
 
           {/* Stock performance — per-product: in hand, sold 30d, sell-through */}
-          <div className="bg-white rounded-2xl border border-neutral-200/60 p-6">
+          {canSeePersonalSalesMetrics && <div className="bg-white rounded-2xl border border-neutral-200/60 p-6">
             <div className="mb-4">
               <h2 className="text-base font-semibold text-neutral-950">Stock performance</h2>
               <p className="text-xs text-neutral-500 mt-0.5">Your holdings and sales activity — last 30 days</p>
@@ -586,7 +586,7 @@ export default async function DashboardPage() {
                 </table>
               </div>
             )}
-          </div>
+          </div>}
         </>
       )}
     </div>

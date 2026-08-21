@@ -38,7 +38,21 @@ export type ServiceRecordDetail = ServiceRecordRow & {
   customerPhone: string | null
   clientEmail: string | null
   note: string | null
+  clientPlanId: string | null
+  sessionRevenueCents: number | null
+  totalCogsCents: number | null
+  costFullyKnown: boolean
   lines: ServiceConsumptionLine[]
+}
+
+export type JobCostingSessionRow = {
+  id: string
+  performedOn: string
+  serviceTypeName: string
+  customerName: string | null
+  sessionRevenueCents: number
+  totalCogsCents: number | null
+  costFullyKnown: boolean
 }
 
 // ── Raw shapes returned by Supabase ──────────────────────────────────────────
@@ -82,8 +96,16 @@ type RawServiceRecordDetail = {
   service_fee_cents: number | null
   note: string | null
   created_at: string
+  client_plan_id: string | null
+  session_revenue_cents: number | null
   service_types: { name: string } | { name: string }[] | null
   service_consumption: RawServiceConsumption[]
+}
+
+type RawCogsRow = {
+  reference_id: string
+  cogs_cents: number | null
+  cost_known: boolean
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -225,7 +247,7 @@ export async function getServiceRecordById(id: string): Promise<ServiceRecordDet
   const { data, error } = await supabase
     .from("service_records")
     .select(
-      "id, performed_on, performed_by, customer_name, customer_phone, member_id, client_email, service_fee_cents, note, created_at, service_types(name), service_consumption(id, product_id, quantity, products(name, sku))",
+      "id, performed_on, performed_by, customer_name, customer_phone, member_id, client_email, service_fee_cents, note, created_at, client_plan_id, session_revenue_cents, service_types(name), service_consumption(id, product_id, quantity, products(name, sku))",
     )
     .eq("id", id)
     .eq("organisation_id", scope.organisationId)
@@ -235,6 +257,30 @@ export async function getServiceRecordById(id: string): Promise<ServiceRecordDet
 
   const row = data as RawServiceRecordDetail
   const performerMap = await fetchPerformerMap([row.performed_by])
+
+  // Fetch COGS for each consumption line
+  const consumptionIds = row.service_consumption.map((c) => c.id)
+  let totalCogsCents: number | null = null
+  let costFullyKnown = false
+
+  if (consumptionIds.length > 0) {
+    const { data: cogsRows } = await supabase
+      .from("cogs_allocations")
+      .select("reference_id, cogs_cents, cost_known")
+      .eq("reference_type", "service_consumption")
+      .in("reference_id", consumptionIds)
+
+    const cogsMap = new Map<string, RawCogsRow>()
+    for (const g of (cogsRows ?? []) as RawCogsRow[]) {
+      cogsMap.set(g.reference_id, g)
+    }
+
+    const allKnown = consumptionIds.every((cid) => cogsMap.get(cid)?.cost_known === true)
+    costFullyKnown = allKnown
+    totalCogsCents = allKnown
+      ? consumptionIds.reduce((sum, cid) => sum + (cogsMap.get(cid)?.cogs_cents ?? 0), 0)
+      : null
+  }
 
   return {
     id: row.id,
@@ -250,6 +296,10 @@ export async function getServiceRecordById(id: string): Promise<ServiceRecordDet
     note: row.note,
     consumptionCount: row.service_consumption.length,
     createdAt: row.created_at,
+    clientPlanId: row.client_plan_id,
+    sessionRevenueCents: row.session_revenue_cents,
+    totalCogsCents,
+    costFullyKnown,
     lines: row.service_consumption.map((c) => {
       const product = resolveProduct(c.products)
       return {
@@ -261,4 +311,78 @@ export async function getServiceRecordById(id: string): Promise<ServiceRecordDet
       }
     }),
   }
+}
+
+export async function getMyJobCostingSessions(): Promise<JobCostingSessionRow[]> {
+  const scope = await getCurrentScope()
+  if (!scope) return []
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createAppServerClient()) as any
+
+  const { data: authData } = await supabase.auth.getUser()
+  if (!authData.user) return []
+
+  // 1. Plan-linked records for this user
+  const { data: records, error } = await supabase
+    .from("service_records")
+    .select(
+      "id, performed_on, session_revenue_cents, customer_name, service_types(name), service_consumption(id)",
+    )
+    .eq("organisation_id", scope.organisationId)
+    .eq("performed_by", authData.user.id)
+    .not("session_revenue_cents", "is", null)
+    .order("performed_on", { ascending: false })
+    .limit(100)
+
+  if (error || !records || records.length === 0) return []
+
+  // 2. Batch collect all consumption IDs
+  const allConsumptionIds = (records as { service_consumption: { id: string }[] }[]).flatMap(
+    (r) => r.service_consumption.map((c) => c.id),
+  )
+
+  // 3. Batch fetch COGS
+  const cogsMap = new Map<string, RawCogsRow>()
+  if (allConsumptionIds.length > 0) {
+    const { data: cogsRows } = await supabase
+      .from("cogs_allocations")
+      .select("reference_id, cogs_cents, cost_known")
+      .eq("reference_type", "service_consumption")
+      .in("reference_id", allConsumptionIds)
+
+    for (const g of (cogsRows ?? []) as RawCogsRow[]) {
+      cogsMap.set(g.reference_id, g)
+    }
+  }
+
+  // 4. Join in TypeScript
+  return (
+    records as {
+      id: string
+      performed_on: string
+      session_revenue_cents: number
+      customer_name: string | null
+      service_types: { name: string } | { name: string }[] | null
+      service_consumption: { id: string }[]
+    }[]
+  ).map((r) => {
+    const consumptionIds = r.service_consumption.map((c) => c.id)
+    const allKnown =
+      consumptionIds.length > 0 &&
+      consumptionIds.every((cid) => cogsMap.get(cid)?.cost_known === true)
+    const totalCogsCents = allKnown
+      ? consumptionIds.reduce((sum, cid) => sum + (cogsMap.get(cid)?.cogs_cents ?? 0), 0)
+      : null
+
+    return {
+      id: r.id,
+      performedOn: r.performed_on,
+      serviceTypeName: resolveServiceTypeName(r.service_types),
+      customerName: r.customer_name,
+      sessionRevenueCents: r.session_revenue_cents,
+      totalCogsCents,
+      costFullyKnown: allKnown,
+    }
+  })
 }

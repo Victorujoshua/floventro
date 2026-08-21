@@ -4,12 +4,17 @@ import { useEffect, useState } from "react"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
-import { Plus, Trash2 } from "lucide-react"
+import { Plus, Trash2, UserRound } from "lucide-react"
 import { serviceUsageSchema, type ServiceUsageInput } from "@/lib/validation/services"
 import { recordServiceUsageAction, getActiveServiceTypesAction } from "@/lib/db/actions/services"
 import { getMyHoldingsAction } from "@/lib/db/actions/holdings"
+import { getClientActivePlansAction } from "@/lib/db/actions/plans"
+import { createClientAction } from "@/lib/db/actions/clients"
+import { ClientSearch } from "@/components/app/clients/client-search"
 import type { MyHolding } from "@/lib/db/queries/holdings"
 import type { ServiceType } from "@/lib/db/queries/services"
+import type { ClientActivePlan } from "@/lib/db/queries/plans"
+import type { Client } from "@/lib/db/queries/clients"
 import {
   Dialog,
   DialogContent,
@@ -36,11 +41,22 @@ function todayLocal() {
 }
 
 export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProductId }: Props) {
-  const [holdings, setHoldings] = useState<MyHolding[]>([])
-  const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([])
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [holdings, setHoldings]           = useState<MyHolding[]>([])
+  const [serviceTypes, setServiceTypes]   = useState<ServiceType[]>([])
+  const [loadError, setLoadError]         = useState<string | null>(null)
+  const [loading, setLoading]             = useState(false)
+  const [submitError, setSubmitError]     = useState<string | null>(null)
+
+  // ── Client + plan state ────────────────────────────────────────────────────
+  const [selectedClient, setSelectedClient]     = useState<Client | null>(null)
+  const [clientPlans, setClientPlans]           = useState<ClientActivePlan[]>([])
+  const [loadingPlans, setLoadingPlans]         = useState(false)
+  const [showQuickCreate, setShowQuickCreate]   = useState(false)
+  const [newClientName, setNewClientName]       = useState("")
+  const [newClientPhone, setNewClientPhone]     = useState("")
+  const [newClientMemberId, setNewClientMemberId] = useState("")
+  const [newClientError, setNewClientError]     = useState<string | null>(null)
+  const [newClientSaving, setNewClientSaving]   = useState(false)
 
   const {
     register,
@@ -53,24 +69,27 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
   } = useForm<ServiceUsageInput>({
     resolver: zodResolver(serviceUsageSchema),
     defaultValues: {
-      serviceTypeId: "",
-      customerName: "",
-      customerPhone: "",
-      memberId: "",
-      clientEmail: "",
-      performedOn: todayLocal(),
+      serviceTypeId:   "",
+      customerName:    "",
+      customerPhone:   "",
+      memberId:        "",
+      clientEmail:     "",
+      performedOn:     todayLocal(),
       serviceFeeNaira: undefined,
-      note: "",
-      lines: [{ productId: initialProductId ?? "", quantity: 1 }],
+      note:            "",
+      lines:           [{ productId: initialProductId ?? "", quantity: 1 }],
+      clientId:        "",
+      clientPlanId:    "",
     },
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: "lines" })
-  const watchedLines = watch("lines")
-  const performedOn = watch("performedOn")
+  const watchedLines   = watch("lines")
+  const watchedPlanId  = watch("clientPlanId")
+  const performedOn    = watch("performedOn")
+  const isFutureDate   = performedOn && performedOn > todayLocal()
 
-  const isFutureDate = performedOn && performedOn > todayLocal()
-
+  // Load holdings + service types when dialog opens
   useEffect(() => {
     if (!open) return
     let cancelled = false
@@ -88,39 +107,95 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        console.error("service dialog load failed", err)
         setLoadError("Could not load data: " + ((err as Error)?.message ?? "unknown"))
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [open, initialProductId, setValue])
+
+  // Load active plans when a client is selected
+  useEffect(() => {
+    if (!selectedClient) {
+      setClientPlans([])
+      setValue("clientId", "")
+      setValue("clientPlanId", "")
+      return
+    }
+    setValue("clientId", selectedClient.id)
+    setValue("clientPlanId", "")
+    // Auto-fill customer name and member ID from selected client
+    setValue("customerName", selectedClient.name)
+    if (selectedClient.memberId) setValue("memberId", selectedClient.memberId)
+
+    let cancelled = false
+    setLoadingPlans(true)
+    getClientActivePlansAction(selectedClient.id)
+      .then((plans) => { if (!cancelled) setClientPlans(plans) })
+      .catch(() => { if (!cancelled) setClientPlans([]) })
+      .finally(() => { if (!cancelled) setLoadingPlans(false) })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClient?.id])
+
+  function resetClientState() {
+    setSelectedClient(null)
+    setClientPlans([])
+    setLoadingPlans(false)
+    setShowQuickCreate(false)
+    setNewClientName(""); setNewClientPhone(""); setNewClientMemberId("")
+    setNewClientError(null); setNewClientSaving(false)
+  }
 
   function handleClose() {
     reset({
-      serviceTypeId: "",
-      customerName: "",
-      customerPhone: "",
-      memberId: "",
-      clientEmail: "",
-      performedOn: todayLocal(),
+      serviceTypeId:   "",
+      customerName:    "",
+      customerPhone:   "",
+      memberId:        "",
+      clientEmail:     "",
+      performedOn:     todayLocal(),
       serviceFeeNaira: undefined,
-      note: "",
-      lines: [{ productId: initialProductId ?? "", quantity: 1 }],
+      note:            "",
+      lines:           [{ productId: initialProductId ?? "", quantity: 1 }],
+      clientId:        "",
+      clientPlanId:    "",
     })
     setSubmitError(null)
     setLoadError(null)
+    resetClientState()
     onOpenChange(false)
+  }
+
+  async function handleQuickCreate() {
+    if (!newClientName.trim()) { setNewClientError("Name is required"); return }
+    setNewClientSaving(true)
+    setNewClientError(null)
+    const result = await createClientAction({
+      name:     newClientName.trim(),
+      phone:    newClientPhone.trim()    || undefined,
+      memberId: newClientMemberId.trim() || undefined,
+    })
+    setNewClientSaving(false)
+    if (!result.ok) { setNewClientError(result.message ?? "Error creating client"); return }
+
+    const newClient: Client = {
+      id:             result.data.id,
+      organisationId: "",
+      name:           newClientName.trim(),
+      phone:          newClientPhone.trim() || null,
+      email:          null,
+      memberId:       newClientMemberId.trim() || null,
+      createdAt:      new Date().toISOString(),
+    }
+    setSelectedClient(newClient)
+    setShowQuickCreate(false)
+    setNewClientName(""); setNewClientPhone(""); setNewClientMemberId("")
   }
 
   const usedProductIds = new Set((watchedLines ?? []).map((l) => l.productId).filter(Boolean))
 
   function getHoldingForLine(index: number): MyHolding | undefined {
-    const pid = watchedLines?.[index]?.productId
-    return holdings.find((h) => h.productId === pid)
+    return holdings.find((h) => h.productId === watchedLines?.[index]?.productId)
   }
 
   async function onSubmit(values: ServiceUsageInput) {
@@ -156,13 +231,10 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
                 <button
                   type="button"
                   onClick={() => {
-                    setLoadError(null)
-                    setLoading(true)
+                    setLoadError(null); setLoading(true)
                     Promise.all([getMyHoldingsAction(), getActiveServiceTypesAction()])
                       .then(([h, st]) => { setHoldings(h); setServiceTypes(st) })
-                      .catch((err: unknown) => {
-                        setLoadError("Could not load data: " + ((err as Error)?.message ?? "unknown"))
-                      })
+                      .catch((err: unknown) => setLoadError("Could not load data: " + ((err as Error)?.message ?? "unknown")))
                       .finally(() => setLoading(false))
                   }}
                   className="text-sm text-violet-700 hover:text-violet-800 underline underline-offset-2"
@@ -171,14 +243,10 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
                 </button>
               </div>
             ) : serviceTypes.length === 0 ? (
-              <p className="text-sm text-neutral-500">No active services defined. Ask an owner or inventory manager to add them under Inventory → Services.</p>
+              <p className="text-sm text-neutral-500">No active services defined. Ask an owner or inventory manager to add them.</p>
             ) : (
               <>
-                <select
-                  id="serviceTypeId"
-                  className={SELECT_CLASS}
-                  {...register("serviceTypeId")}
-                >
+                <select id="serviceTypeId" className={SELECT_CLASS} {...register("serviceTypeId")}>
                   <option value="">Select a service…</option>
                   {serviceTypes.map((st) => (
                     <option key={st.id} value={st.id}>{st.name}</option>
@@ -201,12 +269,8 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
                 const availableOptions = holdings.filter(
                   (h) => !usedProductIds.has(h.productId) || h.productId === currentProductId,
                 )
-
                 return (
-                  <div
-                    key={field.id}
-                    className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 space-y-3"
-                  >
+                  <div key={field.id} className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 space-y-3">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Product</Label>
                       <select
@@ -223,17 +287,13 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
                       </select>
                       {holding && (
                         <p className="text-xs text-neutral-500">
-                          You hold{" "}
-                          <span className="font-medium tabular-nums">{holding.quantity}</span> units
+                          You hold <span className="font-medium tabular-nums">{holding.quantity}</span> units
                         </p>
                       )}
                     </div>
-
                     <div className="flex items-center gap-3">
                       <div className="flex-1 space-y-1.5">
-                        <Label htmlFor={`qty-${index}`} className="text-xs">
-                          Quantity used
-                        </Label>
+                        <Label htmlFor={`qty-${index}`} className="text-xs">Quantity used</Label>
                         <Input
                           id={`qty-${index}`}
                           type="number"
@@ -244,9 +304,7 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
                           {...register(`lines.${index}.quantity`, { valueAsNumber: true })}
                         />
                         {errors.lines?.[index]?.quantity && (
-                          <p className="text-xs text-red-500">
-                            {errors.lines[index]?.quantity?.message}
-                          </p>
+                          <p className="text-xs text-red-500">{errors.lines[index]?.quantity?.message}</p>
                         )}
                       </div>
                       {fields.length > 1 && (
@@ -262,7 +320,6 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
                   </div>
                 )
               })}
-
               {usedProductIds.size < holdings.length && (
                 <button
                   type="button"
@@ -276,13 +333,121 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess, initialProd
               {errors.lines?.root && (
                 <p className="text-xs text-red-500">{errors.lines.root.message}</p>
               )}
-              {!loading && !loadError && holdings.length === 0 && (
-                <p className="text-sm text-neutral-500">
-                  You have no stock in your holding to use.
-                </p>
-              )}
             </div>
           )}
+
+          {/* ── Client (optional) ───────────────────────────────────────────────── */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-neutral-700">Client</Label>
+              <span className="text-xs text-neutral-400">Optional — links to a plan subscription</span>
+            </div>
+
+            {showQuickCreate ? (
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 space-y-3">
+                <p className="text-xs font-medium text-neutral-500">New client</p>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Name <span className="text-red-500">*</span></Label>
+                  <Input
+                    placeholder="Jane Doe"
+                    value={newClientName}
+                    onChange={(e) => setNewClientName(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Phone</Label>
+                    <Input
+                      placeholder="08012345678"
+                      value={newClientPhone}
+                      onChange={(e) => setNewClientPhone(e.target.value)}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Member ID</Label>
+                    <Input
+                      placeholder="MEM-0001"
+                      value={newClientMemberId}
+                      onChange={(e) => setNewClientMemberId(e.target.value)}
+                      className="h-9 text-sm font-mono"
+                    />
+                  </div>
+                </div>
+                {newClientError && <p className="text-xs text-red-500">{newClientError}</p>}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={newClientSaving}
+                    onClick={handleQuickCreate}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-violet-700 hover:bg-violet-800 text-white px-3 h-8 text-xs font-medium transition-colors disabled:opacity-50"
+                  >
+                    {newClientSaving ? "Creating…" : "Create & select"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowQuickCreate(false); setNewClientError(null) }}
+                    className="inline-flex items-center rounded-md border border-neutral-200 px-3 h-8 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <ClientSearch
+                    value={selectedClient}
+                    onChange={(c) => setSelectedClient(c)}
+                  />
+                </div>
+                {!selectedClient && (
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickCreate(true)}
+                    className="shrink-0 inline-flex items-center gap-1 rounded-md border border-neutral-200 px-2.5 h-9 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
+                  >
+                    <UserRound className="h-3 w-3" />
+                    New
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* ── Plan select (shown when client is selected) ──────────────── */}
+            {selectedClient && !showQuickCreate && (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-neutral-600">Plan subscription</Label>
+                {loadingPlans ? (
+                  <p className="text-xs text-neutral-400">Loading plans…</p>
+                ) : clientPlans.length === 0 ? (
+                  <p className="text-xs text-neutral-400">
+                    No active subscriptions for this client. Recording as an unlinked session.
+                  </p>
+                ) : (
+                  <>
+                    <select
+                      className={SELECT_CLASS}
+                      {...register("clientPlanId")}
+                    >
+                      <option value="">No plan — unlinked session</option>
+                      {clientPlans.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.planName ?? "Ad-hoc"} — {p.sessionsRemaining} of {p.sessionsTotal} remaining
+                        </option>
+                      ))}
+                    </select>
+                    {watchedPlanId && (
+                      <p className="text-xs text-violet-700">
+                        Session will draw down this subscription and snapshot the revenue.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Client details */}
           <div className="space-y-3">

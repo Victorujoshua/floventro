@@ -22,6 +22,8 @@ export const serviceUsageSchema = z.object({
   serviceFeeNaira: z.number().min(0).optional(),
   note: z.string().max(500).optional().or(z.literal("")),
   lines: z.array(serviceUsageLineSchema).min(1, "Add at least one product used"),
+  clientId: z.string().uuid().optional().or(z.literal("")),
+  clientPlanId: z.string().uuid().optional().or(z.literal("")),
 })
 
 export type ServiceTypeInput = z.infer<typeof serviceTypeSchema>
