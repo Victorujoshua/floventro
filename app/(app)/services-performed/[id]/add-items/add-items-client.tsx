@@ -3,18 +3,24 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Plus, Trash2, ArrowLeft } from "lucide-react"
+import { ArrowLeft, PackagePlus } from "lucide-react"
+import { toast } from "sonner"
 import { addServiceConsumptionAction } from "@/lib/db/actions/services"
-import type { MyHolding } from "@/lib/db/queries/holdings"
+import { createRequestAction } from "@/lib/db/actions/requests"
 
-type Line = { productId: string; quantity: number }
+export type CatalogItem = {
+  productId: string
+  productName: string
+  productSku: string
+  holdingQty: number
+}
 
 type Props = {
   recordId: string
   serviceTypeName: string
   customerName: string | null
   performedOn: string
-  holdings: MyHolding[]
+  catalog: CatalogItem[]
 }
 
 function formatDate(d: string) {
@@ -30,22 +36,48 @@ export function AddItemsClient({
   serviceTypeName,
   customerName,
   performedOn,
-  holdings,
+  catalog,
 }: Props) {
   const router = useRouter()
-  const [lines, setLines] = useState<Line[]>([{ productId: "", quantity: 1 }])
+  const [qtys, setQtys] = useState<Record<string, string>>({})
+  const [reqState, setReqState] = useState<Record<string, "idle" | "loading" | "done">>({})
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  async function handleSubmit() {
-    const valid = lines.filter((l) => l.productId && l.quantity > 0)
-    if (valid.length === 0) {
-      setError("Add at least one product with a valid quantity.")
+  const heldItems = catalog.filter((i) => i.holdingQty > 0)
+  const notHeldItems = catalog.filter((i) => i.holdingQty === 0)
+
+  function setQty(productId: string, val: string) {
+    setQtys((prev) => ({ ...prev, [productId]: val }))
+  }
+
+  async function handleRequest(productId: string) {
+    setReqState((prev) => ({ ...prev, [productId]: "loading" }))
+    const res = await createRequestAction({ lines: [{ productId, quantity: 1 }] })
+    if (!res.ok) {
+      setReqState((prev) => ({ ...prev, [productId]: "idle" }))
+      toast.error(res.message ?? "Could not create request.")
       return
     }
+    setReqState((prev) => ({ ...prev, [productId]: "done" }))
+    toast.success("Stock requested — inventory will issue it to your holding.")
+  }
+
+  async function handleSubmit() {
+    const lines = heldItems.flatMap((item) => {
+      const q = parseInt(qtys[item.productId] ?? "0", 10)
+      if (!q || q <= 0) return []
+      return [{ productId: item.productId, quantity: Math.min(q, item.holdingQty) }]
+    })
+
+    if (lines.length === 0) {
+      setError("Enter a quantity for at least one held product.")
+      return
+    }
+
     setSubmitting(true)
     setError(null)
-    const res = await addServiceConsumptionAction(recordId, valid)
+    const res = await addServiceConsumptionAction(recordId, lines)
     setSubmitting(false)
     if (!res.ok) {
       setError(res.message ?? "Something went wrong.")
@@ -54,8 +86,10 @@ export function AddItemsClient({
     router.push("/services-performed")
   }
 
+  const hasAnyQty = heldItems.some((i) => parseInt(qtys[i.productId] ?? "0", 10) > 0)
+
   return (
-    <div className="max-w-xl">
+    <div className="max-w-2xl">
       <Link
         href="/services-performed"
         className="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-800 transition-colors mb-6"
@@ -68,7 +102,7 @@ export function AddItemsClient({
         Add items used
       </h1>
       <p className="text-sm text-neutral-500 mb-6">
-        Record which products were consumed during this session.
+        Enter quantities consumed during this session. Items not in your holding can be requested from inventory.
       </p>
 
       {/* Session context */}
@@ -89,65 +123,97 @@ export function AddItemsClient({
         </div>
       </div>
 
-      {holdings.length === 0 ? (
-        <div className="rounded-lg border border-amber-100 bg-amber-50 px-4 py-3">
-          <p className="text-sm text-amber-700">
-            You have no items in your holding. Receive stock into your holding first.
-          </p>
+      {catalog.length === 0 ? (
+        <div className="rounded-lg border border-neutral-200 px-4 py-6 text-center">
+          <p className="text-sm text-neutral-500">No products configured for this organisation.</p>
         </div>
       ) : (
-        <div className="space-y-4">
-          <div className="space-y-2">
-            {lines.map((line, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <select
-                  value={line.productId}
-                  onChange={(e) => {
-                    const next = [...lines]
-                    next[idx] = { ...next[idx], productId: e.target.value }
-                    setLines(next)
-                  }}
-                  className="flex-1 h-9 rounded-md border border-neutral-200 bg-white px-3 text-sm text-neutral-950 focus:outline-none focus:ring-2 focus:ring-violet-500"
-                >
-                  <option value="">Select product…</option>
-                  {holdings.map((h) => (
-                    <option key={h.productId} value={h.productId}>
-                      {h.productName} ({h.productSku}) — {h.quantity} in hand
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  min={1}
-                  value={line.quantity}
-                  onChange={(e) => {
-                    const next = [...lines]
-                    next[idx] = { ...next[idx], quantity: parseInt(e.target.value, 10) || 1 }
-                    setLines(next)
-                  }}
-                  className="w-20 h-9 rounded-md border border-neutral-200 bg-white px-3 text-sm text-neutral-950 text-center focus:outline-none focus:ring-2 focus:ring-violet-500"
-                />
-                {lines.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setLines(lines.filter((_, i) => i !== idx))}
-                    className="p-1.5 text-neutral-400 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                )}
+        <div className="space-y-6">
+          {/* Held items — consumable */}
+          {heldItems.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-3">
+                In your holding — enter quantity used
+              </p>
+              <div className="rounded-lg border border-neutral-200 bg-white overflow-hidden divide-y divide-neutral-100">
+                {heldItems.map((item) => {
+                  const val = qtys[item.productId] ?? ""
+                  const parsed = parseInt(val, 10)
+                  const overMax = !!val && parsed > item.holdingQty
+                  return (
+                    <div key={item.productId} className="flex items-center gap-3 px-4 py-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-neutral-950 truncate">{item.productName}</p>
+                        <p className="text-xs font-mono text-neutral-400">{item.productSku}</p>
+                      </div>
+                      <span className="text-xs text-neutral-500 whitespace-nowrap shrink-0">
+                        {item.holdingQty} in hand
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={item.holdingQty}
+                        value={val}
+                        placeholder="0"
+                        onChange={(e) => setQty(item.productId, e.target.value)}
+                        className={`w-20 h-9 rounded-md border px-3 text-sm text-neutral-950 text-center focus:outline-none focus:ring-2 ${
+                          overMax
+                            ? "border-red-300 bg-red-50 focus:ring-red-400"
+                            : "border-neutral-200 bg-white focus:ring-violet-500"
+                        }`}
+                      />
+                    </div>
+                  )
+                })}
               </div>
-            ))}
-          </div>
+            </div>
+          )}
 
-          <button
-            type="button"
-            onClick={() => setLines([...lines, { productId: "", quantity: 1 }])}
-            className="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-800 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Add another item
-          </button>
+          {/* Not-held items — request only */}
+          {notHeldItems.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-3">
+                Not in your holding — request from inventory
+              </p>
+              <div className="rounded-lg border border-neutral-200 bg-white overflow-hidden divide-y divide-neutral-100">
+                {notHeldItems.map((item) => {
+                  const state = reqState[item.productId] ?? "idle"
+                  return (
+                    <div key={item.productId} className="flex items-center gap-3 px-4 py-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-neutral-950 truncate">{item.productName}</p>
+                        <p className="text-xs font-mono text-neutral-400">{item.productSku}</p>
+                      </div>
+                      <span className="text-xs text-neutral-400 whitespace-nowrap shrink-0">0 in hand</span>
+                      {state === "done" ? (
+                        <span className="text-xs font-medium text-emerald-600 px-2.5 h-8 inline-flex items-center shrink-0">
+                          Requested ✓
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={state === "loading"}
+                          onClick={() => handleRequest(item.productId)}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-2.5 h-8 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50 transition-colors shrink-0"
+                        >
+                          <PackagePlus className="h-3.5 w-3.5" />
+                          {state === "loading" ? "Requesting…" : "Request"}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {heldItems.length === 0 && (
+            <div className="rounded-lg border border-amber-100 bg-amber-50 px-4 py-3">
+              <p className="text-sm text-amber-700">
+                You have no items in your holding. Request the products you need above — once inventory issues them they{"'"}ll appear here to consume.
+              </p>
+            </div>
+          )}
 
           {error && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
@@ -155,22 +221,24 @@ export function AddItemsClient({
             </p>
           )}
 
-          <div className="flex items-center gap-4 pt-2">
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-5 h-10 text-sm font-medium text-white hover:bg-violet-800 disabled:opacity-50 transition-colors"
-            >
-              {submitting ? "Recording…" : "Record items used"}
-            </button>
-            <Link
-              href="/services-performed"
-              className="text-sm text-neutral-500 hover:text-neutral-800 transition-colors"
-            >
-              Cancel
-            </Link>
-          </div>
+          {heldItems.length > 0 && (
+            <div className="flex items-center gap-4 pt-1">
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting || !hasAnyQty}
+                className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-5 h-10 text-sm font-medium text-white hover:bg-violet-800 disabled:opacity-50 transition-colors"
+              >
+                {submitting ? "Recording…" : "Record items used"}
+              </button>
+              <Link
+                href="/services-performed"
+                className="text-sm text-neutral-500 hover:text-neutral-800 transition-colors"
+              >
+                Cancel
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>
