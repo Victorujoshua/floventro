@@ -28,7 +28,6 @@ export default async function AddItemsPage({
 
   if (!record) redirect("/services-performed")
   if (record.performedByUserId !== user.id) redirect("/services-performed")
-  if (record.consumptionCount > 0) redirect("/services-performed")
 
   const holdingMap = new Map(myHoldings.map((h) => [h.productId, h.quantity]))
   const catalog: CatalogItem[] = allProducts.map((p) => ({

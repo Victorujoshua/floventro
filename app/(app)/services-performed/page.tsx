@@ -13,6 +13,7 @@ export default async function ServicesPerformedPage() {
       records={records}
       jobCostingSessions={jobCostingSessions}
       role={scope.role}
+      currentUserId={scope.userId}
     />
   )
 }

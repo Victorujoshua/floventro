@@ -28,6 +28,7 @@ type Props = {
   records: ServiceRecordRow[]
   jobCostingSessions: JobCostingSessionRow[]
   role: string
+  currentUserId: string
 }
 
 function formatDate(d: string) {
@@ -212,7 +213,7 @@ function JobCostingSessionsSection({
 
 // ── Main client ────────────────────────────────────────────────────────────
 
-export function ServicesPerformedClient({ records, jobCostingSessions, role }: Props) {
+export function ServicesPerformedClient({ records, jobCostingSessions, role, currentUserId }: Props) {
   const router = useRouter()
   const [newServiceOpen, setNewServiceOpen] = useState(false)
   const [detailRecord, setDetailRecord]     = useState<ServiceRecordDetail | null>(null)
@@ -406,13 +407,13 @@ export function ServicesPerformedClient({ records, jobCostingSessions, role }: P
                   <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">
                     Products used
                   </p>
-                  {detailRecord.lines.length === 0 && role === "internal_use" && (
+                  {role === "internal_use" && detailRecord.performedByUserId === currentUserId && (
                     <Link
                       href={`/services-performed/${detailRecord.id}/add-items`}
                       className="inline-flex items-center gap-1.5 text-xs font-medium text-violet-700 hover:text-violet-900 transition-colors"
                     >
                       <Plus className="h-3.5 w-3.5" />
-                      Add items used
+                      {detailRecord.lines.length === 0 ? "Add items used" : "Add more items"}
                     </Link>
                   )}
                 </div>

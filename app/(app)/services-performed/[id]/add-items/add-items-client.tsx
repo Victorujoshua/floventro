@@ -40,6 +40,7 @@ export function AddItemsClient({
 }: Props) {
   const router = useRouter()
   const [qtys, setQtys] = useState<Record<string, string>>({})
+  const [reqQtys, setReqQtys] = useState<Record<string, string>>({})
   const [reqState, setReqState] = useState<Record<string, "idle" | "loading" | "done">>({})
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -52,15 +53,16 @@ export function AddItemsClient({
   }
 
   async function handleRequest(productId: string) {
+    const qty = Math.max(1, parseInt(reqQtys[productId] ?? "1", 10) || 1)
     setReqState((prev) => ({ ...prev, [productId]: "loading" }))
-    const res = await createRequestAction({ lines: [{ productId, quantity: 1 }] })
+    const res = await createRequestAction({ lines: [{ productId, quantity: qty }] })
     if (!res.ok) {
       setReqState((prev) => ({ ...prev, [productId]: "idle" }))
       toast.error(res.message ?? "Could not create request.")
       return
     }
     setReqState((prev) => ({ ...prev, [productId]: "done" }))
-    toast.success("Stock requested — inventory will issue it to your holding.")
+    toast.success(`Stock requested (${qty} unit${qty !== 1 ? "s" : ""}) — inventory will issue it to your holding.`)
   }
 
   async function handleSubmit() {
@@ -178,6 +180,7 @@ export function AddItemsClient({
               <div className="rounded-lg border border-neutral-200 bg-white overflow-hidden divide-y divide-neutral-100">
                 {notHeldItems.map((item) => {
                   const state = reqState[item.productId] ?? "idle"
+                  const reqQty = reqQtys[item.productId] ?? "1"
                   return (
                     <div key={item.productId} className="flex items-center gap-3 px-4 py-3">
                       <div className="flex-1 min-w-0">
@@ -190,15 +193,27 @@ export function AddItemsClient({
                           Requested ✓
                         </span>
                       ) : (
-                        <button
-                          type="button"
-                          disabled={state === "loading"}
-                          onClick={() => handleRequest(item.productId)}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-2.5 h-8 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50 transition-colors shrink-0"
-                        >
-                          <PackagePlus className="h-3.5 w-3.5" />
-                          {state === "loading" ? "Requesting…" : "Request"}
-                        </button>
+                        <>
+                          <input
+                            type="number"
+                            min={1}
+                            value={reqQty}
+                            disabled={state === "loading"}
+                            onChange={(e) =>
+                              setReqQtys((prev) => ({ ...prev, [item.productId]: e.target.value }))
+                            }
+                            className="w-16 h-8 rounded-md border border-neutral-200 bg-white px-2 text-sm text-neutral-950 text-center focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-50"
+                          />
+                          <button
+                            type="button"
+                            disabled={state === "loading"}
+                            onClick={() => handleRequest(item.productId)}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-2.5 h-8 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50 transition-colors shrink-0"
+                          >
+                            <PackagePlus className="h-3.5 w-3.5" />
+                            {state === "loading" ? "Requesting…" : "Request"}
+                          </button>
+                        </>
                       )}
                     </div>
                   )
