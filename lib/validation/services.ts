@@ -27,10 +27,12 @@ export const serviceUsageSchema = z.object({
 })
 
 // Two-phase booking schema: no products. Used by create_service_session RPC.
+// When clientId is set (linked client), name/phone are pre-filled from the
+// client record and not re-collected — the min(1) requirement is skipped.
 export const serviceSessionSchema = z.object({
   serviceTypeId:   z.string().uuid("Select a service"),
-  customerName:    z.string().min(1, "Client name is required").max(120),
-  customerPhone:   z.string().min(1, "Phone is required").max(40),
+  customerName:    z.string().max(120),
+  customerPhone:   z.string().max(40),
   memberId:        z.string().max(50).optional().or(z.literal("")),
   clientEmail:     z.string().email("Invalid email format").max(120).optional().or(z.literal("")),
   performedOn:     z.string().min(1, "Date is required"),
@@ -38,6 +40,16 @@ export const serviceSessionSchema = z.object({
   note:            z.string().max(500).optional().or(z.literal("")),
   clientId:        z.string().uuid().optional().or(z.literal("")),
   clientPlanId:    z.string().uuid().optional().or(z.literal("")),
+}).superRefine((data, ctx) => {
+  const hasClient = !!data.clientId
+  if (!hasClient) {
+    if (!data.customerName || data.customerName.trim().length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Client name is required", path: ["customerName"] })
+    }
+    if (!data.customerPhone || data.customerPhone.trim().length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Phone is required", path: ["customerPhone"] })
+    }
+  }
 })
 
 export type ServiceTypeInput    = z.infer<typeof serviceTypeSchema>

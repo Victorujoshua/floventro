@@ -104,12 +104,18 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess }: Props) {
       setClientPlans([])
       setValue("clientId", "")
       setValue("clientPlanId", "")
+      setValue("customerName", "")
+      setValue("customerPhone", "")
+      setValue("memberId", "")
+      setValue("clientEmail", "")
       return
     }
     setValue("clientId", selectedClient.id)
     setValue("clientPlanId", "")
     setValue("customerName", selectedClient.name)
-    if (selectedClient.memberId) setValue("memberId", selectedClient.memberId)
+    setValue("customerPhone", selectedClient.phone ?? "")
+    setValue("memberId", selectedClient.memberId ?? "")
+    setValue("clientEmail", selectedClient.email ?? "")
 
     let cancelled = false
     setLoadingPlans(true)
@@ -349,46 +355,64 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess }: Props) {
             )}
           </div>
 
-          {/* Client details */}
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="customerName">
-                  Client name <span className="text-red-500">*</span>
-                </Label>
-                <Input id="customerName" placeholder="Jane Doe" {...register("customerName")} />
-                {errors.customerName && (
-                  <p className="text-xs text-red-500">{errors.customerName.message}</p>
+          {/* Client details — read-only when a client is linked, manual when walk-in */}
+          {selectedClient ? (
+            <div className="rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-3 space-y-0.5">
+              <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-1.5">Session for</p>
+              <p className="text-sm font-medium text-neutral-950">{selectedClient.name}</p>
+              <div className="flex items-center gap-3 mt-0.5">
+                {selectedClient.phone && (
+                  <span className="text-xs font-mono text-neutral-500">{selectedClient.phone}</span>
                 )}
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="customerPhone">
-                  Phone <span className="text-red-500">*</span>
-                </Label>
-                <Input id="customerPhone" placeholder="08012345678" {...register("customerPhone")} />
-                {errors.customerPhone && (
-                  <p className="text-xs text-red-500">{errors.customerPhone.message}</p>
+                {selectedClient.memberId && (
+                  <span className="text-xs font-mono text-neutral-400">#{selectedClient.memberId}</span>
+                )}
+                {selectedClient.email && (
+                  <span className="text-xs text-neutral-400">{selectedClient.email}</span>
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="memberId">
-                  Member ID <span className="text-neutral-400 font-normal">(optional)</span>
-                </Label>
-                <Input id="memberId" placeholder="MEM-0001" {...register("memberId")} />
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="customerName">
+                    Client name <span className="text-red-500">*</span>
+                  </Label>
+                  <Input id="customerName" placeholder="Jane Doe" {...register("customerName")} />
+                  {errors.customerName && (
+                    <p className="text-xs text-red-500">{errors.customerName.message}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="customerPhone">
+                    Phone <span className="text-red-500">*</span>
+                  </Label>
+                  <Input id="customerPhone" placeholder="08012345678" {...register("customerPhone")} />
+                  {errors.customerPhone && (
+                    <p className="text-xs text-red-500">{errors.customerPhone.message}</p>
+                  )}
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="clientEmail">
-                  Email <span className="text-neutral-400 font-normal">(optional)</span>
-                </Label>
-                <Input id="clientEmail" type="email" placeholder="jane@example.com" {...register("clientEmail")} />
-                {errors.clientEmail && (
-                  <p className="text-xs text-red-500">{errors.clientEmail.message}</p>
-                )}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="memberId">
+                    Member ID <span className="text-neutral-400 font-normal">(optional)</span>
+                  </Label>
+                  <Input id="memberId" placeholder="MEM-0001" {...register("memberId")} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="clientEmail">
+                    Email <span className="text-neutral-400 font-normal">(optional)</span>
+                  </Label>
+                  <Input id="clientEmail" type="email" placeholder="jane@example.com" {...register("clientEmail")} />
+                  {errors.clientEmail && (
+                    <p className="text-xs text-red-500">{errors.clientEmail.message}</p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Date + Service fee (fee hidden when a plan is selected) */}
           <div className={hasPlan ? "" : "grid grid-cols-2 gap-3"}>
