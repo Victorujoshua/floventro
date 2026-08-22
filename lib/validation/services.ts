@@ -27,14 +27,15 @@ export const serviceUsageSchema = z.object({
 })
 
 // Two-phase booking schema: no products. Used by create_service_session RPC.
-// When clientId is set (linked client), name/phone are pre-filled from the
-// client record and not re-collected — the min(1) requirement is skipped.
+// When clientId is set (linked client), identity fields are pre-filled from
+// the record — format validation is skipped (trust the stored value).
+// When no client (walk-in), name, phone, and email format are all required.
 export const serviceSessionSchema = z.object({
   serviceTypeId:   z.string().uuid("Select a service"),
   customerName:    z.string().max(120),
   customerPhone:   z.string().max(40),
   memberId:        z.string().max(50).optional().or(z.literal("")),
-  clientEmail:     z.string().email("Invalid email format").max(120).optional().or(z.literal("")),
+  clientEmail:     z.string().max(120).optional().or(z.literal("")),
   performedOn:     z.string().min(1, "Date is required"),
   serviceFeeNaira: z.number().min(0).optional(),
   note:            z.string().max(500).optional().or(z.literal("")),
@@ -48,6 +49,12 @@ export const serviceSessionSchema = z.object({
     }
     if (!data.customerPhone || data.customerPhone.trim().length === 0) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Phone is required", path: ["customerPhone"] })
+    }
+    if (data.clientEmail && data.clientEmail.trim().length > 0) {
+      const emailOk = z.string().email().safeParse(data.clientEmail).success
+      if (!emailOk) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid email format", path: ["clientEmail"] })
+      }
     }
   }
 })

@@ -60,7 +60,7 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess }: Props) {
     watch,
     setValue,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isSubmitted },
   } = useForm<ServiceSessionInput>({
     resolver: zodResolver(serviceSessionSchema),
     defaultValues: {
@@ -460,10 +460,17 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess }: Props) {
             />
           </div>
 
-          {/* Submit error */}
+          {/* Submit error (server) */}
           {submitError && (
             <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">
               {submitError}
+            </p>
+          )}
+
+          {/* Validation error catch-all — surfaces hidden-field failures */}
+          {isSubmitted && !submitError && Object.keys(errors).length > 0 && (
+            <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+              Some fields need attention. Please refresh and try again, or contact support if this persists.
             </p>
           )}
         </form>
