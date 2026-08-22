@@ -439,7 +439,7 @@ export function RecordServiceDialog({ open, onOpenChange, onSuccess }: Props) {
                   step="0.01"
                   placeholder="0.00"
                   className="h-9 text-sm tabular-nums"
-                  {...register("serviceFeeNaira", { valueAsNumber: true })}
+                  {...register("serviceFeeNaira", { setValueAs: (v: string) => v === "" ? undefined : parseFloat(v) })}
                 />
                 <p className="text-xs text-neutral-400">What the client paid for the service</p>
               </div>
