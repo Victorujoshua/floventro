@@ -401,6 +401,49 @@ export async function addServiceConsumptionAction(
   return { ok: true, data: null }
 }
 
+export async function addServiceItemConsumptionAction(
+  recordId: string,
+  lines: { serviceItemId: string; amountUsed?: number | null }[],
+): Promise<ActionResult<null>> {
+  if (!lines || lines.length === 0)
+    return { ok: false, error: "validation", message: "Add at least one service item." }
+
+  await requireScope()
+  const supabase = await createAppServerClient()
+
+  const pLines = lines.map((l) => ({
+    service_item_id: l.serviceItemId,
+    amount_used: l.amountUsed ?? null,
+  }))
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any).rpc("add_service_item_consumption", {
+    p_service_record_id: recordId,
+    p_lines: pLines,
+  })
+
+  if (error) {
+    const msg: string = error.message ?? ""
+    const lower = msg.toLowerCase()
+    console.error("[addServiceItemConsumptionAction] RPC error:", msg)
+
+    if (lower.includes("not authorised"))
+      return { ok: false, error: "not_allowed", message: "Only the practitioner who performed this session can add items." }
+    if (lower.includes("service record not found"))
+      return { ok: false, error: "not_found", message: "Session not found. Please refresh and try again." }
+    if (lower.includes("not found in this organisation"))
+      return { ok: false, error: "not_found", message: "One or more service items could not be found." }
+    if (lower.includes("is inactive"))
+      return { ok: false, error: "inactive", message: "One or more service items are inactive." }
+    if (lower.includes("amount_used must be positive"))
+      return { ok: false, error: "validation", message: "Enter a valid amount for each consumable item." }
+
+    return { ok: false, error: "server", message: "Something went wrong. Please try again." }
+  }
+
+  return { ok: true, data: null }
+}
+
 export async function toggleServiceTypeAction(
   id: string,
   isActive: boolean,

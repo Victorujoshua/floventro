@@ -58,19 +58,27 @@ function JobCostingPanel({
   sessionRevenueCents,
   totalCogsCents,
   costFullyKnown,
+  serviceItemCostCents,
 }: {
   sessionRevenueCents: number | null
   totalCogsCents: number | null
   costFullyKnown: boolean
+  serviceItemCostCents: number
 }) {
   if (sessionRevenueCents == null) return null
 
-  const profitCents =
-    totalCogsCents != null ? sessionRevenueCents - totalCogsCents : null
+  // Product COGS is known iff costFullyKnown (totalCogsCents non-null).
+  // Service item costs are always known.
+  const productKnown = totalCogsCents != null
+  const profitCents = productKnown
+    ? sessionRevenueCents - totalCogsCents - serviceItemCostCents
+    : null
   const profitPct =
     profitCents != null && sessionRevenueCents > 0
       ? (profitCents / sessionRevenueCents) * 100
       : null
+
+  const showServiceRow = serviceItemCostCents > 0
 
   return (
     <div className="space-y-2">
@@ -86,7 +94,7 @@ function JobCostingPanel({
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-neutral-500">
-            Cost of items used
+            Product items
             {!costFullyKnown && (
               <span className="ml-1.5 text-xs text-amber-600">(partial)</span>
             )}
@@ -95,6 +103,14 @@ function JobCostingPanel({
             {totalCogsCents != null ? nairaCell(totalCogsCents) : <Dash />}
           </span>
         </div>
+        {showServiceRow && (
+          <div className="flex justify-between text-sm">
+            <span className="text-neutral-500">Service items</span>
+            <span className="font-mono tabular-nums text-neutral-950">
+              {nairaCell(serviceItemCostCents)}
+            </span>
+          </div>
+        )}
         <div className="border-t border-violet-100 pt-2 flex justify-between text-sm">
           <span className="text-neutral-700 font-medium">Profit</span>
           <span
@@ -163,8 +179,13 @@ function JobCostingSessionsSection({
           </TableHeader>
           <TableBody>
             {sessions.map((s) => {
-              const profitCents =
-                s.totalCogsCents != null ? s.sessionRevenueCents - s.totalCogsCents : null
+              // Combined cost = product COGS (if known) + service item costs (always known).
+              const combinedCostCents = s.totalCogsCents != null
+                ? s.totalCogsCents + s.serviceItemCostCents
+                : null
+              const profitCents = combinedCostCents != null
+                ? s.sessionRevenueCents - combinedCostCents
+                : null
               const profitPct =
                 profitCents != null && s.sessionRevenueCents > 0
                   ? (profitCents / s.sessionRevenueCents) * 100
@@ -184,13 +205,12 @@ function JobCostingSessionsSection({
                     {nairaCell(s.sessionRevenueCents)}
                   </TableCell>
                   <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3.5 text-right">
-                    {s.totalCogsCents != null ? (
-                      <>
-                        {nairaCell(s.totalCogsCents)}
-                        {!s.costFullyKnown && (
-                          <span className="block text-xs text-amber-500 font-sans">partial</span>
-                        )}
-                      </>
+                    {combinedCostCents != null ? (
+                      nairaCell(combinedCostCents)
+                    ) : s.serviceItemCostCents > 0 ? (
+                      <span className="text-xs font-sans text-amber-600">
+                        {nairaCell(s.serviceItemCostCents)} + pending
+                      </span>
                     ) : (
                       <span className="text-xs font-sans text-amber-600">pending →</span>
                     )}
@@ -437,11 +457,41 @@ export function ServicesPerformedClient({ records, jobCostingSessions, role, cur
                 )}
               </div>
 
+              {/* Service items used */}
+              {detailRecord.serviceItemLines.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">
+                    Service items used
+                  </p>
+                  <div className="rounded-lg border border-neutral-100 overflow-hidden divide-y divide-neutral-50">
+                    {detailRecord.serviceItemLines.map((line) => (
+                      <div key={line.id} className="flex items-center justify-between px-4 py-3">
+                        <div>
+                          <p className="text-sm text-neutral-950">{line.serviceItemName}</p>
+                          <p className="text-xs font-mono text-neutral-400 capitalize">{line.serviceItemCategory}</p>
+                        </div>
+                        <div className="text-right">
+                          {line.amountUsed != null && line.measurementSymbol && (
+                            <p className="text-xs text-neutral-400 font-mono">
+                              {line.amountUsed} {line.measurementSymbol}
+                            </p>
+                          )}
+                          <span className="text-sm font-mono tabular-nums text-neutral-700">
+                            {nairaCell(line.costCents)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Job costing (only when session_revenue is set) */}
               <JobCostingPanel
                 sessionRevenueCents={detailRecord.sessionRevenueCents}
                 totalCogsCents={detailRecord.totalCogsCents}
                 costFullyKnown={detailRecord.costFullyKnown}
+                serviceItemCostCents={detailRecord.serviceItemCostCents}
               />
             </div>
           ) : null}

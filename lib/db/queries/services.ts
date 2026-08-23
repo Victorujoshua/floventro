@@ -34,6 +34,16 @@ export type ServiceConsumptionLine = {
   quantity: number
 }
 
+export type ServiceItemConsumptionLine = {
+  id: string
+  serviceItemId: string
+  serviceItemName: string
+  serviceItemCategory: "product" | "supply" | "equipment"
+  amountUsed: number | null
+  measurementSymbol: string | null
+  costCents: number
+}
+
 export type ServiceRecordDetail = ServiceRecordRow & {
   customerPhone: string | null
   clientEmail: string | null
@@ -42,7 +52,9 @@ export type ServiceRecordDetail = ServiceRecordRow & {
   sessionRevenueCents: number | null
   totalCogsCents: number | null
   costFullyKnown: boolean
+  serviceItemCostCents: number
   lines: ServiceConsumptionLine[]
+  serviceItemLines: ServiceItemConsumptionLine[]
 }
 
 export type JobCostingSessionRow = {
@@ -53,6 +65,7 @@ export type JobCostingSessionRow = {
   sessionRevenueCents: number
   totalCogsCents: number | null
   costFullyKnown: boolean
+  serviceItemCostCents: number
 }
 
 // ── Raw shapes returned by Supabase ──────────────────────────────────────────
@@ -282,6 +295,38 @@ export async function getServiceRecordById(id: string): Promise<ServiceRecordDet
       : null
   }
 
+  // Fetch service item consumptions
+  const { data: sicRows } = await supabase
+    .from("service_item_consumptions")
+    .select(
+      "id, service_item_id, amount_used, cost_cents, service_items(name, category, measurements(symbol))",
+    )
+    .eq("service_record_id", id)
+
+  type RawSicRow = {
+    id: string
+    service_item_id: string
+    amount_used: string | null
+    cost_cents: number
+    service_items: {
+      name: string
+      category: string
+      measurements: { symbol: string | null } | null
+    } | null
+  }
+
+  const sicTyped = (sicRows ?? []) as RawSicRow[]
+  const serviceItemCostCents = sicTyped.reduce((sum, r) => sum + r.cost_cents, 0)
+  const serviceItemLines: ServiceItemConsumptionLine[] = sicTyped.map((r) => ({
+    id: r.id,
+    serviceItemId: r.service_item_id,
+    serviceItemName: r.service_items?.name ?? "Unknown item",
+    serviceItemCategory: (r.service_items?.category ?? "supply") as "product" | "supply" | "equipment",
+    amountUsed: r.amount_used != null ? Number(r.amount_used) : null,
+    measurementSymbol: r.service_items?.measurements?.symbol ?? null,
+    costCents: r.cost_cents,
+  }))
+
   return {
     id: row.id,
     performedOn: row.performed_on,
@@ -300,6 +345,7 @@ export async function getServiceRecordById(id: string): Promise<ServiceRecordDet
     sessionRevenueCents: row.session_revenue_cents,
     totalCogsCents,
     costFullyKnown,
+    serviceItemCostCents,
     lines: row.service_consumption.map((c) => {
       const product = resolveProduct(c.products)
       return {
@@ -310,6 +356,7 @@ export async function getServiceRecordById(id: string): Promise<ServiceRecordDet
         quantity: c.quantity,
       }
     }),
+    serviceItemLines,
   }
 }
 
@@ -342,7 +389,7 @@ export async function getMyJobCostingSessions(): Promise<JobCostingSessionRow[]>
     (r) => r.service_consumption.map((c) => c.id),
   )
 
-  // 3. Batch fetch COGS
+  // 3. Batch fetch product COGS
   const cogsMap = new Map<string, RawCogsRow>()
   if (allConsumptionIds.length > 0) {
     const { data: cogsRows } = await supabase
@@ -356,7 +403,21 @@ export async function getMyJobCostingSessions(): Promise<JobCostingSessionRow[]>
     }
   }
 
-  // 4. Join in TypeScript
+  // 4. Batch fetch service item costs by record
+  const recordIds = (records as { id: string }[]).map((r) => r.id)
+  const sicCostMap = new Map<string, number>()
+  if (recordIds.length > 0) {
+    const { data: sicRows } = await supabase
+      .from("service_item_consumptions")
+      .select("service_record_id, cost_cents")
+      .in("service_record_id", recordIds)
+
+    for (const sic of (sicRows ?? []) as { service_record_id: string; cost_cents: number }[]) {
+      sicCostMap.set(sic.service_record_id, (sicCostMap.get(sic.service_record_id) ?? 0) + sic.cost_cents)
+    }
+  }
+
+  // 5. Join in TypeScript
   return (
     records as {
       id: string
@@ -383,6 +444,7 @@ export async function getMyJobCostingSessions(): Promise<JobCostingSessionRow[]>
       sessionRevenueCents: r.session_revenue_cents,
       totalCogsCents,
       costFullyKnown: allKnown,
+      serviceItemCostCents: sicCostMap.get(r.id) ?? 0,
     }
   })
 }
