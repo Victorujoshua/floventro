@@ -66,6 +66,7 @@ export type JobCostingSessionRow = {
   totalCogsCents: number | null
   costFullyKnown: boolean
   serviceItemCostCents: number
+  productLineCount: number
 }
 
 // ── Raw shapes returned by Supabase ──────────────────────────────────────────
@@ -445,6 +446,7 @@ export async function getMyJobCostingSessions(): Promise<JobCostingSessionRow[]>
       totalCogsCents,
       costFullyKnown: allKnown,
       serviceItemCostCents: sicCostMap.get(r.id) ?? 0,
+      productLineCount: r.service_consumption.length,
     }
   })
 }

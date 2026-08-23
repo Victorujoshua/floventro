@@ -59,26 +59,26 @@ function JobCostingPanel({
   totalCogsCents,
   costFullyKnown,
   serviceItemCostCents,
+  hasProductLines,
 }: {
   sessionRevenueCents: number | null
   totalCogsCents: number | null
   costFullyKnown: boolean
   serviceItemCostCents: number
+  hasProductLines: boolean
 }) {
   if (sessionRevenueCents == null) return null
 
-  // Product COGS is known iff costFullyKnown (totalCogsCents non-null).
-  // Service item costs are always known.
-  const productKnown = totalCogsCents != null
-  const profitCents = productKnown
-    ? sessionRevenueCents - totalCogsCents - serviceItemCostCents
-    : null
+  // Profit is computable when product costs are fully known, or when there are
+  // no product lines at all (service-items-only session).
+  const profitCents =
+    totalCogsCents !== null || !hasProductLines
+      ? sessionRevenueCents - (totalCogsCents ?? 0) - serviceItemCostCents
+      : null
   const profitPct =
     profitCents != null && sessionRevenueCents > 0
       ? (profitCents / sessionRevenueCents) * 100
       : null
-
-  const showServiceRow = serviceItemCostCents > 0
 
   return (
     <div className="space-y-2">
@@ -92,18 +92,20 @@ function JobCostingPanel({
             {nairaCell(sessionRevenueCents)}
           </span>
         </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-neutral-500">
-            Product items
-            {!costFullyKnown && (
-              <span className="ml-1.5 text-xs text-amber-600">(partial)</span>
-            )}
-          </span>
-          <span className="font-mono tabular-nums text-neutral-950">
-            {totalCogsCents != null ? nairaCell(totalCogsCents) : <Dash />}
-          </span>
-        </div>
-        {showServiceRow && (
+        {hasProductLines && (
+          <div className="flex justify-between text-sm">
+            <span className="text-neutral-500">
+              Product items
+              {!costFullyKnown && (
+                <span className="ml-1.5 text-xs text-amber-600">(partial)</span>
+              )}
+            </span>
+            <span className="font-mono tabular-nums text-neutral-950">
+              {totalCogsCents != null ? nairaCell(totalCogsCents) : <Dash />}
+            </span>
+          </div>
+        )}
+        {serviceItemCostCents > 0 && (
           <div className="flex justify-between text-sm">
             <span className="text-neutral-500">Service items</span>
             <span className="font-mono tabular-nums text-neutral-950">
@@ -179,13 +181,14 @@ function JobCostingSessionsSection({
           </TableHeader>
           <TableBody>
             {sessions.map((s) => {
-              // Combined cost = product COGS (if known) + service item costs (always known).
-              const combinedCostCents = s.totalCogsCents != null
-                ? s.totalCogsCents + s.serviceItemCostCents
-                : null
-              const profitCents = combinedCostCents != null
-                ? s.sessionRevenueCents - combinedCostCents
-                : null
+              // No product lines → cost = service items only (always known).
+              // Product lines present → cost = product COGS + service items (null if COGS unknown).
+              const costCents = s.productLineCount === 0
+                ? s.serviceItemCostCents
+                : s.totalCogsCents != null
+                  ? s.totalCogsCents + s.serviceItemCostCents
+                  : null
+              const profitCents = costCents != null ? s.sessionRevenueCents - costCents : null
               const profitPct =
                 profitCents != null && s.sessionRevenueCents > 0
                   ? (profitCents / s.sessionRevenueCents) * 100
@@ -205,12 +208,8 @@ function JobCostingSessionsSection({
                     {nairaCell(s.sessionRevenueCents)}
                   </TableCell>
                   <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3.5 text-right">
-                    {combinedCostCents != null ? (
-                      nairaCell(combinedCostCents)
-                    ) : s.serviceItemCostCents > 0 ? (
-                      <span className="text-xs font-sans text-amber-600">
-                        {nairaCell(s.serviceItemCostCents)} + pending
-                      </span>
+                    {costCents != null ? (
+                      nairaCell(costCents)
                     ) : (
                       <span className="text-xs font-sans text-amber-600">pending →</span>
                     )}
@@ -492,6 +491,7 @@ export function ServicesPerformedClient({ records, jobCostingSessions, role, cur
                 totalCogsCents={detailRecord.totalCogsCents}
                 costFullyKnown={detailRecord.costFullyKnown}
                 serviceItemCostCents={detailRecord.serviceItemCostCents}
+                hasProductLines={detailRecord.lines.length > 0}
               />
             </div>
           ) : null}
