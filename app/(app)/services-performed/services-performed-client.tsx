@@ -39,6 +39,13 @@ function formatDate(d: string) {
   })
 }
 
+function formatTime(d: string) {
+  return new Date(d).toLocaleTimeString("en-NG", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
 function nairaCell(cents: number) {
   return (
     <>
@@ -201,7 +208,12 @@ function JobCostingSessionsSection({
                   className="hover:bg-neutral-50/60 transition-colors cursor-pointer"
                   onClick={() => onRowClick(s.id)}
                 >
-                  <TableCell className="text-sm text-neutral-700 py-3.5">{formatDate(s.performedOn)}</TableCell>
+                  <TableCell className="text-sm text-neutral-700 py-3.5">
+                    {formatDate(s.performedOn)}
+                    <span className="block text-xs text-neutral-400 font-mono">
+                      {formatTime(s.createdAt)}
+                    </span>
+                  </TableCell>
                   <TableCell className="text-sm font-medium text-neutral-950 py-3.5">{s.serviceTypeName}</TableCell>
                   <TableCell className="text-sm text-neutral-500 py-3.5">{s.customerName ?? <Dash />}</TableCell>
                   <TableCell className="text-sm font-mono tabular-nums text-neutral-950 py-3.5 text-right">
@@ -310,6 +322,9 @@ export function ServicesPerformedClient({ records, jobCostingSessions, role, cur
                 >
                   <TableCell className="text-sm text-neutral-700 py-3.5">
                     {formatDate(record.performedOn)}
+                    <span className="block text-xs text-neutral-400 font-mono">
+                      {formatTime(record.createdAt)}
+                    </span>
                   </TableCell>
                   <TableCell className="text-sm font-medium text-neutral-950 py-3.5">
                     {record.serviceTypeName}
@@ -374,7 +389,9 @@ export function ServicesPerformedClient({ records, jobCostingSessions, role, cur
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-neutral-500">Date</span>
-                  <span className="text-neutral-950 font-medium">{formatDate(detailRecord.performedOn)}</span>
+                  <span className="text-neutral-950 font-medium">
+                    {formatDate(detailRecord.performedOn)}, {formatTime(detailRecord.createdAt)}
+                  </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-neutral-500">Performed by</span>

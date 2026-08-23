@@ -60,6 +60,7 @@ export type ServiceRecordDetail = ServiceRecordRow & {
 export type JobCostingSessionRow = {
   id: string
   performedOn: string
+  createdAt: string
   serviceTypeName: string
   customerName: string | null
   sessionRevenueCents: number
@@ -375,7 +376,7 @@ export async function getMyJobCostingSessions(): Promise<JobCostingSessionRow[]>
   const { data: records, error } = await supabase
     .from("service_records")
     .select(
-      "id, performed_on, session_revenue_cents, customer_name, service_types(name), service_consumption(id)",
+      "id, performed_on, created_at, session_revenue_cents, customer_name, service_types(name), service_consumption(id)",
     )
     .eq("organisation_id", scope.organisationId)
     .eq("performed_by", authData.user.id)
@@ -423,6 +424,7 @@ export async function getMyJobCostingSessions(): Promise<JobCostingSessionRow[]>
     records as {
       id: string
       performed_on: string
+      created_at: string
       session_revenue_cents: number
       customer_name: string | null
       service_types: { name: string } | { name: string }[] | null
@@ -440,6 +442,7 @@ export async function getMyJobCostingSessions(): Promise<JobCostingSessionRow[]>
     return {
       id: r.id,
       performedOn: r.performed_on,
+      createdAt: r.created_at,
       serviceTypeName: resolveServiceTypeName(r.service_types),
       customerName: r.customer_name,
       sessionRevenueCents: r.session_revenue_cents,

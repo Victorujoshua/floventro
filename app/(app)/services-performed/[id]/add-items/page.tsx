@@ -45,6 +45,7 @@ export default async function AddItemsPage({
       serviceTypeName={record.serviceTypeName}
       customerName={record.customerName}
       performedOn={record.performedOn}
+      createdAt={record.createdAt}
       serviceItems={serviceItems}
     />
   )
