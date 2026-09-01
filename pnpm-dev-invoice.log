@@ -1,0 +1,15 @@
+$ next dev --webpack
+⚠ Port 3000 is in use by process 8472, using available port 3001 instead.
+▲ Next.js 16.2.9 (webpack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.1.187:3001
+- Environments: .env.local
+✓ Ready in 1417ms
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (102kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (250kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+○ Compiling /sales/[id]/invoice ...
+ GET /sales/00000000/invoice 307 in 225ms (next.js: 20ms, proxy.ts: 14ms, application-code: 191ms)
+○ Compiling /login ...
+ GET /login 200 in 5.6s (next.js: 5.3s, proxy.ts: 14ms, application-code: 333ms)

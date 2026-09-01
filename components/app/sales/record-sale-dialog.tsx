@@ -55,6 +55,8 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
   const [holdingsError, setHoldingsError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
+  const [hasValidationErrors, setHasValidationErrors] = useState(false)
+
   // ── Client state ───────────────────────────────────────────────────────────
   const [selectedClient, setSelectedClient]       = useState<Client | null>(null)
   const [showQuickCreate, setShowQuickCreate]     = useState(false)
@@ -169,6 +171,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
     })
     setSubmitError(null)
     setHoldingsError(null)
+    setHasValidationErrors(false)
     resetClientState()
     onOpenChange(false)
   }
@@ -302,6 +305,9 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
                         <p className="text-xs text-neutral-500">
                           You hold <span className="font-medium tabular-nums">{holding.quantity}</span> units
                         </p>
+                      )}
+                      {errors.lines?.[index]?.productId && (
+                        <p className="text-xs text-red-500">Select a product</p>
                       )}
                     </div>
 
@@ -694,15 +700,16 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
             </div>
             {paymentStatus === "paid" && (
               <div className="space-y-1.5">
-                <Label htmlFor="paymentMethod">
-                  Payment method <span className="text-neutral-400 font-normal">(optional)</span>
-                </Label>
+                <Label htmlFor="paymentMethod">Payment method</Label>
                 <select id="paymentMethod" className={SELECT_CLASS} {...register("paymentMethod")}>
                   <option value="">Select…</option>
                   {PAYMENT_METHODS.map((m) => (
                     <option key={m.value} value={m.value}>{m.label}</option>
                   ))}
                 </select>
+                {errors.paymentMethod && (
+                  <p className="text-xs text-red-500">{errors.paymentMethod.message}</p>
+                )}
               </div>
             )}
           </div>
@@ -719,7 +726,12 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
             />
           </div>
 
-          {/* ── Submit error ── */}
+          {/* ── Validation + submit errors ── */}
+          {hasValidationErrors && (
+            <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+              Some fields need attention — check the form above.
+            </p>
+          )}
           {submitError && (
             <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">
               {submitError}
@@ -732,7 +744,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
             type="submit"
             form=""
             disabled={isSubmitting || loadingHoldings || !!holdingsError}
-            onClick={handleSubmit(onSubmit)}
+            onClick={handleSubmit(onSubmit, () => setHasValidationErrors(true))}
             className="bg-violet-700 hover:bg-violet-800 text-white rounded-md"
           >
             {isSubmitting ? "Recording…" : "Record sale"}

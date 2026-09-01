@@ -1,0 +1,152 @@
+## Part 2b — getProducts() branch filter + product picker audit
+
+─────────────────────────────────────────────────────────────────────────────
+DIFF — lib/db/queries/products.ts
+─────────────────────────────────────────────────────────────────────────────
+
+BEFORE:
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, sku, name, ..., product_stock(quantity)")
+    .eq("organisation_id", scope.organisationId)
+    .is("deleted_at", null)
+    .order("name", { ascending: true })
+
+  if (error) return []
+
+AFTER:
+  let query = supabase
+    .from("products")
+    .select("id, sku, name, ..., product_stock(quantity)")
+    .eq("organisation_id", scope.organisationId)
+    .is("deleted_at", null)
+    .order("name", { ascending: true })
+
+  if (scope.branchId) {
+    // Fetch which product IDs this branch carries from the join table.
+    // After app_0043 backfill, every existing (branch, product) pair is listed,
+    // so this is visually inert on deploy.
+    const { data: carried } = await supabase
+      .from("branch_products")
+      .select("product_id")
+      .eq("branch_id", scope.branchId)
+
+    const carriedIds = (carried ?? []).map((r: { product_id: string }) => r.product_id)
+    if (carriedIds.length === 0) return []
+    query = query.in("id", carriedIds)
+  }
+
+  const { data, error } = await query
+
+  if (error) return []
+
+Pattern:
+  - Two-step: fetch branch_products IDs first, then filter products table with .in().
+  - Empty carriedIds → return [] immediately (branch has no catalog yet — safe after backfill).
+  - scope.branchId null (org-level owner) → no branch_products lookup, all org products unchanged.
+  - Extra round-trip (branch_products lookup) only fires when inside a branch. Org-level views pay nothing.
+
+Visual change on deploy: ZERO — backfill in app_0043 inserts every (branch, product) pair,
+so carriedIds for any branch = full org product list = same result as no filter.
+
+
+─────────────────────────────────────────────────────────────────────────────
+getStockSummary / getLowStockProducts — do they need branch_products filter?
+─────────────────────────────────────────────────────────────────────────────
+
+SHORT ANSWER: NO.
+
+Reasoning:
+
+getStockSummary:
+  .from("products")
+  .select("reorder_point, product_stock(quantity)")
+  .eq("organisation_id", scope.organisationId)
+  .is("deleted_at", null)
+
+  - For non-owner branch members (inventory/sales/service): RLS on product_stock is
+    already restricted to their branch via user_vendor_read_branch_ids(). The nested
+    product_stock select returns at most 1 row per product (their branch's row).
+    A product not stocked at their branch has quantity 0 or no row → contributes 0 to
+    the sum. stock-existence already implies the product touched their branch.
+    NO branch_products filter needed: the result is already branch-accurate.
+
+  - For owners inside a branch: RLS on product_stock expands to ALL branches (owner null-
+    membership returns every branch). So the stock sum is org-wide even when inside a branch.
+    This is a pre-existing behaviour, separate from the branch_products question.
+    The dashboard stock widget (totalUnits, lowStockCount) is an informational summary —
+    showing org-wide stock to the owner even inside a branch is acceptable for a dashboard.
+    Adding branch_products filter here would restrict WHICH products appear in low-stock
+    alerts, but their stock totals would still be org-wide. That inconsistency is worse
+    than leaving it org-wide. Leave as-is.
+
+getLowStockProducts:
+  Same query shape. Same reasoning. Org-wide for owners, branch-restricted for members
+  via RLS on product_stock. Not curated by branch_products. Leave as-is.
+
+getNotifications (low-stock path):
+  Same query — products with reorder_point > 0. Same conclusion. Leave as-is.
+
+CONCLUSION: stock-existence + RLS already makes these branch-correct for non-owner roles.
+For owners, they're intentionally org-wide. branch_products filter would not help here.
+
+
+─────────────────────────────────────────────────────────────────────────────
+Product picker audit — every place that shows a product list to the user
+─────────────────────────────────────────────────────────────────────────────
+
+1. /inventory/products page
+   Source: getProducts() (lib/db/queries/products.ts)
+   Fix: YES — this is the change we just made. Branch filter applied via branch_products.
+
+2. /requests page — stock request form (raise a request for products)
+   Source: getProductsForOrg() — which is just:
+     export { getProducts as getProductsForOrg }  // invoices.ts line 6
+   It IS getProducts(). Gets the branch_products filter for free.
+   Fix: YES, automatically.
+
+3. /inventory/invoices/new page — new vendor invoice line picker
+   Source: getProductsForOrg() — same alias.
+   Gets the branch_products filter for free.
+   Fix: YES, automatically.
+
+4. /inventory/transfers page — transfer form product picker
+   Source: getOrgProducts() in lib/db/queries/transfers.ts — SEPARATE query:
+     supabase.from("products").select("id, sku, name")
+       .eq("organisation_id", scope.organisationId)
+       .is("deleted_at", null)
+       .order("name")
+   This is its own org-wide query. Does NOT use getProducts(). Does NOT get the fix.
+   Status: NEEDS ITS OWN FILTER (Part 2c if desired — same two-step pattern).
+   Note: transfers page already redirects owner-at-org-level to /org, so scope.branchId
+   is always set here. The branch_products filter would always apply.
+
+5. /holding page → RecordSaleDialog + RecordServiceDialog
+   Source: getMyHoldings() — personal holdings (staff_holdings table).
+   The sale/service form lets you sell/consume what you personally hold.
+   Products appear because they are in your holding, not from the catalog.
+   Staff holdings are keyed (branch_id, holder_user_id, product_id) — already
+   branch-scoped by the fact that holdings are issued per-branch.
+   Fix: NOT NEEDED. Holdings-based pickers are already branch-correct by nature.
+
+─────────────────────────────────────────────────────────────────────────────
+Summary
+─────────────────────────────────────────────────────────────────────────────
+
+Fixed now (this PR):
+  - getProducts() — branch_products filter when scope.branchId set
+  - getProductsForOrg() — automatic (it's an alias)
+
+Fixed automatically:
+  - /inventory/products product list
+  - /requests stock request picker
+  - /inventory/invoices/new invoice line picker
+
+Needs separate fix (Part 2c):
+  - getOrgProducts() in transfers.ts — /inventory/transfers product picker
+
+Not needed:
+  - getStockSummary, getLowStockProducts, getNotifications (stock views, not catalog)
+  - RecordSaleDialog, RecordServiceDialog (holdings-based, inherently branch-scoped)
+
+Deploy impact: ZERO visual change — backfill ensures every branch carries every product.
