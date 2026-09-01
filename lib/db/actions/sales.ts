@@ -66,6 +66,7 @@ export async function recordSaleAction(input: SaleInput): Promise<ActionResult<{
     p_lines: pLines,
     p_vat_rate: parsed.data.vatRate ?? 7.5,
     p_service_lines: pServiceLines,
+    p_client_id: parsed.data.clientId || null,
   })
 
   if (error) {

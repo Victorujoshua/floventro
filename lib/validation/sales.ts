@@ -14,6 +14,7 @@ export const saleServiceLineSchema = z.object({
 })
 
 export const saleSchema = z.object({
+  clientId: z.string().uuid().optional().or(z.literal("")),
   customerName: z.string().max(120).optional().or(z.literal("")),
   customerPhone: z.string().max(40).optional().or(z.literal("")),
   soldOn: z.string().min(1, "Date is required"),

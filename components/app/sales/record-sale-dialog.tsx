@@ -4,13 +4,16 @@ import { useEffect, useState } from "react"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
-import { Plus, Trash2 } from "lucide-react"
+import { Plus, Trash2, UserRound } from "lucide-react"
 import { saleSchema, type SaleInput } from "@/lib/validation/sales"
 import { recordSaleAction } from "@/lib/db/actions/sales"
 import { getMyHoldingsAction } from "@/lib/db/actions/holdings"
 import { getActiveServiceTypesAction } from "@/lib/db/actions/services"
+import { createClientAction } from "@/lib/db/actions/clients"
+import { ClientSearch } from "@/components/app/clients/client-search"
 import type { MyHolding } from "@/lib/db/queries/holdings"
 import type { ServiceType } from "@/lib/db/queries/services"
+import type { Client } from "@/lib/db/queries/clients"
 import { formatNaira } from "@/lib/format/money"
 import {
   Dialog,
@@ -52,6 +55,15 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
   const [holdingsError, setHoldingsError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
+  // ── Client state ───────────────────────────────────────────────────────────
+  const [selectedClient, setSelectedClient]       = useState<Client | null>(null)
+  const [showQuickCreate, setShowQuickCreate]     = useState(false)
+  const [newClientName, setNewClientName]         = useState("")
+  const [newClientPhone, setNewClientPhone]       = useState("")
+  const [newClientMemberId, setNewClientMemberId] = useState("")
+  const [newClientError, setNewClientError]       = useState<string | null>(null)
+  const [newClientSaving, setNewClientSaving]     = useState(false)
+
   const {
     register,
     control,
@@ -63,6 +75,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
   } = useForm<SaleInput>({
     resolver: zodResolver(saleSchema),
     defaultValues: {
+      clientId: "",
       customerName: "",
       customerPhone: "",
       soldOn: todayLocal(),
@@ -78,11 +91,11 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
   const { fields, append, remove } = useFieldArray({ control, name: "lines" })
   const { fields: svcFields, append: appendSvc, remove: removeSvc } = useFieldArray({ control, name: "serviceLines" })
 
-  const watchedLines = watch("lines")
+  const watchedLines    = watch("lines")
   const watchedSvcLines = watch("serviceLines")
-  const soldOn = watch("soldOn")
-  const paymentStatus = watch("paymentStatus")
-  const watchedVatRate = watch("vatRate") ?? 7.5
+  const soldOn          = watch("soldOn")
+  const paymentStatus   = watch("paymentStatus")
+  const watchedVatRate  = watch("vatRate") ?? 7.5
 
   const isFutureDate = soldOn && soldOn > todayLocal()
 
@@ -92,8 +105,8 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
   const serviceSubtotalCents = (watchedSvcLines ?? []).reduce((sum, line) => {
     return sum + Math.round((line.quantity || 0) * (line.unitPriceNaira || 0) * 100)
   }, 0)
-  const subtotalCents = productSubtotalCents + serviceSubtotalCents
-  const vatCentsComputed = Math.round(subtotalCents * watchedVatRate / 100)
+  const subtotalCents      = productSubtotalCents + serviceSubtotalCents
+  const vatCentsComputed   = Math.round(subtotalCents * watchedVatRate / 100)
   const totalCentsComputed = subtotalCents + vatCentsComputed
 
   useEffect(() => {
@@ -125,8 +138,25 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
     return () => { cancelled = true }
   }, [open, initialProductId, setValue])
 
+  // Sync clientId hidden field when client selection changes
+  useEffect(() => {
+    if (selectedClient) {
+      setValue("clientId", selectedClient.id)
+    } else {
+      setValue("clientId", "")
+    }
+  }, [selectedClient, setValue])
+
+  function resetClientState() {
+    setSelectedClient(null)
+    setShowQuickCreate(false)
+    setNewClientName(""); setNewClientPhone(""); setNewClientMemberId("")
+    setNewClientError(null); setNewClientSaving(false)
+  }
+
   function handleClose() {
     reset({
+      clientId: "",
       customerName: "",
       customerPhone: "",
       soldOn: todayLocal(),
@@ -139,7 +169,34 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
     })
     setSubmitError(null)
     setHoldingsError(null)
+    resetClientState()
     onOpenChange(false)
+  }
+
+  async function handleQuickCreate() {
+    if (!newClientName.trim()) { setNewClientError("Name is required"); return }
+    setNewClientSaving(true)
+    setNewClientError(null)
+    const result = await createClientAction({
+      name:     newClientName.trim(),
+      phone:    newClientPhone.trim()    || undefined,
+      memberId: newClientMemberId.trim() || undefined,
+    })
+    setNewClientSaving(false)
+    if (!result.ok) { setNewClientError(result.message ?? "Error creating client"); return }
+
+    const newClient: Client = {
+      id:             result.data.id,
+      organisationId: "",
+      name:           newClientName.trim(),
+      phone:          newClientPhone.trim() || null,
+      email:          null,
+      memberId:       newClientMemberId.trim() || null,
+      createdAt:      new Date().toISOString(),
+    }
+    setSelectedClient(newClient)
+    setShowQuickCreate(false)
+    setNewClientName(""); setNewClientPhone(""); setNewClientMemberId("")
   }
 
   const usedProductIds = new Set((watchedLines ?? []).map((l) => l.productId).filter(Boolean))
@@ -186,6 +243,9 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 pt-1">
+
+          {/* Hidden clientId field — synced via useEffect above */}
+          <input type="hidden" {...register("clientId")} />
 
           {/* ── Products ── */}
           <div className="space-y-3">
@@ -345,7 +405,6 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
                               <option key={svc.id} value={svc.id}>{svc.name}</option>
                             ))}
                           </select>
-                          {/* Hidden inputs to register serviceTypeId and serviceName with RHF */}
                           <input type="hidden" {...register(`serviceLines.${index}.serviceTypeId`)} />
                           <input type="hidden" {...register(`serviceLines.${index}.serviceName`)} />
                           {errors.serviceLines?.[index]?.serviceTypeId && (
@@ -480,16 +539,116 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
             </div>
           </div>
 
-          {/* ── Customer ── */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="customerName">Customer name <span className="text-neutral-400 font-normal">(optional)</span></Label>
-              <Input id="customerName" placeholder="Walk-in" {...register("customerName")} />
+          {/* ── Customer / Client ── */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-neutral-700">Customer</Label>
+              <span className="text-xs text-neutral-400">Optional — link to a client record</span>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="customerPhone">Phone <span className="text-neutral-400 font-normal">(optional)</span></Label>
-              <Input id="customerPhone" placeholder="08012345678" {...register("customerPhone")} />
-            </div>
+
+            {showQuickCreate ? (
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 space-y-3">
+                <p className="text-xs font-medium text-neutral-500">New client</p>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Name <span className="text-red-500">*</span></Label>
+                  <Input
+                    placeholder="Jane Doe"
+                    value={newClientName}
+                    onChange={(e) => setNewClientName(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Phone</Label>
+                    <Input
+                      placeholder="08012345678"
+                      value={newClientPhone}
+                      onChange={(e) => setNewClientPhone(e.target.value)}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Member ID</Label>
+                    <Input
+                      placeholder="MEM-0001"
+                      value={newClientMemberId}
+                      onChange={(e) => setNewClientMemberId(e.target.value)}
+                      className="h-9 text-sm font-mono"
+                    />
+                  </div>
+                </div>
+                {newClientError && <p className="text-xs text-red-500">{newClientError}</p>}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={newClientSaving}
+                    onClick={handleQuickCreate}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-violet-700 hover:bg-violet-800 text-white px-3 h-8 text-xs font-medium transition-colors disabled:opacity-50"
+                  >
+                    {newClientSaving ? "Creating…" : "Create & select"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowQuickCreate(false); setNewClientError(null) }}
+                    className="inline-flex items-center rounded-md border border-neutral-200 px-3 h-8 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <ClientSearch
+                    value={selectedClient}
+                    onChange={(c) => setSelectedClient(c)}
+                    placeholder="Search clients by name or member ID…"
+                  />
+                </div>
+                {!selectedClient && (
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickCreate(true)}
+                    className="shrink-0 inline-flex items-center gap-1 rounded-md border border-neutral-200 px-2.5 h-9 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
+                  >
+                    <UserRound className="h-3 w-3" />
+                    New
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Client linked — show card; or walk-in free-text */}
+            {selectedClient ? (
+              <div className="rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-3 space-y-0.5">
+                <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-1.5">Sale for</p>
+                <p className="text-sm font-medium text-neutral-950">{selectedClient.name}</p>
+                <div className="flex items-center gap-3 mt-0.5">
+                  {selectedClient.phone && (
+                    <span className="text-xs font-mono text-neutral-500">{selectedClient.phone}</span>
+                  )}
+                  {selectedClient.memberId && (
+                    <span className="text-xs font-mono text-neutral-400">#{selectedClient.memberId}</span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="customerName" className="text-xs">
+                    Name <span className="text-neutral-400 font-normal">(optional)</span>
+                  </Label>
+                  <Input id="customerName" placeholder="Walk-in" {...register("customerName")} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="customerPhone" className="text-xs">
+                    Phone <span className="text-neutral-400 font-normal">(optional)</span>
+                  </Label>
+                  <Input id="customerPhone" placeholder="08012345678" {...register("customerPhone")} />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ── Payment toggle ── */}
