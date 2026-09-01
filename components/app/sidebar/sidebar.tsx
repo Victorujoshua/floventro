@@ -25,6 +25,7 @@ import {
   BookOpen,
   CreditCard,
   FlaskConical,
+  Store,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Role } from "@/lib/auth/scope"
@@ -41,6 +42,7 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
   owner: [
     { label: "Dashboard",          href: "/dashboard",              icon: LayoutDashboard },
     { label: "Products",           href: "/inventory/products",     icon: Package },
+    { label: "Branch Stock",       href: "/branch-stock",           icon: Store },
     { label: "Services",           href: "/admin/services",         icon: Sparkles },
     { label: "Service Items",      href: "/admin/service-items",    icon: FlaskConical },
     { label: "Clients",            href: "/admin/clients",          icon: UserRound },
@@ -50,7 +52,6 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "Invoices",           href: "/inventory/invoices",     icon: FileText },
     { label: "Requests",           href: "/requests",               icon: ClipboardList },
     { label: "Stock requests",     href: "/inventory/requests",     icon: ClipboardCheck },
-    { label: "My Holding",         href: "/holding",                icon: Wallet },
     { label: "Sales",              href: "/sales",                  icon: ShoppingCart },
     { label: "Services performed", href: "/services-performed",     icon: Sparkles },
     { label: "Fulfilment",         href: "/fulfilment",             icon: PackageCheck, feature: "fulfilment" },
@@ -58,6 +59,7 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
   inventory: [
     { label: "Dashboard",          href: "/dashboard",              icon: LayoutDashboard },
     { label: "Products",           href: "/inventory/products",     icon: Package },
+    { label: "Branch Stock",       href: "/branch-stock",           icon: Store },
     { label: "Services",           href: "/admin/services",         icon: Sparkles },
     { label: "Service Items",      href: "/admin/service-items",    icon: FlaskConical },
     { label: "Clients",            href: "/admin/clients",          icon: UserRound },
@@ -67,7 +69,6 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "Invoices",           href: "/inventory/invoices",     icon: FileText },
     { label: "Requests",           href: "/requests",               icon: ClipboardList },
     { label: "Stock requests",     href: "/inventory/requests",     icon: ClipboardCheck },
-    { label: "My Holding",         href: "/holding",                icon: Wallet },
     { label: "Fulfilment",         href: "/fulfilment",             icon: PackageCheck, feature: "fulfilment" },
   ],
   sales: [
@@ -93,6 +94,7 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
   admin: [
     { label: "Dashboard",          href: "/dashboard",              icon: LayoutDashboard },
     { label: "Products",           href: "/inventory/products",     icon: Package },
+    { label: "Branch Stock",       href: "/branch-stock",           icon: Store },
     { label: "Services",           href: "/admin/services",         icon: Sparkles },
     { label: "Service Items",      href: "/admin/service-items",    icon: FlaskConical },
     { label: "Clients",            href: "/admin/clients",          icon: UserRound },
@@ -102,7 +104,6 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "Invoices",           href: "/inventory/invoices",     icon: FileText },
     { label: "Requests",           href: "/requests",               icon: ClipboardList },
     { label: "Stock requests",     href: "/inventory/requests",     icon: ClipboardCheck },
-    { label: "My Holding",         href: "/holding",                icon: Wallet },
     { label: "Sales",              href: "/sales",                  icon: ShoppingCart },
     { label: "Services performed", href: "/services-performed",     icon: Sparkles },
     { label: "Fulfilment",         href: "/fulfilment",             icon: PackageCheck, feature: "fulfilment" },
