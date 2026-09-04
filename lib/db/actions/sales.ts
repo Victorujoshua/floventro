@@ -74,7 +74,7 @@ export async function recordSaleAction(input: SaleInput): Promise<ActionResult<{
   if (error) {
     const msg: string = error.message ?? ""
     const lower = msg.toLowerCase()
-    console.error("[recordSaleAction] RPC error:", msg)
+    console.error("[recordSaleAction] RPC error:", msg, "| code:", error.code, "| details:", error.details)
 
     if (lower.includes("insufficient holding")) {
       const productMatch = msg.match(/insufficient holding for product ([0-9a-f-]{36})/i)
@@ -116,6 +116,15 @@ export async function recordSaleAction(input: SaleInput): Promise<ActionResult<{
         error: "cost_sync",
         message: "This item's stock and cost records are out of sync. Please contact support.",
       }
+
+    if (lower.includes("service type not found or inactive"))
+      return { ok: false, error: "invalid_service", message: "That service is inactive or unavailable. Pick an active service." }
+    if (lower.includes("service line must have a name"))
+      return { ok: false, error: "validation", message: "Each service line needs a name." }
+    if (lower.includes("service line quantity must be greater than 0"))
+      return { ok: false, error: "validation", message: "Service quantity must be greater than 0." }
+    if (lower.includes("service line price must be 0 or greater"))
+      return { ok: false, error: "validation", message: "Service price can't be negative." }
 
     return { ok: false, error: "server", message: "Something went wrong. Please try again." }
   }
