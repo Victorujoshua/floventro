@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
-function Dialog({ ...props }: DialogPrimitive.Root.Props) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+function Dialog({ disablePointerDismissal = true, ...props }: DialogPrimitive.Root.Props) {
+  return <DialogPrimitive.Root data-slot="dialog" disablePointerDismissal={disablePointerDismissal} {...props} />
 }
 
 function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
@@ -53,7 +53,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-[440px] flex-col",
+          "fixed inset-y-0 right-0 z-50 flex h-full w-[25vw] flex-col",
           "bg-popover text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/10",
           "duration-200 outline-none",
           "data-open:animate-in data-open:slide-in-from-right",
