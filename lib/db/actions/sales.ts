@@ -41,11 +41,13 @@ export async function recordSaleAction(input: SaleInput): Promise<ActionResult<{
     branchId = branches[0].id
   }
 
-  const pLines = parsed.data.lines.map((l) => ({
-    product_id: l.productId,
-    quantity: l.quantity,
-    unit_price_cents: Math.round(l.unitPriceNaira * 100),
-  }))
+  const pLines = parsed.data.lines
+    .filter((l) => l.productId !== "")
+    .map((l) => ({
+      product_id: l.productId,
+      quantity: l.quantity,
+      unit_price_cents: Math.round(l.unitPriceNaira * 100),
+    }))
 
   const pServiceLines = (parsed.data.serviceLines ?? []).map((l) => ({
     service_type_id: l.serviceTypeId || null,
