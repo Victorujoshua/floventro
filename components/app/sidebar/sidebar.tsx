@@ -25,6 +25,7 @@ import {
   CreditCard,
   FlaskConical,
   Store,
+  ScrollText,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Role } from "@/lib/auth/scope"
@@ -113,6 +114,7 @@ const MANAGEMENT_MENU: Record<Role, NavItem[]> = {
     { label: "Settings",       href: "/admin/settings",      icon: SettingsIcon },
     { label: "Staff holdings", href: "/inventory/holdings",  icon: Layers },
     { label: "Transfers",      href: "/inventory/transfers", icon: ArrowLeftRight },
+    { label: "Stock Ledger",   href: "/ledger",              icon: ScrollText },
     { label: "Report",         href: "/report",              icon: BarChart2 },
   ],
   inventory: [
