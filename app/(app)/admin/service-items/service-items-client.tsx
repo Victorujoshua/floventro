@@ -33,7 +33,7 @@ const SELECT_CLASS =
 const CATEGORY_LABELS: Record<string, string> = {
   product:   "Product",
   supply:    "Supply",
-  equipment: "Equipment",
+  equipment: "Others",
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -260,7 +260,7 @@ function ServiceItemFormDialog({
             <select id="si-category" className={SELECT_CLASS} {...register("category")}>
               <option value="product">Product — consumable, links to inventory</option>
               <option value="supply">Supply — consumable, no inventory link</option>
-              <option value="equipment">Equipment — reusable, flat per-session fee</option>
+              <option value="equipment">Others — reusable, flat per-session fee</option>
             </select>
             {errors.category && <p className="text-xs text-red-500">{errors.category.message}</p>}
           </div>
@@ -307,7 +307,7 @@ function ServiceItemFormDialog({
               />
             )}
             {isEquipment && (
-              <p className="text-xs text-neutral-400">Equipment always uses flat rate.</p>
+              <p className="text-xs text-neutral-400">Others always uses flat rate.</p>
             )}
           </div>
 
@@ -467,7 +467,7 @@ export function ServiceItemsClient({ initialItems, initialMeasurements, products
     { value: "all",       label: "All" },
     { value: "product",   label: "Product" },
     { value: "supply",    label: "Supply" },
-    { value: "equipment", label: "Equipment" },
+    { value: "equipment", label: "Others" },
   ]
 
   return (

@@ -31,7 +31,7 @@ const FILTERS: { value: CategoryFilter; label: string }[] = [
   { value: "all",       label: "All" },
   { value: "product",   label: "Product" },
   { value: "supply",    label: "Supply" },
-  { value: "equipment", label: "Equipment" },
+  { value: "equipment", label: "Others" },
 ]
 
 function formatDate(dateStr: string, timeStr: string) {
