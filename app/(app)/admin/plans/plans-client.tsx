@@ -123,7 +123,7 @@ function PlanFormDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="plan-price">
-                List price (<span className="font-inter">₦</span>)
+                Price (<span className="font-inter">₦</span>)
               </Label>
               <Input
                 id="plan-price"

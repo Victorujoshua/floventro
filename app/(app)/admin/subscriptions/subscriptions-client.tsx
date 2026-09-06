@@ -157,7 +157,7 @@ function SubscribeDialog({
                 </span>
               </div>
               <div className="flex justify-between text-xs text-neutral-500">
-                <span>List price</span>
+                <span>Price</span>
                 <span className="font-mono tabular-nums text-neutral-950">
                   <span className="font-inter">₦</span>{formatNaira(selectedPlan.priceCents)}
                 </span>
