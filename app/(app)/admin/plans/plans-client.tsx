@@ -11,6 +11,7 @@ import { createPlanAction, updatePlanAction, togglePlanAction } from "@/lib/db/a
 import type { Plan } from "@/lib/db/queries/plans"
 import type { ServiceType } from "@/lib/db/queries/services"
 import { formatNaira } from "@/lib/format/money"
+import { ServiceTypeSearch } from "@/components/app/services/service-type-search"
 import {
   Dialog,
   DialogContent,
@@ -33,17 +34,25 @@ function PlanFormDialog({
   onSuccess,
   editing,
   serviceTypes,
+  canCreateServiceType,
 }: {
   open: boolean
   onClose: () => void
   onSuccess: () => void
   editing: Plan | null
   serviceTypes: ServiceType[]
+  canCreateServiceType: boolean
 }) {
+  // Tracks service types created inline during this session before a page refresh
+  const [extraTypes, setExtraTypes] = useState<ServiceType[]>([])
+  const serverIds = new Set(serviceTypes.map((s) => s.id))
+  const availableTypes = [...serviceTypes, ...extraTypes.filter((s) => !serverIds.has(s.id))]
+
   const {
     register,
     handleSubmit,
     watch,
+    setValue,
     control,
     reset,
     formState: { errors, isSubmitting },
@@ -148,12 +157,14 @@ function PlanFormDialog({
                 <div className="flex items-start gap-2">
                   <div className="flex-1 space-y-1.5">
                     <Label className="text-xs">Service type</Label>
-                    <select className={SELECT_CLASS} {...register(`lines.${index}.serviceTypeId`)}>
-                      <option value="">Select a service…</option>
-                      {serviceTypes.map((st) => (
-                        <option key={st.id} value={st.id}>{st.name}</option>
-                      ))}
-                    </select>
+                    <ServiceTypeSearch
+                      value={watchedLines?.[index]?.serviceTypeId ?? ""}
+                      onChange={(id) => setValue(`lines.${index}.serviceTypeId`, id, { shouldValidate: true })}
+                      serviceTypes={availableTypes}
+                      canCreate={canCreateServiceType}
+                      onCreated={(st) => setExtraTypes((prev) => [...prev, st])}
+                      error={errors.lines?.[index]?.serviceTypeId?.message}
+                    />
                     {errors.lines?.[index]?.serviceTypeId && (
                       <p className="text-xs text-red-500">{errors.lines[index]?.serviceTypeId?.message}</p>
                     )}
@@ -204,7 +215,7 @@ function PlanFormDialog({
         <DialogFooter showCloseButton>
           <Button
             type="button"
-            disabled={isSubmitting || serviceTypes.length === 0}
+            disabled={isSubmitting}
             onClick={handleSubmit(onSubmit)}
             className="bg-violet-700 hover:bg-violet-800 text-white rounded-md"
           >
@@ -219,11 +230,12 @@ function PlanFormDialog({
 // ── Main client ───────────────────────────────────────────────────────────────
 
 type Props = {
-  initialPlans:  Plan[]
-  serviceTypes:  ServiceType[]
+  initialPlans:         Plan[]
+  serviceTypes:         ServiceType[]
+  canCreateServiceType: boolean
 }
 
-export function PlansClient({ initialPlans, serviceTypes }: Props) {
+export function PlansClient({ initialPlans, serviceTypes, canCreateServiceType }: Props) {
   const router = useRouter()
   const [, startTransition] = useTransition()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -260,17 +272,13 @@ export function PlansClient({ initialPlans, serviceTypes }: Props) {
             Define single-service and package plans. Clients subscribe to a plan to track sessions and revenue.
           </p>
         </div>
-        {serviceTypes.length === 0 ? (
-          <p className="text-xs text-neutral-400 mt-1">Add services first (Admin → Services).</p>
-        ) : (
-          <button
-            onClick={() => { setEditing(null); setDialogOpen(true) }}
-            className="shrink-0 inline-flex items-center gap-1.5 rounded-md bg-violet-700 hover:bg-violet-800 text-white px-4 h-9 text-sm font-medium transition-colors"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New plan
-          </button>
-        )}
+        <button
+          onClick={() => { setEditing(null); setDialogOpen(true) }}
+          className="shrink-0 inline-flex items-center gap-1.5 rounded-md bg-violet-700 hover:bg-violet-800 text-white px-4 h-9 text-sm font-medium transition-colors"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New plan
+        </button>
       </div>
 
       {initialPlans.length === 0 ? (
@@ -359,6 +367,7 @@ export function PlansClient({ initialPlans, serviceTypes }: Props) {
         onSuccess={handleSuccess}
         editing={editing}
         serviceTypes={serviceTypes}
+        canCreateServiceType={canCreateServiceType}
       />
     </div>
   )
