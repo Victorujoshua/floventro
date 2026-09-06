@@ -1,9 +1,10 @@
 "use client"
 
+import Link from "next/link"
 import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { MoreHorizontal, Plus, Store } from "lucide-react"
+import { FileText, MoreHorizontal, Plus, Store } from "lucide-react"
 import {
   Table,
   TableBody,
@@ -105,13 +106,22 @@ export function VendorsClient({ vendors, branches }: Props) {
           <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Vendors</h1>
           <p className="text-sm text-neutral-500 mt-1">Suppliers you buy from</p>
         </div>
-        <button
-          onClick={() => setDialogState({ type: "create" })}
-          className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          New vendor
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/inventory/invoices"
+            className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-4 h-10 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+          >
+            <FileText className="h-4 w-4" />
+            Invoices
+          </Link>
+          <button
+            onClick={() => setDialogState({ type: "create" })}
+            className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            New vendor
+          </button>
+        </div>
       </div>
 
       {/* Empty state */}

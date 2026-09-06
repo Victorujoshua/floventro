@@ -3,6 +3,8 @@ import { requireRole } from "@/lib/auth/guards"
 import { getInvoices } from "@/lib/db/queries/invoices"
 import { FileText, Plus } from "lucide-react"
 import { InvoicesClient, type InvoiceRow } from "./invoices-client"
+import { InvoiceExportButton } from "./invoice-export-button"
+import { InvoiceImportButton } from "./invoice-import-button"
 
 export default async function InvoicesPage() {
   await requireRole("owner", "inventory", "admin")
@@ -16,13 +18,17 @@ export default async function InvoicesPage() {
           <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Invoices</h1>
           <p className="text-sm text-neutral-500 mt-1">Vendor invoices and stock received</p>
         </div>
-        <Link
-          href="/inventory/invoices/new"
-          className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Record invoice
-        </Link>
+        <div className="flex items-center gap-2">
+          <InvoiceExportButton />
+          <InvoiceImportButton />
+          <Link
+            href="/inventory/invoices/new"
+            className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Record invoice
+          </Link>
+        </div>
       </div>
 
       {invoices.length === 0 ? (

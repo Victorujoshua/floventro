@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   Package,
   Truck,
-  FileText,
   Users,
   Settings as SettingsIcon,
   LogOut,
@@ -49,7 +48,6 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "Plans",              href: "/admin/plans",            icon: BookOpen },
     { label: "Subscriptions",      href: "/admin/subscriptions",    icon: CreditCard },
     { label: "Vendors",            href: "/inventory/vendors",      icon: Truck },
-    { label: "Invoices",           href: "/inventory/invoices",     icon: FileText },
     { label: "Requests",           href: "/requests",               icon: ClipboardList },
     { label: "Stock requests",     href: "/inventory/requests",     icon: ClipboardCheck },
     { label: "Sales",              href: "/sales",                  icon: ShoppingCart },
@@ -66,7 +64,6 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "Plans",              href: "/admin/plans",            icon: BookOpen },
     { label: "Subscriptions",      href: "/admin/subscriptions",    icon: CreditCard },
     { label: "Vendors",            href: "/inventory/vendors",      icon: Truck },
-    { label: "Invoices",           href: "/inventory/invoices",     icon: FileText },
     { label: "Requests",           href: "/requests",               icon: ClipboardList },
     { label: "Stock requests",     href: "/inventory/requests",     icon: ClipboardCheck },
     { label: "Fulfilment",         href: "/fulfilment",             icon: PackageCheck, feature: "fulfilment" },
@@ -101,7 +98,6 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "Plans",              href: "/admin/plans",            icon: BookOpen },
     { label: "Subscriptions",      href: "/admin/subscriptions",    icon: CreditCard },
     { label: "Vendors",            href: "/inventory/vendors",      icon: Truck },
-    { label: "Invoices",           href: "/inventory/invoices",     icon: FileText },
     { label: "Requests",           href: "/requests",               icon: ClipboardList },
     { label: "Stock requests",     href: "/inventory/requests",     icon: ClipboardCheck },
     { label: "Sales",              href: "/sales",                  icon: ShoppingCart },
@@ -183,7 +179,7 @@ export function Sidebar({ role, pastDueCount, pendingRequestsCount, hiddenFeatur
   const mainItems = (MAIN_MENU[role] ?? MAIN_MENU.owner)
     .filter((item) => !item.feature || !hiddenFeatures.includes(item.feature))
     .map((item) => {
-    if (item.href === "/inventory/invoices") return { ...item, badge: pastDueCount }
+    if (item.href === "/inventory/vendors") return { ...item, badge: pastDueCount }
     if (item.href === "/inventory/requests") return { ...item, badge: pendingRequestsCount }
     return item
   })

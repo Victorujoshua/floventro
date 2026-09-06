@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useForm, useFieldArray } from "react-hook-form"
+import { useForm, useFieldArray, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
 import { Plus, Trash2, UserRound } from "lucide-react"
@@ -77,7 +77,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
     reset,
     formState: { errors, isSubmitting },
   } = useForm<SaleInput>({
-    resolver: zodResolver(saleSchema),
+    resolver: zodResolver(saleSchema) as Resolver<SaleInput>,
     defaultValues: {
       clientId: "",
       customerName: "",

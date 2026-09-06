@@ -6,6 +6,10 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
 import { Plus, Pencil, Users } from "lucide-react"
+import { ExportButton } from "@/components/app/export-button"
+import { ImportButton } from "@/components/app/import-button"
+import { importClientsAction } from "@/lib/db/actions/import"
+import type { ExportColumn } from "@/lib/export/xlsx"
 import { clientSchema, type ClientInput } from "@/lib/validation/clients"
 import { createClientAction, updateClientAction } from "@/lib/db/actions/clients"
 import type { Client } from "@/lib/db/queries/clients"
@@ -127,6 +131,13 @@ function ClientFormDialog({
   )
 }
 
+const CLIENT_COLUMNS: ExportColumn[] = [
+  { header: "name",      key: "name" },
+  { header: "phone",     key: "phone" },
+  { header: "email",     key: "email" },
+  { header: "member_id", key: "memberId" },
+]
+
 // ── Main client ───────────────────────────────────────────────────────────────
 
 type Props = { initialClients: Client[] }
@@ -136,6 +147,13 @@ export function ClientsClient({ initialClients }: Props) {
   const [, startTransition] = useTransition()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing]       = useState<Client | null>(null)
+
+  const clientRows = initialClients.map((c) => ({
+    name:     c.name,
+    phone:    c.phone    ?? "",
+    email:    c.email    ?? "",
+    memberId: c.memberId ?? "",
+  }))
 
   function handleSuccess() {
     setDialogOpen(false)
@@ -152,13 +170,20 @@ export function ClientsClient({ initialClients }: Props) {
             Client records used to track plan subscriptions and service history.
           </p>
         </div>
-        <button
-          onClick={() => { setEditing(null); setDialogOpen(true) }}
-          className="shrink-0 inline-flex items-center gap-1.5 rounded-md bg-violet-700 hover:bg-violet-800 text-white px-4 h-9 text-sm font-medium transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Add client
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <ExportButton filename="clients" columns={CLIENT_COLUMNS} rows={clientRows} />
+          <ImportButton
+            onImport={importClientsAction}
+            onSuccess={() => startTransition(() => router.refresh())}
+          />
+          <button
+            onClick={() => { setEditing(null); setDialogOpen(true) }}
+            className="inline-flex items-center gap-1.5 rounded-md bg-violet-700 hover:bg-violet-800 text-white px-4 h-9 text-sm font-medium transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add client
+          </button>
+        </div>
       </div>
 
       {initialClients.length === 0 ? (

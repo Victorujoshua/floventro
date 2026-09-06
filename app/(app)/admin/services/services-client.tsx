@@ -6,6 +6,10 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
 import { Plus, Pencil, Sparkles } from "lucide-react"
+import { ExportButton } from "@/components/app/export-button"
+import { ImportButton } from "@/components/app/import-button"
+import { importServicesAction } from "@/lib/db/actions/import"
+import type { ExportColumn } from "@/lib/export/xlsx"
 import { serviceTypeSchema, type ServiceTypeInput } from "@/lib/validation/services"
 import {
   createServiceTypeAction,
@@ -149,6 +153,12 @@ function ServiceFormDialog({
   )
 }
 
+const SERVICE_COLUMNS: ExportColumn[] = [
+  { header: "name",                 key: "name" },
+  { header: "default_price_naira",  key: "defaultPriceNaira" },
+  { header: "is_active",            key: "isActive" },
+]
+
 // ── Main client ───────────────────────────────────────────────────────────────
 
 type Props = {
@@ -193,6 +203,12 @@ export function ServicesClient({ initialServices }: Props) {
   const active = initialServices.filter((s) => s.isActive)
   const inactive = initialServices.filter((s) => !s.isActive)
 
+  const serviceRows = initialServices.map((s) => ({
+    name:             s.name,
+    defaultPriceNaira: s.defaultPriceCents / 100,
+    isActive:         s.isActive,
+  }))
+
   return (
     <div className="max-w-2xl space-y-8">
       <div className="flex items-start justify-between gap-4">
@@ -202,13 +218,20 @@ export function ServicesClient({ initialServices }: Props) {
             Manage your service catalog. Services appear in the sale modal and the consumption log.
           </p>
         </div>
-        <button
-          onClick={openCreate}
-          className="shrink-0 inline-flex items-center gap-1.5 rounded-md bg-violet-700 hover:bg-violet-800 text-white px-4 h-9 text-sm font-medium transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          New service
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <ExportButton filename="services" columns={SERVICE_COLUMNS} rows={serviceRows} />
+          <ImportButton
+            onImport={importServicesAction}
+            onSuccess={() => startTransition(() => router.refresh())}
+          />
+          <button
+            onClick={openCreate}
+            className="inline-flex items-center gap-1.5 rounded-md bg-violet-700 hover:bg-violet-800 text-white px-4 h-9 text-sm font-medium transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New service
+          </button>
+        </div>
       </div>
 
       {initialServices.length === 0 ? (

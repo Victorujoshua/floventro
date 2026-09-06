@@ -6,6 +6,10 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
 import { Plus, Pencil, FlaskConical } from "lucide-react"
+import { ExportButton } from "@/components/app/export-button"
+import { ImportButton } from "@/components/app/import-button"
+import { importServiceItemsAction } from "@/lib/db/actions/import"
+import type { ExportColumn } from "@/lib/export/xlsx"
 import { serviceItemSchema, measurementSchema } from "@/lib/validation/service-items"
 import type { ServiceItemInput, MeasurementInput } from "@/lib/validation/service-items"
 import {
@@ -409,6 +413,16 @@ function ServiceItemFormDialog({
   )
 }
 
+const SERVICE_ITEM_COLUMNS: ExportColumn[] = [
+  { header: "name",                key: "name" },
+  { header: "category",            key: "category" },
+  { header: "measurement",         key: "measurement" },
+  { header: "package_size",        key: "packageSize" },
+  { header: "amount_naira",        key: "amountNaira" },
+  { header: "linked_product_name", key: "linkedProductName" },
+  { header: "linked_product_sku",  key: "linkedProductSku" },
+]
+
 // ── Main client ───────────────────────────────────────────────────────────────
 
 type CategoryFilter = "all" | "product" | "supply" | "equipment"
@@ -463,6 +477,16 @@ export function ServiceItemsClient({ initialItems, initialMeasurements, products
   const active   = filtered.filter((i) => i.isActive)
   const inactive = filtered.filter((i) => !i.isActive)
 
+  const serviceItemRows = initialItems.map((i) => ({
+    name:              i.name,
+    category:          i.category,
+    measurement:       i.measurementSymbol ?? i.measurementName,
+    packageSize:       i.packageSize,
+    amountNaira:       i.amountCents / 100,
+    linkedProductName: i.productName ?? "",
+    linkedProductSku:  i.productSku  ?? "",
+  }))
+
   const FILTERS: { value: CategoryFilter; label: string }[] = [
     { value: "all",       label: "All" },
     { value: "product",   label: "Product" },
@@ -481,13 +505,20 @@ export function ServiceItemsClient({ initialItems, initialMeasurements, products
             per-measurement unit.
           </p>
         </div>
-        <button
-          onClick={openCreate}
-          className="shrink-0 inline-flex items-center gap-1.5 rounded-md bg-violet-700 hover:bg-violet-800 text-white px-4 h-9 text-sm font-medium transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          New item
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <ExportButton filename="service-items" columns={SERVICE_ITEM_COLUMNS} rows={serviceItemRows} />
+          <ImportButton
+            onImport={importServiceItemsAction}
+            onSuccess={() => startTransition(() => router.refresh())}
+          />
+          <button
+            onClick={openCreate}
+            className="inline-flex items-center gap-1.5 rounded-md bg-violet-700 hover:bg-violet-800 text-white px-4 h-9 text-sm font-medium transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New item
+          </button>
+        </div>
       </div>
 
       {/* Category filter */}

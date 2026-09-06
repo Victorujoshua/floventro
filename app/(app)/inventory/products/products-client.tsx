@@ -4,6 +4,10 @@ import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { MoreHorizontal, Plus, Package } from "lucide-react"
+import { ExportButton } from "@/components/app/export-button"
+import { ImportButton } from "@/components/app/import-button"
+import { importProductsAction } from "@/lib/db/actions/import"
+import type { ExportColumn } from "@/lib/export/xlsx"
 import {
   Table,
   TableBody,
@@ -47,6 +51,13 @@ type Product = {
 
 type Branch = { id: string; name: string }
 
+const PRODUCT_COLUMNS: ExportColumn[] = [
+  { header: "name",            key: "name" },
+  { header: "sku",             key: "sku" },
+  { header: "unit_cost_naira", key: "unitCostNaira" },
+  { header: "reorder_point",   key: "reorderPoint" },
+]
+
 type Props = {
   products: Product[]
   resolvedBranchId: string | null
@@ -64,6 +75,16 @@ export function ProductsClient({ products, resolvedBranchId, branches }: Props) 
     | null
   >(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  const productRows = useMemo(
+    () => products.map((p) => ({
+      name:          p.name,
+      sku:           p.sku,
+      unitCostNaira: (p.unit_cost_cents ?? 0) / 100,
+      reorderPoint:  p.reorder_point,
+    })),
+    [products],
+  )
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -100,13 +121,20 @@ export function ProductsClient({ products, resolvedBranchId, branches }: Props) 
           <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Products</h1>
           <p className="text-sm text-neutral-500 mt-1">Your product catalogue</p>
         </div>
-        <button
-          onClick={() => setDialogState({ type: "create" })}
-          className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          New product
-        </button>
+        <div className="flex items-center gap-2">
+          <ExportButton filename="products" columns={PRODUCT_COLUMNS} rows={productRows} />
+          <ImportButton
+            onImport={importProductsAction}
+            onSuccess={() => router.refresh()}
+          />
+          <button
+            onClick={() => setDialogState({ type: "create" })}
+            className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            New product
+          </button>
+        </div>
       </div>
 
       {/* Empty state */}
