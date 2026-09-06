@@ -52,7 +52,6 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "Requests",           href: "/requests",               icon: ClipboardList },
     { label: "Stock requests",     href: "/inventory/requests",     icon: ClipboardCheck },
     { label: "Sales",              href: "/sales",                  icon: ShoppingCart },
-    { label: "Services performed", href: "/services-performed",     icon: Sparkles },
     { label: "Fulfilment",         href: "/fulfilment",             icon: PackageCheck, feature: "fulfilment" },
   ],
   inventory: [
@@ -102,7 +101,6 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "Requests",           href: "/requests",               icon: ClipboardList },
     { label: "Stock requests",     href: "/inventory/requests",     icon: ClipboardCheck },
     { label: "Sales",              href: "/sales",                  icon: ShoppingCart },
-    { label: "Services performed", href: "/services-performed",     icon: Sparkles },
     { label: "Fulfilment",         href: "/fulfilment",             icon: PackageCheck, feature: "fulfilment" },
   ],
 }

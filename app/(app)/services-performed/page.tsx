@@ -3,7 +3,7 @@ import { getServiceRecords, getMyJobCostingSessions } from "@/lib/db/queries/ser
 import { ServicesPerformedClient } from "./services-performed-client"
 
 export default async function ServicesPerformedPage() {
-  const scope = await requireRole("owner", "internal_use", "admin")
+  const scope = await requireRole("internal_use")
   const [records, jobCostingSessions] = await Promise.all([
     getServiceRecords(),
     scope.role === "internal_use" ? getMyJobCostingSessions() : Promise.resolve([]),
