@@ -56,6 +56,11 @@ export async function recordSaleAction(input: SaleInput): Promise<ActionResult<{
     unit_price_cents: Math.round(l.unitPriceNaira * 100),
   }))
 
+  const pPlanLines = (parsed.data.planLines ?? []).map((l) => ({
+    plan_id: l.planId,
+    price_paid_cents: Math.round(l.pricePaidNaira * 100),
+  }))
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any).rpc("record_sale", {
     p_branch_id: branchId,
@@ -69,6 +74,7 @@ export async function recordSaleAction(input: SaleInput): Promise<ActionResult<{
     p_vat_rate: parsed.data.vatRate ?? 7.5,
     p_service_lines: pServiceLines,
     p_client_id: parsed.data.clientId || null,
+    p_plan_lines: pPlanLines,
   })
 
   if (error) {
@@ -108,8 +114,8 @@ export async function recordSaleAction(input: SaleInput): Promise<ActionResult<{
 
     if (lower.includes("not authorised"))
       return { ok: false, error: "not_allowed", message: "You are not authorised to record sales in this branch." }
-    if (lower.includes("at least one product or service"))
-      return { ok: false, error: "validation", message: "Add at least one product or service to the sale." }
+    if (lower.includes("at least one product"))
+      return { ok: false, error: "validation", message: "Add at least one product, service, or plan to the sale." }
     if (lower.includes("cost_layers exhausted") || lower.includes("out of sync"))
       return {
         ok: false,
@@ -125,6 +131,15 @@ export async function recordSaleAction(input: SaleInput): Promise<ActionResult<{
       return { ok: false, error: "validation", message: "Service quantity must be greater than 0." }
     if (lower.includes("service line price must be 0 or greater"))
       return { ok: false, error: "validation", message: "Service price can't be negative." }
+
+    if (lower.includes("a client is required to sell a plan"))
+      return { ok: false, error: "validation", message: "Select a client to sell a plan." }
+    if (lower.includes("plan not found or inactive"))
+      return { ok: false, error: "invalid_plan", message: "That plan is inactive or unavailable. Pick an active plan." }
+    if (lower.includes("plan has no sessions configured"))
+      return { ok: false, error: "validation", message: "The selected plan has no sessions configured." }
+    if (lower.includes("plan line price must be 0 or greater"))
+      return { ok: false, error: "validation", message: "Plan price can't be negative." }
 
     return { ok: false, error: "server", message: "Something went wrong. Please try again." }
   }

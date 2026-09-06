@@ -20,6 +20,11 @@ export const saleServiceLineSchema = z.object({
   unitPriceNaira: z.number().min(0, "Price must be 0 or more"),
 })
 
+const salePlanLineSchema = z.object({
+  planId: z.string().uuid("Select a plan"),
+  pricePaidNaira: z.number().min(0, "Price must be 0 or more"),
+})
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export const saleSchema = z.object({
@@ -33,6 +38,7 @@ export const saleSchema = z.object({
   vatRate: z.number().min(0, "VAT rate cannot be negative").max(100, "VAT rate cannot exceed 100").optional(),
   lines: z.array(saleLineInputSchema),
   serviceLines: z.array(saleServiceLineSchema),
+  planLines: z.array(salePlanLineSchema),
 }).superRefine((data, ctx) => {
   const filledLines = data.lines.filter((l) => l.productId !== "")
 
@@ -47,11 +53,18 @@ export const saleSchema = z.object({
     }
   })
 
-  if (filledLines.length === 0 && data.serviceLines.length === 0) {
+  if (filledLines.length === 0 && data.serviceLines.length === 0 && data.planLines.length === 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["lines"],
-      message: "Add at least one product or service to the sale",
+      message: "Add at least one product, service, or plan to the sale",
+    })
+  }
+  if (data.planLines.length > 0 && (!data.clientId || data.clientId === "")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["clientId"],
+      message: "Select a client to sell a plan",
     })
   }
   if (data.paymentStatus === "paid" && !data.paymentMethod) {
@@ -72,6 +85,7 @@ export const salePaymentSchema = z.object({
 
 export type SaleLine = z.infer<typeof saleLineSchema>
 export type SaleServiceLine = z.infer<typeof saleServiceLineSchema>
+export type SalePlanLine = z.infer<typeof salePlanLineSchema>
 
 export type SaleInput = z.infer<typeof saleSchema>
 export type SalePaymentInput = z.infer<typeof salePaymentSchema>

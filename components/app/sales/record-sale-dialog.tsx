@@ -9,10 +9,12 @@ import { saleSchema, type SaleInput } from "@/lib/validation/sales"
 import { recordSaleAction } from "@/lib/db/actions/sales"
 import { getMyHoldingsAction } from "@/lib/db/actions/holdings"
 import { getActiveServiceTypesAction } from "@/lib/db/actions/services"
+import { getActivePlanSummariesAction } from "@/lib/db/actions/plans"
 import { createClientAction } from "@/lib/db/actions/clients"
 import { ClientSearch } from "@/components/app/clients/client-search"
 import type { MyHolding } from "@/lib/db/queries/holdings"
 import type { ServiceType } from "@/lib/db/queries/services"
+import type { PlanSummary } from "@/lib/db/queries/plans"
 import type { Client } from "@/lib/db/queries/clients"
 import { formatNaira } from "@/lib/format/money"
 import {
@@ -49,12 +51,12 @@ function todayLocal() {
 }
 
 export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProductId }: Props) {
-  const [holdings, setHoldings] = useState<MyHolding[]>([])
+  const [holdings, setHoldings]           = useState<MyHolding[]>([])
   const [catalogServices, setCatalogServices] = useState<ServiceType[]>([])
+  const [catalogPlans, setCatalogPlans]   = useState<PlanSummary[]>([])
   const [loadingHoldings, setLoadingHoldings] = useState(false)
   const [holdingsError, setHoldingsError] = useState<string | null>(null)
-  const [submitError, setSubmitError] = useState<string | null>(null)
-
+  const [submitError, setSubmitError]     = useState<string | null>(null)
   const [hasValidationErrors, setHasValidationErrors] = useState(false)
 
   // ── Client state ───────────────────────────────────────────────────────────
@@ -87,27 +89,31 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
       vatRate: 7.5,
       lines: [{ productId: initialProductId ?? "", quantity: 1, unitPriceNaira: 0 }],
       serviceLines: [],
+      planLines: [],
     },
   })
 
-  const { fields, append, remove } = useFieldArray({ control, name: "lines" })
+  const { fields, append, remove }                             = useFieldArray({ control, name: "lines" })
   const { fields: svcFields, append: appendSvc, remove: removeSvc } = useFieldArray({ control, name: "serviceLines" })
+  const { fields: planFields, append: appendPlan, remove: removePlan } = useFieldArray({ control, name: "planLines" })
 
-  const watchedLines    = watch("lines")
-  const watchedSvcLines = watch("serviceLines")
-  const soldOn          = watch("soldOn")
-  const paymentStatus   = watch("paymentStatus")
-  const watchedVatRate  = watch("vatRate") ?? 7.5
+  const watchedLines     = watch("lines")
+  const watchedSvcLines  = watch("serviceLines")
+  const watchedPlanLines = watch("planLines")
+  const soldOn           = watch("soldOn")
+  const paymentStatus    = watch("paymentStatus")
+  const watchedVatRate   = watch("vatRate") ?? 7.5
 
   const isFutureDate = soldOn && soldOn > todayLocal()
+  const hasPlanLines = (watchedPlanLines ?? []).length > 0
 
-  const productSubtotalCents = (watchedLines ?? []).reduce((sum, line) => {
-    return sum + Math.round((line.quantity || 0) * (line.unitPriceNaira || 0) * 100)
-  }, 0)
-  const serviceSubtotalCents = (watchedSvcLines ?? []).reduce((sum, line) => {
-    return sum + Math.round((line.quantity || 0) * (line.unitPriceNaira || 0) * 100)
-  }, 0)
-  const subtotalCents      = productSubtotalCents + serviceSubtotalCents
+  const productSubtotalCents = (watchedLines ?? []).reduce((sum, line) =>
+    sum + Math.round((line.quantity || 0) * (line.unitPriceNaira || 0) * 100), 0)
+  const serviceSubtotalCents = (watchedSvcLines ?? []).reduce((sum, line) =>
+    sum + Math.round((line.quantity || 0) * (line.unitPriceNaira || 0) * 100), 0)
+  const planSubtotalCents = (watchedPlanLines ?? []).reduce((sum, line) =>
+    sum + Math.round((line.pricePaidNaira || 0) * 100), 0)
+  const subtotalCents      = productSubtotalCents + serviceSubtotalCents + planSubtotalCents
   const vatCentsComputed   = Math.round(subtotalCents * watchedVatRate / 100)
   const totalCentsComputed = subtotalCents + vatCentsComputed
 
@@ -116,11 +122,12 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
     let cancelled = false
     setLoadingHoldings(true)
     setHoldingsError(null)
-    Promise.all([getMyHoldingsAction(), getActiveServiceTypesAction()])
-      .then(([h, cs]) => {
+    Promise.all([getMyHoldingsAction(), getActiveServiceTypesAction(), getActivePlanSummariesAction()])
+      .then(([h, cs, plans]) => {
         if (cancelled) return
         setHoldings(h)
         setCatalogServices(cs)
+        setCatalogPlans(plans)
         if (initialProductId) {
           const holding = h.find((x) => x.productId === initialProductId)
           if (holding) {
@@ -134,19 +141,12 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
         console.error("holdings load failed", err)
         setHoldingsError("Could not load your holding: " + ((err as Error)?.message ?? "unknown"))
       })
-      .finally(() => {
-        if (!cancelled) setLoadingHoldings(false)
-      })
+      .finally(() => { if (!cancelled) setLoadingHoldings(false) })
     return () => { cancelled = true }
   }, [open, initialProductId, setValue])
 
-  // Sync clientId hidden field when client selection changes
   useEffect(() => {
-    if (selectedClient) {
-      setValue("clientId", selectedClient.id)
-    } else {
-      setValue("clientId", "")
-    }
+    setValue("clientId", selectedClient ? selectedClient.id : "")
   }, [selectedClient, setValue])
 
   function resetClientState() {
@@ -168,6 +168,7 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
       vatRate: 7.5,
       lines: [{ productId: initialProductId ?? "", quantity: 1, unitPriceNaira: 0 }],
       serviceLines: [],
+      planLines: [],
     })
     setSubmitError(null)
     setHoldingsError(null)
@@ -226,6 +227,14 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
     }
   }
 
+  function handlePlanChange(index: number, planId: string) {
+    setValue(`planLines.${index}.planId`, planId)
+    const plan = catalogPlans.find((p) => p.id === planId)
+    if (plan) {
+      setValue(`planLines.${index}.pricePaidNaira`, plan.priceCents / 100)
+    }
+  }
+
   async function onSubmit(values: SaleInput) {
     setSubmitError(null)
     const result = await recordSaleAction(values)
@@ -263,8 +272,8 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
                   onClick={() => {
                     setHoldingsError(null)
                     setLoadingHoldings(true)
-                    Promise.all([getMyHoldingsAction(), getActiveServiceTypesAction()])
-                      .then(([h, cs]) => { setHoldings(h); setCatalogServices(cs) })
+                    Promise.all([getMyHoldingsAction(), getActiveServiceTypesAction(), getActivePlanSummariesAction()])
+                      .then(([h, cs, plans]) => { setHoldings(h); setCatalogServices(cs); setCatalogPlans(plans) })
                       .catch((err: unknown) => {
                         setHoldingsError("Could not load: " + ((err as Error)?.message ?? "unknown"))
                       })
@@ -284,7 +293,6 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
                 const availableOptions = holdings.filter(
                   (h) => !usedProductIds.has(h.productId) || h.productId === currentProductId
                 )
-
                 return (
                   <div key={field.id} className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 space-y-3">
                     <div className="space-y-1.5">
@@ -491,9 +499,107 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
             </div>
           )}
 
+          {/* ── Plans ── */}
+          {!loadingHoldings && !holdingsError && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Plans</Label>
+                <span className="text-xs text-neutral-400">Optional — requires a client</span>
+              </div>
+
+              {catalogPlans.length === 0 && planFields.length === 0 ? (
+                <p className="text-xs text-neutral-400">
+                  No active plans — create them in Admin → Plans.
+                </p>
+              ) : (
+                <>
+                  {planFields.map((field, index) => {
+                    const currentPlanId = watchedPlanLines?.[index]?.planId ?? ""
+                    const selectedPlan  = catalogPlans.find((p) => p.id === currentPlanId)
+                    return (
+                      <div key={field.id} className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 space-y-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Plan</Label>
+                          <select
+                            className={SELECT_CLASS}
+                            value={currentPlanId}
+                            onChange={(e) => handlePlanChange(index, e.target.value)}
+                          >
+                            <option value="">Select a plan…</option>
+                            {catalogPlans.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} — {p.totalSessions} session{p.totalSessions !== 1 ? "s" : ""}
+                              </option>
+                            ))}
+                          </select>
+                          {/* hidden field so RHF tracks planId */}
+                          <input type="hidden" {...register(`planLines.${index}.planId`)} />
+                          {selectedPlan && (
+                            <p className="text-xs text-neutral-500">
+                              {selectedPlan.totalSessions} session{selectedPlan.totalSessions !== 1 ? "s" : ""}
+                            </p>
+                          )}
+                          {errors.planLines?.[index]?.planId && (
+                            <p className="text-xs text-red-500">{errors.planLines[index]?.planId?.message}</p>
+                          )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label htmlFor={`plan-price-${index}`} className="text-xs">
+                            Price paid (<span className="font-inter">₦</span>)
+                          </Label>
+                          <Input
+                            id={`plan-price-${index}`}
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            placeholder="0.00"
+                            className="h-9 text-sm tabular-nums"
+                            {...register(`planLines.${index}.pricePaidNaira`, { valueAsNumber: true })}
+                          />
+                          {errors.planLines?.[index]?.pricePaidNaira && (
+                            <p className="text-xs text-red-500">{errors.planLines[index]?.pricePaidNaira?.message}</p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-neutral-500">
+                            Subscription total:{" "}
+                            <span className="font-medium tabular-nums text-neutral-950">
+                              <span className="font-inter">₦</span>
+                              {formatNaira(Math.round((watchedPlanLines?.[index]?.pricePaidNaira || 0) * 100))}
+                            </span>
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => removePlan(index)}
+                            className="text-neutral-400 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {catalogPlans.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => appendPlan({ planId: "", pricePaidNaira: 0 })}
+                      className="flex items-center gap-1.5 text-sm text-violet-700 hover:text-violet-800 transition-colors"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add plan
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           {/* ── Subtotal / VAT / Total ── */}
           <div className="rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-3 space-y-2">
-            {serviceSubtotalCents > 0 && (
+            {(serviceSubtotalCents > 0 || planSubtotalCents > 0) && (
               <>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-neutral-500">Products</span>
@@ -502,13 +608,24 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
                     {formatNaira(productSubtotalCents)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-neutral-500">Services</span>
-                  <span className="tabular-nums text-neutral-700">
-                    <span className="font-inter">₦</span>
-                    {formatNaira(serviceSubtotalCents)}
-                  </span>
-                </div>
+                {serviceSubtotalCents > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-neutral-500">Services</span>
+                    <span className="tabular-nums text-neutral-700">
+                      <span className="font-inter">₦</span>
+                      {formatNaira(serviceSubtotalCents)}
+                    </span>
+                  </div>
+                )}
+                {planSubtotalCents > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-neutral-500">Plans</span>
+                    <span className="tabular-nums text-neutral-700">
+                      <span className="font-inter">₦</span>
+                      {formatNaira(planSubtotalCents)}
+                    </span>
+                  </div>
+                )}
               </>
             )}
             <div className="flex items-center justify-between text-sm">
@@ -549,7 +666,9 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <Label className="text-neutral-700">Customer</Label>
-              <span className="text-xs text-neutral-400">Optional — link to a client record</span>
+              <span className="text-xs text-neutral-400">
+                {hasPlanLines ? "Required for plan sale" : "Optional — link to a client record"}
+              </span>
             </div>
 
             {showQuickCreate ? (
@@ -623,6 +742,11 @@ export function RecordSaleDialog({ open, onOpenChange, onSuccess, initialProduct
                   </button>
                 )}
               </div>
+            )}
+
+            {/* Client required error — fires when plan lines present and no client selected */}
+            {errors.clientId && (
+              <p className="text-xs text-red-500">{errors.clientId.message}</p>
             )}
 
             {/* Client linked — show card; or walk-in free-text */}
