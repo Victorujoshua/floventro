@@ -1,4 +1,4 @@
-import { requireScope } from "@/lib/auth/guards"
+import { requireRole } from "@/lib/auth/guards"
 import { getMyRequests } from "@/lib/db/queries/requests"
 import { getProductsForOrg } from "@/lib/db/queries/invoices"
 import { getOrgBranches } from "@/lib/db/queries/vendors"
@@ -6,7 +6,7 @@ import { createAppServerClient } from "@/lib/supabase/app-server"
 import { RequestsClient } from "./requests-client"
 
 export default async function RequestsPage() {
-  const scope = await requireScope()
+  const scope = await requireRole("sales", "internal_use")
 
   const [myRequests, products, branches] = await Promise.all([
     getMyRequests(),
