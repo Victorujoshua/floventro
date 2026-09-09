@@ -5,7 +5,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { ShoppingCart, MoreHorizontal, CreditCard, FileText } from "lucide-react"
+import { ShoppingCart, MoreHorizontal, CreditCard, FileText, ArrowUpDown, Download } from "lucide-react"
 import { toast } from "sonner"
 import {
   Table,
@@ -36,6 +36,7 @@ import { salePaymentSchema, type SalePaymentInput } from "@/lib/validation/sales
 import type { SaleRow, SaleDetail } from "@/lib/db/queries/sales"
 import { formatNaira } from "@/lib/format/money"
 import { getSaleDetailAction, recordSalePaymentAction } from "@/lib/db/actions/sales"
+import { exportToXlsx } from "@/lib/export/xlsx"
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: "Cash",
@@ -239,6 +240,36 @@ export function SalesClient({ sales }: Props) {
   const [detailOpen, setDetailOpen] = useState(false)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [markPaidSale, setMarkPaidSale] = useState<SaleRow | null>(null)
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc")
+
+  const displayedSales = [...sales].sort((a, b) =>
+    sortDir === "desc" ? b.totalCents - a.totalCents : a.totalCents - b.totalCents
+  )
+
+  function handleExport() {
+    const rows = displayedSales.map((s) => ({
+      date: formatDate(s.soldOn),
+      seller: s.sellerLabel,
+      customer: s.customerName ?? "",
+      method: s.paymentMethod ? (PAYMENT_METHOD_LABELS[s.paymentMethod] ?? s.paymentMethod) : "",
+      status: s.paymentStatus.charAt(0).toUpperCase() + s.paymentStatus.slice(1),
+      items: s.lineCount,
+      amountPaid: s.amountPaidCents / 100,
+      balance: (s.totalCents - s.amountPaidCents) / 100,
+      total: s.totalCents / 100,
+    }))
+    exportToXlsx("sales-export", rows, [
+      { header: "Date",              key: "date" },
+      { header: "Seller",            key: "seller" },
+      { header: "Customer",          key: "customer" },
+      { header: "Method",            key: "method" },
+      { header: "Payment Status",    key: "status" },
+      { header: "Items",             key: "items" },
+      { header: "Amount Paid (NGN)", key: "amountPaid" },
+      { header: "Balance (NGN)",     key: "balance" },
+      { header: "Total (NGN)",       key: "total" },
+    ])
+  }
 
   async function openDetail(saleId: string) {
     setLoadingDetail(true)
@@ -265,13 +296,22 @@ export function SalesClient({ sales }: Props) {
           <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Sales</h1>
           <p className="text-sm text-neutral-500 mt-1">Products sold from staff holdings</p>
         </div>
-        <button
-          onClick={() => setNewSaleOpen(true)}
-          className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
-        >
-          <ShoppingCart className="h-4 w-4" />
-          New sale
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExport}
+            className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-4 h-10 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </button>
+          <button
+            onClick={() => setNewSaleOpen(true)}
+            className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
+          >
+            <ShoppingCart className="h-4 w-4" />
+            New sale
+          </button>
+        </div>
       </div>
 
       {sales.length === 0 ? (
@@ -300,13 +340,24 @@ export function SalesClient({ sales }: Props) {
                 <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Method</TableHead>
                 <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Payment</TableHead>
                 <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">Items</TableHead>
-                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">Total</TableHead>
+                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">
+                  <button
+                    onClick={() => setSortDir((d) => d === "desc" ? "asc" : "desc")}
+                    className="inline-flex items-center gap-1 hover:text-neutral-800 transition-colors ml-auto"
+                  >
+                    Total
+                    <ArrowUpDown className="h-3 w-3 shrink-0" />
+                  </button>
+                </TableHead>
+                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">Paid</TableHead>
+                <TableHead className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right">Balance</TableHead>
                 <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sales.map((sale) => {
+              {displayedSales.map((sale) => {
                 const canMarkPaid = sale.paymentStatus === "unpaid" || sale.paymentStatus === "partial"
+                const balanceCents = sale.totalCents - sale.amountPaidCents
                 return (
                   <TableRow
                     key={sale.id}
@@ -336,6 +387,16 @@ export function SalesClient({ sales }: Props) {
                     <TableCell className="text-sm font-mono tabular-nums font-medium text-neutral-950 py-3.5 text-right">
                       <span className="font-inter">₦</span>
                       {formatNaira(sale.totalCents)}
+                    </TableCell>
+                    <TableCell className="text-sm font-mono tabular-nums text-neutral-700 py-3.5 text-right">
+                      <span className="font-inter">₦</span>
+                      {formatNaira(sale.amountPaidCents)}
+                    </TableCell>
+                    <TableCell className="text-sm font-mono tabular-nums py-3.5 text-right">
+                      <span className={balanceCents === 0 ? "text-emerald-700" : "text-amber-700"}>
+                        <span className="font-inter">₦</span>
+                        {formatNaira(balanceCents)}
+                      </span>
                     </TableCell>
                     <TableCell
                       className="py-3.5 text-right w-10"
