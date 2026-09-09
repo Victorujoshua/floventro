@@ -20,11 +20,20 @@ export type InvoiceServiceLine = {
   lineTotalCents: number
 }
 
+export type InvoicePlanLine = {
+  id: string
+  planName: string
+  sessionsTotal: number
+  pricePaidCents: number
+}
+
 export type SaleInvoiceData = {
   invoiceNumber: string
   orgName: string
   branchName: string
   soldOn: string
+  clientName: string | null
+  clientPhone: string | null
   customerName: string | null
   customerPhone: string | null
   paymentStatus: string
@@ -36,6 +45,7 @@ export type SaleInvoiceData = {
   outstandingCents: number
   lines: InvoiceLine[]
   serviceLines: InvoiceServiceLine[]
+  planLines: InvoicePlanLine[]
   payoutAccount: PayoutAccount | null
 }
 
@@ -49,7 +59,7 @@ export async function getSaleInvoiceData(saleId: string): Promise<SaleInvoiceDat
   const { data, error } = await supabase
     .from("sales")
     .select(
-      "id, sold_on, customer_name, customer_phone, payment_status, amount_paid_cents, subtotal_cents, vat_rate, vat_cents, total_cents, branch_id, organisation_id, sale_lines(id, product_id, quantity, unit_price_cents, line_total_cents, products(name, sku)), sale_service_lines(id, service_name, quantity, unit_price_cents, line_total_cents)",
+      "id, sold_on, customer_name, customer_phone, payment_status, amount_paid_cents, subtotal_cents, vat_rate, vat_cents, total_cents, branch_id, organisation_id, client_id, clients(name, phone), sale_lines(id, product_id, quantity, unit_price_cents, line_total_cents, products(name, sku)), sale_service_lines(id, service_name, quantity, unit_price_cents, line_total_cents), sale_plan_lines(id, plan_name, sessions_total, price_paid_cents)",
     )
     .eq("id", saleId)
     .eq("organisation_id", scope.organisationId)
@@ -73,6 +83,15 @@ export async function getSaleInvoiceData(saleId: string): Promise<SaleInvoiceDat
     unit_price_cents: number
     line_total_cents: number
   }
+
+  type RawPlanLine = {
+    id: string
+    plan_name: string
+    sessions_total: number
+    price_paid_cents: number
+  }
+
+  type RawClient = { name: string; phone: string | null } | { name: string; phone: string | null }[] | null
 
   const [orgResult, branchResult, payoutAccount] = await Promise.all([
     supabase
@@ -108,11 +127,23 @@ export async function getSaleInvoiceData(saleId: string): Promise<SaleInvoiceDat
     lineTotalCents: l.line_total_cents,
   }))
 
+  const planLines = ((data.sale_plan_lines ?? []) as RawPlanLine[]).map((l) => ({
+    id: l.id,
+    planName: l.plan_name,
+    sessionsTotal: l.sessions_total,
+    pricePaidCents: l.price_paid_cents,
+  }))
+
+  const rawClient = data.clients as RawClient
+  const client = Array.isArray(rawClient) ? rawClient[0] : rawClient
+
   return {
     invoiceNumber: `INV-${data.id.slice(0, 8).toUpperCase()}`,
     orgName: (orgResult.data?.name as string | null) ?? "Your Organisation",
     branchName: (branchResult.data?.name as string | null) ?? "",
     soldOn: data.sold_on as string,
+    clientName: client?.name ?? null,
+    clientPhone: client?.phone ?? null,
     customerName: data.customer_name as string | null,
     customerPhone: data.customer_phone as string | null,
     paymentStatus: data.payment_status as string,
@@ -124,6 +155,7 @@ export async function getSaleInvoiceData(saleId: string): Promise<SaleInvoiceDat
     outstandingCents: (data.total_cents as number) - (data.amount_paid_cents as number),
     lines,
     serviceLines,
+    planLines,
     payoutAccount,
   }
 }

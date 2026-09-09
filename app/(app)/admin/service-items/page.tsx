@@ -4,7 +4,7 @@ import { getProducts } from "@/lib/db/queries/products"
 import { ServiceItemsClient } from "./service-items-client"
 
 export default async function ServiceItemsPage() {
-  await requireRole("owner", "inventory", "admin", "sales")
+  await requireRole("owner", "admin")
   const [items, measurements, products] = await Promise.all([
     getServiceItems(),
     getMeasurements(),

@@ -92,7 +92,14 @@ export default async function InvoicePage({ params }: Props) {
           <p className="text-[10px] font-medium text-neutral-400 uppercase tracking-[0.15em] mb-2">
             Bill to
           </p>
-          {invoice.customerName ? (
+          {invoice.clientName ? (
+            <>
+              <p className="text-sm font-semibold text-neutral-950">{invoice.clientName}</p>
+              {invoice.clientPhone && (
+                <p className="text-sm font-mono text-neutral-500 mt-0.5">{invoice.clientPhone}</p>
+              )}
+            </>
+          ) : invoice.customerName ? (
             <>
               <p className="text-sm font-semibold text-neutral-950">{invoice.customerName}</p>
               {invoice.customerPhone && (
@@ -162,6 +169,23 @@ export default async function InvoicePage({ params }: Props) {
                 <td className="py-3.5 text-right tabular-nums font-semibold text-neutral-950">
                   <span className="font-inter">₦</span>
                   {formatNaira(line.lineTotalCents)}
+                </td>
+              </tr>
+            ))}
+            {invoice.planLines.map((line) => (
+              <tr key={line.id}>
+                <td className="py-3.5">
+                  <p className="font-medium text-neutral-950">{line.planName}</p>
+                  <p className="text-xs text-neutral-400 mt-0.5">{line.sessionsTotal} sessions</p>
+                </td>
+                <td className="py-3.5 text-right tabular-nums text-neutral-700">1</td>
+                <td className="py-3.5 text-right tabular-nums text-neutral-700">
+                  <span className="font-inter">₦</span>
+                  {formatNaira(line.pricePaidCents)}
+                </td>
+                <td className="py-3.5 text-right tabular-nums font-semibold text-neutral-950">
+                  <span className="font-inter">₦</span>
+                  {formatNaira(line.pricePaidCents)}
                 </td>
               </tr>
             ))}

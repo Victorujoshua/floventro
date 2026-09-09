@@ -6,7 +6,7 @@ import { PlansClient } from "./plans-client"
 const SERVICE_TYPE_CREATE_ROLES = ["owner", "inventory", "admin", "sales"] as const
 
 export default async function PlansPage() {
-  const scope = await requireRole("owner", "inventory", "admin", "sales")
+  const scope = await requireRole("owner", "admin", "sales")
   const canCreateServiceType = (SERVICE_TYPE_CREATE_ROLES as readonly string[]).includes(scope.role)
   const [plans, serviceTypes] = await Promise.all([getPlans(), getActiveServiceTypes()])
   return (

@@ -3,7 +3,7 @@ import { getClients } from "@/lib/db/queries/clients"
 import { ClientsClient } from "./clients-client"
 
 export default async function ClientsPage() {
-  await requireRole("owner", "inventory", "admin", "sales")
+  await requireRole("owner", "admin", "sales")
   const clients = await getClients()
   return <ClientsClient initialClients={clients} />
 }
