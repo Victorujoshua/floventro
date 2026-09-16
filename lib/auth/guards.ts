@@ -1,15 +1,11 @@
 import { redirect } from "next/navigation"
-import { createAppServerClient } from "@/lib/supabase/app-server"
-import { getCurrentScope, type Scope, type Role } from "./scope"
+import { getAppUser, getCurrentScope, type Scope, type Role } from "./scope"
 
 /**
  * Ensures the user is authenticated. Returns userId or redirects to /login.
  */
 export async function requireAuth(): Promise<string> {
-  const supabase = await createAppServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await getAppUser()
   if (!user) redirect("/login")
   return user.id
 }
@@ -20,10 +16,7 @@ export async function requireAuth(): Promise<string> {
  * - Authenticated but no memberships → /onboarding/create-org
  */
 export async function requireScope(): Promise<Scope> {
-  const supabase = await createAppServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await getAppUser()
   if (!user) redirect("/login")
 
   const scope = await getCurrentScope()

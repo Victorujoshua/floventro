@@ -1,5 +1,13 @@
+import { cache } from "react"
 import { cookies } from "next/headers"
 import { createAppServerClient } from "@/lib/supabase/app-server"
+
+// Dedupes supabase.auth.getUser() across all callers in the same render.
+// React.cache is request-scoped — safe, never serves stale cross-request data.
+export const getAppUser = cache(async () => {
+  const supabase = await createAppServerClient()
+  return supabase.auth.getUser()
+})
 
 export type Role = "owner" | "admin" | "inventory" | "sales" | "internal_use"
 
@@ -26,12 +34,13 @@ const ROLE_PRIORITY: Record<Role, number> = {
  * Reads current scope from cookies. Falls back to the user's first membership
  * (by role priority) if cookies are missing or don't match a real membership.
  * Returns null if unauthenticated or if the user has no memberships.
+ * Wrapped with React.cache — runs once per request regardless of call count.
  */
-export async function getCurrentScope(): Promise<Scope | null> {
+export const getCurrentScope = cache(async (): Promise<Scope | null> => {
   try {
   const supabase = await createAppServerClient()
 
-  const { data: scopeData, error: scopeUserError } = await supabase.auth.getUser()
+  const { data: scopeData, error: scopeUserError } = await getAppUser()
   if (scopeUserError || !scopeData?.user) return null
   const user = scopeData.user
 
@@ -114,7 +123,7 @@ export async function getCurrentScope(): Promise<Scope | null> {
     console.error("[getCurrentScope] failed:", err instanceof Error ? err.stack : JSON.stringify(err))
     return null
   }
-}
+})
 
 /**
  * Persists the requested scope in cookies after validating it against the
@@ -232,7 +241,7 @@ export async function getUserMemberships() {
 
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getAppUser()
   if (!user) return []
 
   const { data: memberships } = await supabase

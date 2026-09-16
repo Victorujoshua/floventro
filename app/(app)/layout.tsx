@@ -1,4 +1,4 @@
-import { getCurrentScope, getUserMemberships } from "@/lib/auth/scope"
+import { getCurrentScope, getUserMemberships, getAppUser } from "@/lib/auth/scope"
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { Sidebar } from "@/components/app/sidebar/sidebar"
 import { AppHeader } from "@/components/app/header/app-header"
@@ -16,14 +16,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const supabase = await createAppServerClient()
 
-  const [orgResult, userResult, notifications, rawMemberships, pendingRequestsCount, hiddenFeatures] =
+  const [orgResult, userResult, notifications, rawMemberships, pendingRequestsCount, hiddenFeatures, branchResult] =
     await Promise.all([
       supabase.from("organisations").select("name").eq("id", scope.organisationId).maybeSingle(),
-      supabase.auth.getUser(),
+      getAppUser(),
       getNotifications(),
       getUserMemberships(),
       getPendingRequestCount(),
       getHiddenFeatures(scope.branchId, scope.role),
+      scope.branchId
+        ? supabase.from("branches").select("name").eq("id", scope.branchId).maybeSingle()
+        : Promise.resolve(null),
     ])
 
   const user = userResult.data.user
@@ -54,16 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const pastDueCount = notifications.filter((n) => n.kind === "past_due").length
 
-  // Resolve current branch name for the header when owner is inside a branch.
-  let branchName = ""
-  if (scope.branchId) {
-    const { data: branchData } = await supabase
-      .from("branches")
-      .select("name")
-      .eq("id", scope.branchId)
-      .maybeSingle()
-    branchName = branchData?.name ?? ""
-  }
+  const branchName = branchResult?.data?.name ?? ""
 
   return (
     <div className="flex min-h-screen bg-neutral-50">

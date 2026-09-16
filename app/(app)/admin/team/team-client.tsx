@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { inviteSchema, type InviteInput } from "@/lib/validation/invites"
-import { inviteMemberAction, revokeInviteAction } from "@/lib/db/actions/team"
+import { inviteMemberAction, revokeInviteAction, resendInviteAction } from "@/lib/db/actions/team"
 import type { Member, PendingInvite } from "@/lib/db/queries/team"
 
 type Props = {
@@ -68,7 +68,7 @@ function formatDate(dateStr: string): string {
   })
 }
 
-type SuccessData = { acceptUrl: string; emailSent: boolean; email: string }
+type SuccessData = { acceptUrl: string; emailSent: boolean; emailError?: string; email: string }
 
 export function TeamClient({ orgName, members, invites, canInviteAdmin }: Props) {
   const router = useRouter()
@@ -77,6 +77,7 @@ export function TeamClient({ orgName, members, invites, canInviteAdmin }: Props)
   const [copied, setCopied] = useState(false)
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null)
   const [revoking, setRevoking] = useState(false)
+  const [resending, setResending] = useState<string | null>(null)
 
   const {
     register,
@@ -111,7 +112,7 @@ export function TeamClient({ orgName, members, invites, canInviteAdmin }: Props)
       }
       return
     }
-    setSuccessData({ acceptUrl: result.data.acceptUrl, emailSent: result.data.emailSent, email: values.email })
+    setSuccessData({ acceptUrl: result.data.acceptUrl, emailSent: result.data.emailSent, emailError: result.data.emailError, email: values.email })
     router.refresh()
   }
 
@@ -120,6 +121,17 @@ export function TeamClient({ orgName, members, invites, canInviteAdmin }: Props)
     navigator.clipboard.writeText(successData.acceptUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function handleResend(inviteId: string) {
+    setResending(inviteId)
+    const result = await resendInviteAction(inviteId)
+    setResending(null)
+    if (result.ok) {
+      toast.success("Invite email resent")
+    } else {
+      toast.error(result.error ?? "Failed to resend invite")
+    }
   }
 
   async function handleRevoke(inviteId: string) {
@@ -273,12 +285,21 @@ export function TeamClient({ orgName, members, invites, canInviteAdmin }: Props)
                           </button>
                         </span>
                       ) : (
-                        <button
-                          onClick={() => handleRevoke(inv.id)}
-                          className="text-xs font-medium text-neutral-400 hover:text-red-600 transition-colors"
-                        >
-                          Revoke
-                        </button>
+                        <span className="inline-flex items-center gap-3">
+                          <button
+                            onClick={() => handleResend(inv.id)}
+                            disabled={resending === inv.id}
+                            className="text-xs font-medium text-neutral-400 hover:text-violet-700 transition-colors disabled:opacity-50"
+                          >
+                            {resending === inv.id ? "…" : "Resend"}
+                          </button>
+                          <button
+                            onClick={() => handleRevoke(inv.id)}
+                            className="text-xs font-medium text-neutral-400 hover:text-red-600 transition-colors"
+                          >
+                            Revoke
+                          </button>
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -306,9 +327,16 @@ export function TeamClient({ orgName, members, invites, canInviteAdmin }: Props)
                   Invitation email sent to{" "}
                   <span className="font-medium text-neutral-950">{successData.email}</span>.
                 </p>
+              ) : successData.emailError === "not_configured" ? (
+                <p className="text-sm text-neutral-600">
+                  Email isn&apos;t configured yet — set{" "}
+                  <span className="font-mono text-xs text-neutral-800">ZEPTOMAIL_TOKEN</span> and{" "}
+                  <span className="font-mono text-xs text-neutral-800">ZEPTOMAIL_FROM</span>, or share this link directly:
+                </p>
               ) : (
                 <p className="text-sm text-neutral-600">
-                  Email isn&apos;t configured yet — share this link directly:
+                  Email couldn&apos;t be sent
+                  {successData.emailError === "network" ? " (network error)" : " — check ZeptoMail token and verified-from address"} — share this link directly:
                 </p>
               )}
 

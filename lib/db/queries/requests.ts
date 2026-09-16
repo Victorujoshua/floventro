@@ -1,4 +1,5 @@
 import "server-only"
+import { cache } from "react"
 import { createAppServerClient, createAppServiceRoleClient } from "@/lib/supabase/app-server"
 import { getCurrentScope } from "@/lib/auth/scope"
 
@@ -297,7 +298,7 @@ export async function getReviewedRequests(limit = 30): Promise<ReviewedRequest[]
   })
 }
 
-export async function getPendingRequestCount(): Promise<number> {
+export const getPendingRequestCount = cache(async (): Promise<number> => {
   const scope = await getCurrentScope()
   if (!scope) return 0
   if (scope.role !== "owner" && scope.role !== "inventory") return 0
@@ -319,4 +320,4 @@ export async function getPendingRequestCount(): Promise<number> {
 
   if (error) return 0
   return count ?? 0
-}
+})

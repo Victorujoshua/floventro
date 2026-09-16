@@ -11,7 +11,7 @@ type ActionResult<T = null> =
 
 export async function inviteMemberAction(
   input: InviteInput,
-): Promise<ActionResult<{ acceptUrl: string; emailSent: boolean }>> {
+): Promise<ActionResult<{ acceptUrl: string; emailSent: boolean; emailError?: string }>> {
   const parsed = inviteSchema.safeParse(input)
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }
@@ -76,10 +76,57 @@ export async function inviteMemberAction(
     acceptUrl,
   })
 
+  let emailError: string | undefined
+  if (!emailResult.ok) emailError = emailResult.error
+
   return {
     ok: true,
-    data: { acceptUrl, emailSent: emailResult.ok },
+    data: { acceptUrl, emailSent: emailResult.ok, emailError },
   }
+}
+
+export async function resendInviteAction(inviteId: string): Promise<ActionResult<null>> {
+  const scope = await requireRole("owner", "admin")
+  const supabase = await createAppServerClient()
+
+  const { data: invite, error } = await supabase
+    .from("invitations")
+    .select("email, role, token")
+    .eq("id", inviteId)
+    .eq("organisation_id", scope.organisationId)
+    .eq("status", "pending")
+    .maybeSingle()
+
+  if (error || !invite) {
+    return { ok: false, error: "Invite not found or already used." }
+  }
+
+  const row = invite as { email: string; role: string; token: string }
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.floventro.com"
+  const acceptUrl = `${appUrl}/accept-invite/${row.token}`
+
+  const { data: { user } } = await supabase.auth.getUser()
+  const inviterName = (user?.user_metadata?.full_name as string) || user?.email || "Your team"
+
+  const { data: org } = await supabase
+    .from("organisations")
+    .select("name")
+    .eq("id", scope.organisationId)
+    .maybeSingle()
+
+  const emailResult = await sendInviteEmail({
+    email: row.email,
+    inviterName,
+    organisationName: org?.name ?? "your organisation",
+    role: row.role,
+    acceptUrl,
+  })
+
+  if (!emailResult.ok) {
+    return { ok: false, error: "Email could not be sent — check ZEPTOMAIL_TOKEN and ZEPTOMAIL_FROM." }
+  }
+
+  return { ok: true, data: null }
 }
 
 export async function revokeInviteAction(inviteId: string): Promise<ActionResult> {
