@@ -48,19 +48,21 @@ export async function addWaitlistContact(payload: LoopsContactPayload) {
   }
 }
 
+type InviteResult = { ok: true } | { ok: false; error: string }
+
 export async function sendInviteEmail(params: {
   email: string
   inviterName: string
   organisationName: string
   role: string
   acceptUrl: string
-}) {
+}): Promise<InviteResult> {
   const apiKey = process.env.LOOPS_API_KEY
   const transactionalId = process.env.LOOPS_INVITE_TRANSACTIONAL_ID
 
   if (!apiKey || !transactionalId) {
-    console.error("[loops] LOOPS_API_KEY or LOOPS_INVITE_TRANSACTIONAL_ID not set")
-    return { ok: false as const }
+    console.error("[loops] missing env var(s):", !apiKey ? "LOOPS_API_KEY" : "", !transactionalId ? "LOOPS_INVITE_TRANSACTIONAL_ID" : "")
+    return { ok: false, error: "not_configured" }
   }
 
   try {
@@ -84,14 +86,16 @@ export async function sendInviteEmail(params: {
 
     if (!res.ok) {
       const body = await res.text().catch(() => "(unreadable)")
-      console.error("[loops] invite send failed:", res.status, body)
-      return { ok: false as const }
+      console.error("[loops] invite send failed | status:", res.status, "| body:", body)
+      return { ok: false, error: "send_failed" }
     }
 
-    return { ok: true as const }
+    const successBody = await res.text().catch(() => "(unreadable)")
+    console.log("[loops] invite send ok | status:", res.status, "| body:", successBody)
+    return { ok: true }
   } catch (err) {
-    console.error("[loops] invite send error:", err)
-    return { ok: false as const }
+    console.error("[loops] invite send network error:", err)
+    return { ok: false, error: "network" }
   }
 }
 

@@ -3,7 +3,7 @@
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { requireRole } from "@/lib/auth/guards"
 import { inviteSchema, type InviteInput } from "@/lib/validation/invites"
-import { sendInviteEmail } from "@/lib/email/zeptomail"
+import { sendInviteEmail } from "@/lib/email/loops"
 
 type ActionResult<T = null> =
   | { ok: true; data: T }
@@ -123,7 +123,7 @@ export async function resendInviteAction(inviteId: string): Promise<ActionResult
   })
 
   if (!emailResult.ok) {
-    return { ok: false, error: "Email could not be sent — check ZEPTOMAIL_TOKEN and ZEPTOMAIL_FROM." }
+    return { ok: false, error: "Email could not be sent — check LOOPS_API_KEY and LOOPS_INVITE_TRANSACTIONAL_ID." }
   }
 
   return { ok: true, data: null }

@@ -1,6 +1,6 @@
 # Floventro — Deploy Guide
 
-> Production stack: Vercel (hosting) · Supabase (Postgres) · ZeptoMail (transactional email)
+> Production stack: Vercel (hosting) · Supabase (Postgres) · Loops (transactional email)
 
 ---
 
@@ -9,7 +9,7 @@
 - GitHub account (repo will live here)
 - Vercel account at vercel.com (free Hobby tier is enough)
 - Supabase project created at supabase.com
-- ZeptoMail account at zeptomail.com with a verified sending domain
+- Loops account at loops.so with a verified sending domain
 
 ---
 
@@ -54,13 +54,12 @@ In the Vercel project → **Settings → Environment Variables**, add all of the
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase dashboard → Project Settings → API → Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase dashboard → Project Settings → API → `anon` `public` key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase dashboard → Project Settings → API → `service_role` key (**keep secret**) |
-| `ZEPTOMAIL_API_TOKEN` | ZeptoMail dashboard → Mail Agents → API Tokens (prefix: `Zoho-enczapikey …`) |
-| `ZEPTOMAIL_FROM_ADDRESS` | `hello@floventro.com` |
-| `ZEPTOMAIL_FROM_NAME` | `Floventro` |
-| `ZEPTOMAIL_WAITLIST_TEMPLATE_ALIAS` | `waitlist-confirmation` (must match the template you create in ZeptoMail) |
+| `LOOPS_API_KEY` | Loops dashboard → Settings → API Keys |
+| `LOOPS_INVITE_TRANSACTIONAL_ID` | ID of the "Team Invite" transactional email in Loops (see `docs/loops-setup.md`) |
+| `LOOPS_WAITLIST_TRANSACTIONAL_ID` | ID of the waitlist confirmation transactional email in Loops |
 | `NEXT_PUBLIC_SITE_URL` | `https://floventro.com` |
 
-> **Security:** `SUPABASE_SERVICE_ROLE_KEY` and `ZEPTOMAIL_API_TOKEN` are server-only secrets.
+> **Security:** `SUPABASE_SERVICE_ROLE_KEY` and `LOOPS_API_KEY` are server-only secrets.
 > Never set them as `NEXT_PUBLIC_*`.
 
 ---
@@ -122,57 +121,9 @@ DNS propagation takes 5–30 minutes. Vercel provisions the SSL certificate auto
 
 ---
 
-## 7. ZeptoMail — SPF + DKIM
+## 7. Loops — domain verification + email templates
 
-In your DNS registrar, add the following records so emails from `hello@floventro.com` aren't marked as spam:
-
-**SPF** (if no SPF record exists yet):
-| Type | Name | Value |
-|------|------|-------|
-| `TXT` | `@` | `v=spf1 include:transmail.net ~all` |
-
-If an SPF record already exists, append `include:transmail.net` before the `~all`.
-
-**DKIM** — get the exact record from ZeptoMail:
-1. ZeptoMail dashboard → Mail Agents → your sending domain → DKIM
-2. Copy the `TXT` record name and value
-3. Add to DNS
-
-**DMARC** (recommended):
-| Type | Name | Value |
-|------|------|-------|
-| `TXT` | `_dmarc` | `v=DMARC1; p=none; rua=mailto:hello@floventro.com` |
-
-Wait 24–48 hours for DNS to propagate before sending real emails.
-
----
-
-## 8. ZeptoMail — create the waitlist confirmation template
-
-In ZeptoMail → Mail Templates → New Template:
-
-- **Alias:** `waitlist-confirmation`
-- **Subject:** `You're on the Floventro waitlist.`
-- **From name:** `Floventro`
-- **From address:** `hello@floventro.com`
-
-Body (plain HTML — adapt to your design):
-
-```html
-<p>Hi {{first_name}},</p>
-
-<p>You're on the list. We'll reach out when Floventro is ready for your first cohort.</p>
-
-<p>In the meantime, if you have questions or want to share what you're building,
-reply directly to this email.</p>
-
-<p>— The Floventro team</p>
-```
-
-Merge variable used: `{{first_name}}` — automatically populated from the full name field.
-Fallback: `there` (e.g. "Hi there,") when no name is provided.
-
-See `docs/email-templates/waitlist-confirmation.md` for the full spec.
+See `docs/loops-setup.md` for the full setup: DNS records (SPF/DKIM), invite template creation, and env vars.
 
 ---
 
