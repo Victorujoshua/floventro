@@ -296,10 +296,13 @@ APP_SUPABASE_SERVICE_ROLE_KEY=
 # Site
 NEXT_PUBLIC_APP_URL=https://app.floventro.com
 
-# Loops (shared account, different transactional templates)
-LOOPS_API_KEY=                          # same as landing page
-LOOPS_INVITE_TRANSACTIONAL_ID=          # NEW — for team invites
-LOOPS_PASSWORD_RESET_TRANSACTIONAL_ID=  # NEW — for password reset
+# ZeptoMail (transactional — team invites)
+ZEPTOMAIL_TOKEN=
+ZEPTOMAIL_FROM=
+ZEPTOMAIL_FROM_NAME=                    # optional, defaults to "Floventro"
+# Password reset: not yet implemented. Pick a provider (ZeptoMail or otherwise)
+# when that feature is built — do not assume ZEPTOMAIL_TOKEN above covers it
+# without checking ZeptoMail's sending limits for the account in use.
 
 # Feature flags
 NEXT_PUBLIC_APP_ENV=development         # development | preview | production
@@ -308,8 +311,8 @@ NEXT_PUBLIC_APP_ENV=development         # development | preview | production
 **Prefix everything app-related with `APP_` or `NEXT_PUBLIC_APP_`** so it can't be confused with the landing page vars.
 
 Each Vercel project has ONLY the env vars it needs:
-- Marketing project → landing page vars only (existing waitlist Supabase, existing Loops template)
-- App project → app vars only (new Supabase, new Loops templates) plus `LOOPS_API_KEY` if the same account is used
+- Marketing project → landing page vars only (waitlist feature removed as of 2026-09-20)
+- App project → app vars only (new Supabase, ZeptoMail invite sending)
 
 ---
 

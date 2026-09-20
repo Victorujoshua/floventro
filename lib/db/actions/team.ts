@@ -3,7 +3,7 @@
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { requireRole } from "@/lib/auth/guards"
 import { inviteSchema, type InviteInput } from "@/lib/validation/invites"
-import { sendInviteEmail } from "@/lib/email/loops"
+import { sendInviteEmail } from "@/lib/email/zeptomail"
 
 type ActionResult<T = null> =
   | { ok: true; data: T }
@@ -68,6 +68,14 @@ export async function inviteMemberAction(
     .eq("id", scope.organisationId)
     .maybeSingle()
 
+  console.log("[team] about to call sendInviteEmail", {
+    email: parsed.data.email.toLowerCase(),
+    inviterName,
+    organisationName: org?.name ?? "your organisation",
+    role: parsed.data.role,
+    acceptUrl,
+  })
+
   const emailResult = await sendInviteEmail({
     email: parsed.data.email.toLowerCase(),
     inviterName,
@@ -75,6 +83,8 @@ export async function inviteMemberAction(
     role: parsed.data.role,
     acceptUrl,
   })
+
+  console.log("[team] sendInviteEmail result:", emailResult)
 
   let emailError: string | undefined
   if (!emailResult.ok) emailError = emailResult.error
@@ -123,7 +133,7 @@ export async function resendInviteAction(inviteId: string): Promise<ActionResult
   })
 
   if (!emailResult.ok) {
-    return { ok: false, error: "Email could not be sent — check LOOPS_API_KEY and LOOPS_INVITE_TRANSACTIONAL_ID." }
+    return { ok: false, error: "Email could not be sent — check ZEPTOMAIL_TOKEN and ZEPTOMAIL_FROM." }
   }
 
   return { ok: true, data: null }

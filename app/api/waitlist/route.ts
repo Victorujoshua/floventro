@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { waitlistSchema } from "@/lib/validation/waitlist"
 import { createServerSupabase } from "@/lib/supabase/server"
-import { addWaitlistContact, sendWaitlistConfirmation } from "@/lib/email/loops"
 
 // In-memory rate limit: 5 requests per minute per IP.
 // Per-instance only — acceptable for a low-traffic waitlist endpoint.
@@ -78,17 +77,6 @@ export async function POST(request: NextRequest) {
     console.error("[waitlist] insert error:", error.message)
     return NextResponse.json({ ok: false, error: "server" }, { status: 500 })
   }
-
-  const firstName = fullName?.split(" ")[0]
-
-  // Fire-and-forget — failures are logged but don't affect the user response
-  addWaitlistContact({ email, firstName, company, role, branchCount }).then((r) => {
-    if (!r.ok) console.error("[waitlist] loops contact add failed for", email)
-  })
-
-  sendWaitlistConfirmation(email, firstName).then((r) => {
-    if (!r.ok) console.error("[waitlist] loops confirmation failed for", email)
-  })
 
   return NextResponse.json({ ok: true })
 }

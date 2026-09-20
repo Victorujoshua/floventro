@@ -330,13 +330,13 @@ export function TeamClient({ orgName, members, invites, canInviteAdmin }: Props)
               ) : successData.emailError === "not_configured" ? (
                 <p className="text-sm text-neutral-600">
                   Email isn&apos;t configured yet — set{" "}
-                  <span className="font-mono text-xs text-neutral-800">LOOPS_API_KEY</span> and{" "}
-                  <span className="font-mono text-xs text-neutral-800">LOOPS_INVITE_TRANSACTIONAL_ID</span>, or share this link directly:
+                  <span className="font-mono text-xs text-neutral-800">ZEPTOMAIL_TOKEN</span> and{" "}
+                  <span className="font-mono text-xs text-neutral-800">ZEPTOMAIL_FROM</span>, or share this link directly:
                 </p>
               ) : (
                 <p className="text-sm text-neutral-600">
                   Email couldn&apos;t be sent
-                  {successData.emailError === "network" ? " (network error)" : " — check LOOPS_API_KEY and LOOPS_INVITE_TRANSACTIONAL_ID"} — share this link directly:
+                  {successData.emailError === "network" ? " (network error)" : " — check ZEPTOMAIL_TOKEN and ZEPTOMAIL_FROM"} — share this link directly:
                 </p>
               )}
 

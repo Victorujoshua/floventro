@@ -120,6 +120,13 @@ report deltas, iterate until ~90% structural match.
 > 3. Both functions: never throw. Fire-and-forget from the route handler — failures are logged but don't block the success response.
 > 4. Required env vars: `LOOPS_API_KEY`, `LOOPS_WAITLIST_TRANSACTIONAL_ID`.
 
+> **Removed (2026-09-20):** the waitlist feature is no longer part of the product.
+> `addWaitlistContact` and `sendWaitlistConfirmation` were deleted from `lib/email/loops.ts`
+> (which was itself deleted once nothing imported from it), and the calls were removed from
+> `app/api/waitlist/route.ts`. The route still inserts into `public.waitlist` but no longer
+> sends any email or `LOOPS_WAITLIST_TRANSACTIONAL_ID`-dependent confirmation. Kept here for
+> historical record of what Phase 2 originally built.
+
 ---
 
 ## Phase 3 — Shell, design system, nav, footer, screenshot setup

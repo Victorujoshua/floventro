@@ -565,7 +565,7 @@ These are intentionally not detailed yet. Writing detailed prompts now would be 
 
 - `invitations` table with token + expiry
 - RPC `accept_invitation(token)` — security-definer, creates membership atomically
-- Loops transactional email for invites (uses `LOOPS_INVITE_TRANSACTIONAL_ID`)
+- ZeptoMail transactional email for invites (uses `ZEPTOMAIL_TOKEN` + `ZEPTOMAIL_FROM`)
 - Screens: `/admin/team` (owner only), invite modal, `/accept-invite/:token`
 - Post-acceptance: role-appropriate empty dashboard
 - **This is likely when we create the second Vercel project and `app.floventro.com` subdomain** — invited users need a real URL to click.

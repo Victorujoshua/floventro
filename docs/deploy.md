@@ -1,6 +1,6 @@
 # Floventro — Deploy Guide
 
-> Production stack: Vercel (hosting) · Supabase (Postgres) · Loops (transactional email)
+> Production stack: Vercel (hosting) · Supabase (Postgres) · ZeptoMail (transactional email)
 
 ---
 
@@ -9,7 +9,7 @@
 - GitHub account (repo will live here)
 - Vercel account at vercel.com (free Hobby tier is enough)
 - Supabase project created at supabase.com
-- Loops account at loops.so with a verified sending domain
+- ZeptoMail account at zoho.com/zeptomail with a verified sending domain
 
 ---
 
@@ -54,12 +54,12 @@ In the Vercel project → **Settings → Environment Variables**, add all of the
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase dashboard → Project Settings → API → Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase dashboard → Project Settings → API → `anon` `public` key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase dashboard → Project Settings → API → `service_role` key (**keep secret**) |
-| `LOOPS_API_KEY` | Loops dashboard → Settings → API Keys |
-| `LOOPS_INVITE_TRANSACTIONAL_ID` | ID of the "Team Invite" transactional email in Loops (see `docs/loops-setup.md`) |
-| `LOOPS_WAITLIST_TRANSACTIONAL_ID` | ID of the waitlist confirmation transactional email in Loops |
+| `ZEPTOMAIL_TOKEN` | ZeptoMail dashboard → Mail Agent → Send Mail Token (see `docs/zeptomail-setup.md`) |
+| `ZEPTOMAIL_FROM` | Domain-verified sender address in ZeptoMail |
+| `ZEPTOMAIL_FROM_NAME` | Display name shown in the From field (optional, defaults to "Floventro") |
 | `NEXT_PUBLIC_SITE_URL` | `https://floventro.com` |
 
-> **Security:** `SUPABASE_SERVICE_ROLE_KEY` and `LOOPS_API_KEY` are server-only secrets.
+> **Security:** `SUPABASE_SERVICE_ROLE_KEY` and `ZEPTOMAIL_TOKEN` are server-only secrets.
 > Never set them as `NEXT_PUBLIC_*`.
 
 ---
