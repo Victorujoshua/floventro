@@ -17,6 +17,7 @@ import {
   getMyServiceMetrics,
 } from "@/lib/db/queries/dashboard"
 import { formatNaira } from "@/lib/format/money"
+import { RevenueSplitNote } from "@/components/app/revenue-split-note"
 import { StockChart } from "./stock-chart"
 
 function StatusBadge({ status }: { status: string }) {
@@ -112,6 +113,7 @@ export default async function DashboardPage() {
                     <span className="font-inter">₦</span>{formatNaira(financials.revenueLast30dCents)}
                   </p>
                   <p className="text-sm text-neutral-500 mt-1">last 30 days</p>
+                  <RevenueSplitNote split={financials.revenueLast30dSplit} />
                 </div>
 
                 <div className="bg-tint-success rounded-2xl border border-neutral-200/60 p-6">
@@ -426,6 +428,7 @@ export default async function DashboardPage() {
                     <span className="font-inter">₦</span>{formatNaira(mySalesMetrics.revenueLast30dCents)}
                   </p>
                   <p className="text-sm text-neutral-500 mt-1">your sales, last 30 days</p>
+                  <RevenueSplitNote split={mySalesMetrics.revenueLast30dSplit} />
                 </div>
 
                 <div className="bg-white rounded-2xl border border-neutral-200/60 p-6">

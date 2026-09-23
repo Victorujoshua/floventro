@@ -4,6 +4,7 @@ import { requireOwner } from "@/lib/auth/guards"
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { getOrgOverview } from "@/lib/db/queries/org"
 import { formatNaira } from "@/lib/format/money"
+import { RevenueSplitNote } from "@/components/app/revenue-split-note"
 import { BranchStockChart } from "./branch-stock-chart"
 import { BranchCards } from "./branch-cards"
 
@@ -42,6 +43,7 @@ export default async function OrgOverviewPage() {
           <p className="text-2xl font-semibold text-neutral-950 tabular-nums mt-3">
             <span className="font-inter">₦</span>{formatNaira(overview.revenueLast30dCents)}
           </p>
+          <RevenueSplitNote split={overview.revenueLast30dSplit} />
           <p className="text-xs text-neutral-500 mt-1">
             All time: <span className="font-inter">₦</span>{formatNaira(overview.revenueAllTimeCents)}
           </p>

@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import { cn } from "@/lib/utils"
+import { RevenueSplitNote } from "@/components/app/revenue-split-note"
 import type { OrgOverview, OrgSalesData, OrgLedgerRow } from "@/lib/db/queries/org"
 import type { BranchFinancials, MySalesMetrics, MyStockPerformanceRow } from "@/lib/db/queries/dashboard"
 import type { SaleRow } from "@/lib/db/queries/sales"
@@ -117,6 +118,9 @@ export type ReportData =
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Matches MetricCard's sub line.
+const SPLIT_NOTE_CLASS = "mt-0.5 text-neutral-400"
+
 function fmtMoney(cents: number) {
   return "₦" + (cents / 100).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
@@ -137,12 +141,14 @@ function MetricCard({
   label,
   value,
   sub,
+  detail,
   delay = 0,
   muted = false,
 }: {
   label: string
   value: string
   sub?: string
+  detail?: React.ReactNode
   delay?: number
   muted?: boolean
 }) {
@@ -158,6 +164,7 @@ function MetricCard({
         {value}
       </p>
       {sub && <p className="mt-0.5 text-xs text-neutral-400">{sub}</p>}
+      {detail}
     </motion.div>
   )
 }
@@ -540,6 +547,7 @@ function OrgReport({ data, period }: { data: Extract<ReportData, { kind: "org" }
   const { overview, sales } = data
 
   const revenue = period === "30d" ? overview.revenueLast30dCents : overview.revenueAllTimeCents
+  const revenueSplit = period === "30d" ? overview.revenueLast30dSplit : overview.revenueAllTimeSplit
   const profit = period === "30d" ? overview.profitLast30dCents : null // all-time profit not computed
   const margin = period === "30d" ? overview.avgMarginPct : null
 
@@ -560,7 +568,13 @@ function OrgReport({ data, period }: { data: Extract<ReportData, { kind: "org" }
   return (
     <>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <MetricCard label="Revenue" value={fmtMoney(revenue)} sub={period === "30d" ? "Last 30 days" : "All time"} delay={0.05} />
+        <MetricCard
+          label="Revenue"
+          value={fmtMoney(revenue)}
+          sub={period === "30d" ? "Last 30 days" : "All time"}
+          detail={<RevenueSplitNote split={revenueSplit} className={SPLIT_NOTE_CLASS} />}
+          delay={0.05}
+        />
         <MetricCard
           label="Gross Profit"
           value={profit !== null ? fmtMoney(profit) : "—"}
@@ -690,7 +704,13 @@ function BranchReport({ data }: { data: Extract<ReportData, { kind: "branch" }> 
   return (
     <>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <MetricCard label="Revenue" value={fmtMoney(financials.revenueLast30dCents)} sub="Last 30 days" delay={0.05} />
+        <MetricCard
+          label="Revenue"
+          value={fmtMoney(financials.revenueLast30dCents)}
+          sub="Last 30 days"
+          detail={<RevenueSplitNote split={financials.revenueLast30dSplit} className={SPLIT_NOTE_CLASS} />}
+          delay={0.05}
+        />
         <MetricCard
           label="Gross Profit"
           value={financials.profitLast30dCents !== null ? fmtMoney(financials.profitLast30dCents) : "—"}
@@ -969,7 +989,13 @@ function SalesReport({ data }: { data: Extract<ReportData, { kind: "sales" }> })
   return (
     <>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <MetricCard label="Revenue" value={fmtMoney(metrics.revenueLast30dCents)} sub="Last 30 days" delay={0.05} />
+        <MetricCard
+          label="Revenue"
+          value={fmtMoney(metrics.revenueLast30dCents)}
+          sub="Last 30 days"
+          detail={<RevenueSplitNote split={metrics.revenueLast30dSplit} className={SPLIT_NOTE_CLASS} />}
+          delay={0.05}
+        />
         <MetricCard
           label="Gross Profit"
           value={metrics.profitLast30dCents !== null ? fmtMoney(metrics.profitLast30dCents) : "—"}

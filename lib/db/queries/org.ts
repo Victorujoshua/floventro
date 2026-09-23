@@ -1,6 +1,13 @@
 import "server-only"
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { getCurrentScope } from "@/lib/auth/scope"
+import {
+  SALE_CREDIT_COLUMNS,
+  addToRevenueSplit,
+  checkRevenueSplit,
+  emptyRevenueSplit,
+  type RevenueSplit,
+} from "./revenue-split"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -9,13 +16,16 @@ export type BranchSummary = {
   name: string
   // address removed — column does not exist in branches table (Option B)
   revenueLast30dCents: number
+  revenueLast30dSplit: RevenueSplit
   stockUnits: number
 }
 
 export type OrgOverview = {
   revenueLast30dCents: number
+  revenueLast30dSplit: RevenueSplit
   serviceRevenueLast30dCents: number
   revenueAllTimeCents: number
+  revenueAllTimeSplit: RevenueSplit
   profitLast30dCents: number | null
   avgMarginPct: number | null
   costDataComplete: boolean
@@ -63,7 +73,9 @@ export type OrgRecentSale = {
 
 export type OrgSalesData = {
   revenueAllTimeCents: number
+  revenueAllTimeSplit: RevenueSplit
   revenueLast30dCents: number
+  revenueLast30dSplit: RevenueSplit
   serviceRevenueLast30dCents: number
   // null when no products sold in the 30d period have vendor invoice cost data
   profitLast30dCents: number | null
@@ -134,7 +146,7 @@ export async function getOrgOverview(): Promise<OrgOverview> {
 
       supabase
         .from("sales")
-        .select("branch_id, subtotal_cents, service_revenue_cents, created_at, sale_lines(id, product_id, line_total_cents)")
+        .select(`branch_id, subtotal_cents, service_revenue_cents, created_at, ${SALE_CREDIT_COLUMNS}, sale_lines(id, product_id, line_total_cents)`)
         .eq("organisation_id", scope.organisationId),
 
       supabase
@@ -228,24 +240,39 @@ export async function getOrgOverview(): Promise<OrgOverview> {
 
   // ── Revenue + 30d COGS aggregation ───────────────────────────────────────
   type RawSaleLine = { id: string; product_id: string; line_total_cents: number }
-  type RawSale = { branch_id: string; subtotal_cents: number; service_revenue_cents: number; created_at: string; sale_lines: RawSaleLine[] }
+  type RawSale = {
+    branch_id: string
+    subtotal_cents: number
+    service_revenue_cents: number
+    created_at: string
+    payment_status: string
+    sale_payments: { id: string }[] | null
+    sale_lines: RawSaleLine[]
+  }
   const sales = salesRes.data as unknown as RawSale[]
 
   let revenueAllTimeCents = 0
+  const revenueAllTimeSplit = emptyRevenueSplit()
   let revenueLast30dCents = 0
+  const revenueLast30dSplit = emptyRevenueSplit()
   let serviceRevenueLast30dCents = 0
   let revenueLast30dKnownCostCents = 0
   let costLast30dKnownCents = 0
   let hasAny30dCostData = false
   const missingCostProductIds = new Set<string>()
   const branchRevMap = new Map<string, number>()
+  const branchSplitMap = new Map<string, RevenueSplit>()
 
   for (const s of sales) {
     revenueAllTimeCents += s.subtotal_cents
+    addToRevenueSplit(revenueAllTimeSplit, s)
     if (s.created_at >= cutoff) {
       revenueLast30dCents += s.subtotal_cents
+      addToRevenueSplit(revenueLast30dSplit, s)
       serviceRevenueLast30dCents += s.service_revenue_cents ?? 0
       branchRevMap.set(s.branch_id, (branchRevMap.get(s.branch_id) ?? 0) + s.subtotal_cents)
+      if (!branchSplitMap.has(s.branch_id)) branchSplitMap.set(s.branch_id, emptyRevenueSplit())
+      addToRevenueSplit(branchSplitMap.get(s.branch_id)!, s)
 
       for (const line of s.sale_lines ?? []) {
         const alloc = cogsMap.get(line.id)
@@ -271,6 +298,12 @@ export async function getOrgOverview(): Promise<OrgOverview> {
       : null
   const costDataComplete = hasAny30dCostData && missingCostProductIds.size === 0
   const missingCostProductCount = missingCostProductIds.size
+
+  checkRevenueSplit(revenueAllTimeSplit, revenueAllTimeCents, "getOrgOverview all-time")
+  checkRevenueSplit(revenueLast30dSplit, revenueLast30dCents, "getOrgOverview 30d")
+  for (const [branchId, split] of branchSplitMap) {
+    checkRevenueSplit(split, branchRevMap.get(branchId) ?? 0, `getOrgOverview 30d branch ${branchId}`)
+  }
 
   // ── Branch pool stock aggregation ─────────────────────────────────────────
   type RawProductStock = { branch_id: string; quantity: number }
@@ -322,13 +355,16 @@ export async function getOrgOverview(): Promise<OrgOverview> {
     id: b.id,
     name: b.name,
     revenueLast30dCents: branchRevMap.get(b.id) ?? 0,
+    revenueLast30dSplit: branchSplitMap.get(b.id) ?? emptyRevenueSplit(),
     stockUnits: branchStockMap.get(b.id) ?? 0,
   }))
 
   return {
     revenueLast30dCents,
+    revenueLast30dSplit,
     serviceRevenueLast30dCents,
     revenueAllTimeCents,
+    revenueAllTimeSplit,
     profitLast30dCents,
     avgMarginPct,
     costDataComplete,
@@ -348,7 +384,9 @@ export async function getOrgOverview(): Promise<OrgOverview> {
 
 const EMPTY_ORG_SALES: OrgSalesData = {
   revenueAllTimeCents: 0,
+  revenueAllTimeSplit: emptyRevenueSplit(),
   revenueLast30dCents: 0,
+  revenueLast30dSplit: emptyRevenueSplit(),
   serviceRevenueLast30dCents: 0,
   profitLast30dCents: null,
   avgMarginPct: null,
@@ -371,7 +409,7 @@ export async function getOrgSales(): Promise<OrgSalesData> {
     supabase
       .from("sales")
       .select(
-        "id, branch_id, subtotal_cents, service_revenue_cents, total_cents, created_at, sold_on, customer_name, sale_lines(id, product_id, quantity, line_total_cents, products(id, name, sku))",
+        `id, branch_id, subtotal_cents, service_revenue_cents, total_cents, created_at, sold_on, customer_name, ${SALE_CREDIT_COLUMNS}, sale_lines(id, product_id, quantity, line_total_cents, products(id, name, sku))`,
       )
       .eq("organisation_id", scope.organisationId)
       .order("created_at", { ascending: false }),
@@ -428,6 +466,8 @@ export async function getOrgSales(): Promise<OrgSalesData> {
     created_at: string
     sold_on: string
     customer_name: string | null
+    payment_status: string
+    sale_payments: { id: string }[] | null
     sale_lines: RawLine[]
   }
   type RawBranch = { id: string; name: string }
@@ -442,7 +482,9 @@ export async function getOrgSales(): Promise<OrgSalesData> {
   // ── Aggregation pass ──────────────────────────────────────────────────────
 
   let revenueAllTimeCents = 0
+  const revenueAllTimeSplit = emptyRevenueSplit()
   let revenueLast30dCents = 0
+  const revenueLast30dSplit = emptyRevenueSplit()
   let serviceRevenueLast30dCents = 0
 
   let revenueLast30dKnownCostCents = 0
@@ -466,10 +508,12 @@ export async function getOrgSales(): Promise<OrgSalesData> {
 
   for (const sale of sales) {
     revenueAllTimeCents += sale.subtotal_cents
+    addToRevenueSplit(revenueAllTimeSplit, sale)
     const isLast30d = sale.created_at >= cutoff
 
     if (isLast30d) {
       revenueLast30dCents += sale.subtotal_cents
+      addToRevenueSplit(revenueLast30dSplit, sale)
       serviceRevenueLast30dCents += sale.service_revenue_cents ?? 0
       if (!branchAgg.has(sale.branch_id)) {
         branchAgg.set(sale.branch_id, { revenueCents: 0, knownCostCents: 0, hasAnyCostData: false })
@@ -576,9 +620,14 @@ export async function getOrgSales(): Promise<OrgSalesData> {
     createdAt: s.created_at,
   }))
 
+  checkRevenueSplit(revenueAllTimeSplit, revenueAllTimeCents, "getOrgSales all-time")
+  checkRevenueSplit(revenueLast30dSplit, revenueLast30dCents, "getOrgSales 30d")
+
   return {
     revenueAllTimeCents,
+    revenueAllTimeSplit,
     revenueLast30dCents,
+    revenueLast30dSplit,
     serviceRevenueLast30dCents,
     profitLast30dCents,
     avgMarginPct,

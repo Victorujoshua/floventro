@@ -2,6 +2,7 @@ import { TrendingUp, ShoppingCart, Percent, DollarSign } from "lucide-react"
 import { requireOwner } from "@/lib/auth/guards"
 import { getOrgSales } from "@/lib/db/queries/org"
 import { formatNaira } from "@/lib/format/money"
+import { RevenueSplitNote } from "@/components/app/revenue-split-note"
 import { BranchRevenueChart } from "./branch-revenue-chart"
 
 function pct(value: number | null): string {
@@ -36,6 +37,7 @@ export default async function OrgSalesPage() {
             <span className="font-inter">₦</span>{formatNaira(data.revenueAllTimeCents)}
           </p>
           <p className="text-xs text-neutral-500 mt-1">all recorded sales</p>
+          <RevenueSplitNote split={data.revenueAllTimeSplit} />
         </div>
 
         <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-5">
@@ -47,6 +49,7 @@ export default async function OrgSalesPage() {
             <span className="font-inter">₦</span>{formatNaira(data.revenueLast30dCents)}
           </p>
           <p className="text-xs text-neutral-500 mt-1">last 30 days</p>
+          <RevenueSplitNote split={data.revenueLast30dSplit} />
         </div>
 
         <div className="bg-tint-success rounded-2xl border border-neutral-200/60 p-5">

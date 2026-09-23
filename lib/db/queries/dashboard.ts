@@ -3,6 +3,13 @@ import { createAppServerClient } from "@/lib/supabase/app-server"
 import { getCurrentScope } from "@/lib/auth/scope"
 import { formatNaira } from "@/lib/format/money"
 import { getPendingRequestCount } from "./requests"
+import {
+  SALE_CREDIT_COLUMNS,
+  addToRevenueSplit,
+  checkRevenueSplit,
+  emptyRevenueSplit,
+  type RevenueSplit,
+} from "./revenue-split"
 
 export async function getStockSummary() {
   const scope = await getCurrentScope()
@@ -223,6 +230,7 @@ export async function getNotifications(): Promise<NotificationItem[]> {
 
 export type BranchFinancials = {
   revenueLast30dCents: number
+  revenueLast30dSplit: RevenueSplit
   serviceRevenueLast30dCents: number
   profitLast30dCents: number | null
   avgMarginPct: number | null
@@ -233,6 +241,7 @@ export type BranchFinancials = {
 export async function getBranchFinancials(): Promise<BranchFinancials> {
   const empty: BranchFinancials = {
     revenueLast30dCents: 0,
+    revenueLast30dSplit: emptyRevenueSplit(),
     serviceRevenueLast30dCents: 0,
     profitLast30dCents: null,
     avgMarginPct: null,
@@ -254,7 +263,7 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
   const [salesRes, cogsRes] = await Promise.all([
     supabase
       .from("sales")
-      .select("subtotal_cents, service_revenue_cents, sale_lines(id, product_id, line_total_cents)")
+      .select(`subtotal_cents, service_revenue_cents, ${SALE_CREDIT_COLUMNS}, sale_lines(id, product_id, line_total_cents)`)
       .eq("organisation_id", scope.organisationId)
       .eq("branch_id", scope.branchId)
       .gte("created_at", cutoff),
@@ -275,9 +284,16 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
   }
 
   type RawLine = { id: string; product_id: string; line_total_cents: number }
-  type RawSale = { subtotal_cents: number; service_revenue_cents: number; sale_lines: RawLine[] }
+  type RawSale = {
+    subtotal_cents: number
+    service_revenue_cents: number
+    payment_status: string
+    sale_payments: { id: string }[] | null
+    sale_lines: RawLine[]
+  }
 
   let revenueLast30dCents = 0
+  const revenueLast30dSplit = emptyRevenueSplit()
   let serviceRevenueLast30dCents = 0
   let revenueLast30dKnownCostCents = 0
   let costLast30dKnownCents = 0
@@ -286,6 +302,7 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
 
   for (const sale of (salesRes.data as RawSale[]) ?? []) {
     revenueLast30dCents += sale.subtotal_cents
+    addToRevenueSplit(revenueLast30dSplit, sale)
     serviceRevenueLast30dCents += sale.service_revenue_cents ?? 0
     for (const line of sale.sale_lines ?? []) {
       const alloc = cogsMap.get(line.id)
@@ -309,8 +326,11 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
       ? Math.round((profitLast30dCents! / revenueLast30dKnownCostCents) * 1000) / 10
       : null
 
+  checkRevenueSplit(revenueLast30dSplit, revenueLast30dCents, "getBranchFinancials 30d")
+
   return {
     revenueLast30dCents,
+    revenueLast30dSplit,
     serviceRevenueLast30dCents,
     profitLast30dCents,
     avgMarginPct,
@@ -398,6 +418,7 @@ export async function getMyPendingRequestCount() {
 
 export type MySalesMetrics = {
   revenueLast30dCents: number
+  revenueLast30dSplit: RevenueSplit
   serviceRevenueLast30dCents: number
   costKnownCents: number | null
   profitLast30dCents: number | null
@@ -409,6 +430,7 @@ export type MySalesMetrics = {
 export async function getMySalesMetrics(): Promise<MySalesMetrics> {
   const empty: MySalesMetrics = {
     revenueLast30dCents: 0,
+    revenueLast30dSplit: emptyRevenueSplit(),
     serviceRevenueLast30dCents: 0,
     costKnownCents: null,
     profitLast30dCents: null,
@@ -432,7 +454,7 @@ export async function getMySalesMetrics(): Promise<MySalesMetrics> {
   // Adding 30d created_at window and sale_lines for COGS join.
   let salesQuery = client
     .from("sales")
-    .select("subtotal_cents, service_revenue_cents, sale_lines(id, product_id, line_total_cents)")
+    .select(`subtotal_cents, service_revenue_cents, ${SALE_CREDIT_COLUMNS}, sale_lines(id, product_id, line_total_cents)`)
     .eq("seller_user_id", authData.user.id)
     .eq("organisation_id", scope.organisationId)
     .gte("created_at", cutoff)
@@ -459,9 +481,16 @@ export async function getMySalesMetrics(): Promise<MySalesMetrics> {
   }
 
   type RawLine = { id: string; product_id: string; line_total_cents: number }
-  type RawSale = { subtotal_cents: number; service_revenue_cents: number; sale_lines: RawLine[] }
+  type RawSale = {
+    subtotal_cents: number
+    service_revenue_cents: number
+    payment_status: string
+    sale_payments: { id: string }[] | null
+    sale_lines: RawLine[]
+  }
 
   let revenueLast30dCents = 0
+  const revenueLast30dSplit = emptyRevenueSplit()
   let serviceRevenueLast30dCents = 0
   let revenueKnownCostCents = 0
   let costKnownCentsAccum = 0
@@ -470,6 +499,7 @@ export async function getMySalesMetrics(): Promise<MySalesMetrics> {
 
   for (const sale of (salesRes.data as RawSale[]) ?? []) {
     revenueLast30dCents += sale.subtotal_cents
+    addToRevenueSplit(revenueLast30dSplit, sale)
     serviceRevenueLast30dCents += sale.service_revenue_cents ?? 0
     for (const line of sale.sale_lines ?? []) {
       const alloc = cogsMap.get(line.id)
@@ -491,8 +521,11 @@ export async function getMySalesMetrics(): Promise<MySalesMetrics> {
       ? Math.round((profitLast30dCents! / revenueKnownCostCents) * 1000) / 10
       : null
 
+  checkRevenueSplit(revenueLast30dSplit, revenueLast30dCents, "getMySalesMetrics 30d")
+
   return {
     revenueLast30dCents,
+    revenueLast30dSplit,
     serviceRevenueLast30dCents,
     costKnownCents: hasAnyKnownCost ? costKnownCentsAccum : null,
     profitLast30dCents,

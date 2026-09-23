@@ -5,6 +5,7 @@ import { LogIn } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatNaira } from "@/lib/format/money"
 import { enterBranchAction } from "@/lib/db/actions/org"
+import { RevenueSplitNote } from "@/components/app/revenue-split-note"
 import type { BranchSummary } from "@/lib/db/queries/org"
 
 export function BranchCards({ branches }: { branches: BranchSummary[] }) {
@@ -65,6 +66,7 @@ export function BranchCards({ branches }: { branches: BranchSummary[] }) {
                 <span className="font-inter">₦</span>
                 {formatNaira(b.revenueLast30dCents)}
               </p>
+              <RevenueSplitNote split={b.revenueLast30dSplit} className="text-[11px] text-neutral-400 mt-0.5" />
             </div>
             <div>
               <p className="text-[11px] uppercase tracking-wide text-neutral-400">Stock</p>
