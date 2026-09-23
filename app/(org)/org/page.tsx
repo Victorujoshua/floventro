@@ -5,6 +5,7 @@ import { createAppServerClient } from "@/lib/supabase/app-server"
 import { getOrgOverview } from "@/lib/db/queries/org"
 import { formatNaira } from "@/lib/format/money"
 import { RevenueSplitNote } from "@/components/app/revenue-split-note"
+import { CardLink } from "@/components/app/card-link"
 import { BranchStockChart } from "./branch-stock-chart"
 import { BranchCards } from "./branch-cards"
 
@@ -35,7 +36,7 @@ export default async function OrgOverviewPage() {
 
       {/* Metric cards — row 1: financial */}
       <div className="grid sm:grid-cols-3 gap-4">
-        <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-5">
+        <CardLink href="/org/sales" className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-5">
           <div className="flex items-start justify-between">
             <p className="text-xs uppercase tracking-wide text-neutral-500">Revenue (30d)</p>
             <TrendingUp className="h-4 w-4 text-violet-300" />
@@ -47,7 +48,7 @@ export default async function OrgOverviewPage() {
           <p className="text-xs text-neutral-500 mt-1">
             All time: <span className="font-inter">₦</span>{formatNaira(overview.revenueAllTimeCents)}
           </p>
-        </div>
+        </CardLink>
 
         {(() => {
           const hasPartialCost =
@@ -56,7 +57,7 @@ export default async function OrgOverviewPage() {
             overview.missingCostProductCount > 0
           return (
             <>
-              <div className="bg-tint-success rounded-2xl border border-neutral-200/60 p-5">
+              <CardLink href="/org/sales" className="bg-tint-success rounded-2xl border border-neutral-200/60 p-5">
                 <div className="flex items-start justify-between">
                   <p className="text-xs uppercase tracking-wide text-neutral-500">Gross profit (30d)</p>
                   <DollarSign className="h-4 w-4 text-green-400" />
@@ -80,9 +81,9 @@ export default async function OrgOverviewPage() {
                     )}
                   </>
                 )}
-              </div>
+              </CardLink>
 
-              <div className="bg-white rounded-2xl border border-neutral-200/60 p-5">
+              <CardLink href="/org/sales" className="bg-white rounded-2xl border border-neutral-200/60 p-5">
                 <div className="flex items-start justify-between">
                   <p className="text-xs uppercase tracking-wide text-neutral-500">Gross margin (30d)</p>
                   <Percent className="h-4 w-4 text-neutral-300" />
@@ -104,7 +105,7 @@ export default async function OrgOverviewPage() {
                     )}
                   </>
                 )}
-              </div>
+              </CardLink>
             </>
           )
         })()}

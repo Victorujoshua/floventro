@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { ArrowUpRight, Check, TrendingUp, DollarSign, Percent, Layers, Package, Users } from "lucide-react"
+import { Check, TrendingUp, DollarSign, Percent, Layers, Package, Users } from "lucide-react"
 import { requireScope } from "@/lib/auth/guards"
 import {
   getStockSummary,
@@ -18,6 +18,7 @@ import {
 } from "@/lib/db/queries/dashboard"
 import { formatNaira } from "@/lib/format/money"
 import { RevenueSplitNote } from "@/components/app/revenue-split-note"
+import { CardLink, CardArrow } from "@/components/app/card-link"
 import { StockChart } from "./stock-chart"
 
 function StatusBadge({ status }: { status: string }) {
@@ -104,7 +105,7 @@ export default async function DashboardPage() {
               financials.missingCostProductCount > 0
             return (
               <div className="grid sm:grid-cols-3 gap-5">
-                <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
+                <CardLink href="/report" className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
                   <div className="flex items-start justify-between">
                     <p className="text-xs uppercase tracking-wide text-neutral-500">Revenue (30d)</p>
                     <TrendingUp className="h-4 w-4 text-violet-300" />
@@ -114,7 +115,7 @@ export default async function DashboardPage() {
                   </p>
                   <p className="text-sm text-neutral-500 mt-1">last 30 days</p>
                   <RevenueSplitNote split={financials.revenueLast30dSplit} />
-                </div>
+                </CardLink>
 
                 <div className="bg-tint-success rounded-2xl border border-neutral-200/60 p-6">
                   <div className="flex items-start justify-between">
@@ -172,33 +173,23 @@ export default async function DashboardPage() {
           {/* ── Branch-level metric cards ────────────────────────────────────── */}
           <div className="grid sm:grid-cols-3 gap-5">
             {/* Stock on hand */}
-            <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
+            <CardLink href="/inventory/products" className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
               <div className="flex items-start justify-between">
                 <p className="text-xs uppercase tracking-wide text-neutral-500">Stock on hand</p>
-                <Link
-                  href="/inventory/products"
-                  className="rounded-full bg-white/60 p-1.5 hover:bg-white transition-colors"
-                >
-                  <ArrowUpRight className="h-4 w-4 text-neutral-600" />
-                </Link>
+                <CardArrow />
               </div>
               <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
                 {stock!.totalUnits.toLocaleString()}
               </p>
               <p className="text-sm text-neutral-500 mt-1">{stock!.productsWithStock} products</p>
-            </div>
+            </CardLink>
 
             {/* Outstanding payables */}
             {payables && (
-              <div className="bg-tint-coral rounded-2xl border border-neutral-200/60 p-6">
+              <CardLink href="/inventory/invoices" className="bg-tint-coral rounded-2xl border border-neutral-200/60 p-6">
                 <div className="flex items-start justify-between">
                   <p className="text-xs uppercase tracking-wide text-neutral-500">Outstanding payables</p>
-                  <Link
-                    href="/inventory/invoices"
-                    className="rounded-full bg-white/60 p-1.5 hover:bg-white transition-colors"
-                  >
-                    <ArrowUpRight className="h-4 w-4 text-neutral-600" />
-                  </Link>
+                  <CardArrow />
                 </div>
                 <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
                   <span className="font-inter">₦</span>{formatNaira(payables.outstandingCents)}
@@ -213,23 +204,19 @@ export default async function DashboardPage() {
                     </span>
                   )}
                 </div>
-              </div>
+              </CardLink>
             )}
 
-            {/* Low stock */}
-            <div
+            {/* Low stock — products page has no low-stock filter yet, so this lands on the full list */}
+            <CardLink
+              href="/inventory/products"
               className={`${
                 stock!.lowStockCount === 0 ? "bg-tint-success" : "bg-tint-amber"
               } rounded-2xl border border-neutral-200/60 p-6`}
             >
               <div className="flex items-start justify-between">
                 <p className="text-xs uppercase tracking-wide text-neutral-500">Low stock</p>
-                <Link
-                  href="/inventory/products"
-                  className="rounded-full bg-white/60 p-1.5 hover:bg-white transition-colors"
-                >
-                  <ArrowUpRight className="h-4 w-4 text-neutral-600" />
-                </Link>
+                <CardArrow />
               </div>
               {stock!.lowStockCount === 0 ? (
                 <>
@@ -244,7 +231,7 @@ export default async function DashboardPage() {
                   <p className="text-sm text-neutral-500 mt-1">need reordering</p>
                 </>
               )}
-            </div>
+            </CardLink>
           </div>
 
           {/* Stock received chart */}
@@ -333,15 +320,10 @@ export default async function DashboardPage() {
           {/* ── Personal dashboard (sales / internal_use) ────────────────────── */}
           <div className="grid sm:grid-cols-2 gap-5 max-w-xl">
             {/* My holding */}
-            <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
+            <CardLink href="/holding" className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
               <div className="flex items-start justify-between">
                 <p className="text-xs uppercase tracking-wide text-neutral-500">My holding</p>
-                <Link
-                  href="/holding"
-                  className="rounded-full bg-white/60 p-1.5 hover:bg-white transition-colors"
-                >
-                  <ArrowUpRight className="h-4 w-4 text-neutral-600" />
-                </Link>
+                <CardArrow />
               </div>
               <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
                 {personalHolding?.totalUnits.toLocaleString() ?? 0}
@@ -349,18 +331,16 @@ export default async function DashboardPage() {
               <p className="text-sm text-neutral-500 mt-1">
                 {personalHolding?.productCount ?? 0} product{(personalHolding?.productCount ?? 0) !== 1 ? "s" : ""}
               </p>
-            </div>
+            </CardLink>
 
             {/* Pending requests */}
-            <div className={`${myPendingCount === 0 ? "bg-tint-success" : "bg-tint-amber"} rounded-2xl border border-neutral-200/60 p-6`}>
+            <CardLink
+              href="/requests"
+              className={`${myPendingCount === 0 ? "bg-tint-success" : "bg-tint-amber"} rounded-2xl border border-neutral-200/60 p-6`}
+            >
               <div className="flex items-start justify-between">
                 <p className="text-xs uppercase tracking-wide text-neutral-500">Pending requests</p>
-                <Link
-                  href="/requests"
-                  className="rounded-full bg-white/60 p-1.5 hover:bg-white transition-colors"
-                >
-                  <ArrowUpRight className="h-4 w-4 text-neutral-600" />
-                </Link>
+                <CardArrow />
               </div>
               <p className={`text-3xl font-semibold tabular-nums mt-3 ${myPendingCount === 0 ? "text-green-700" : "text-amber-700"}`}>
                 {myPendingCount}
@@ -368,13 +348,13 @@ export default async function DashboardPage() {
               <p className={`text-sm mt-1 ${myPendingCount === 0 ? "text-green-700" : "text-neutral-500"}`}>
                 {myPendingCount === 0 ? "All clear" : "awaiting approval"}
               </p>
-            </div>
+            </CardLink>
           </div>
 
           {/* Service provider metrics for internal_use (30d) */}
           {myServiceMetrics && (
             <div className="grid sm:grid-cols-3 gap-5">
-              <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
+              <CardLink href="/services-performed" className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
                 <div className="flex items-start justify-between">
                   <p className="text-xs uppercase tracking-wide text-neutral-500">Sessions (30d)</p>
                   <Layers className="h-4 w-4 text-violet-300" />
@@ -383,9 +363,10 @@ export default async function DashboardPage() {
                   {myServiceMetrics.sessionCount.toLocaleString()}
                 </p>
                 <p className="text-sm text-neutral-500 mt-1">services performed</p>
-              </div>
+              </CardLink>
 
-              <div className="bg-white rounded-2xl border border-neutral-200/60 p-6">
+              {/* Items used — /services-performed lists items per session; no aggregated view yet */}
+              <CardLink href="/services-performed" className="bg-white rounded-2xl border border-neutral-200/60 p-6">
                 <div className="flex items-start justify-between">
                   <p className="text-xs uppercase tracking-wide text-neutral-500">Items used (30d)</p>
                   <Package className="h-4 w-4 text-neutral-300" />
@@ -396,7 +377,7 @@ export default async function DashboardPage() {
                 <p className="text-sm text-neutral-500 mt-1">
                   {myServiceMetrics.distinctProductsUsed} product{myServiceMetrics.distinctProductsUsed !== 1 ? "s" : ""}
                 </p>
-              </div>
+              </CardLink>
 
               <div className="bg-white rounded-2xl border border-neutral-200/60 p-6">
                 <div className="flex items-start justify-between">
@@ -419,7 +400,7 @@ export default async function DashboardPage() {
               mySalesMetrics.missingCostProductCount > 0
             return (
               <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
+                <CardLink href="/sales" className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
                   <div className="flex items-start justify-between">
                     <p className="text-xs uppercase tracking-wide text-neutral-500">Revenue (30d)</p>
                     <TrendingUp className="h-4 w-4 text-violet-300" />
@@ -429,7 +410,7 @@ export default async function DashboardPage() {
                   </p>
                   <p className="text-sm text-neutral-500 mt-1">your sales, last 30 days</p>
                   <RevenueSplitNote split={mySalesMetrics.revenueLast30dSplit} />
-                </div>
+                </CardLink>
 
                 <div className="bg-white rounded-2xl border border-neutral-200/60 p-6">
                   <div className="flex items-start justify-between">
