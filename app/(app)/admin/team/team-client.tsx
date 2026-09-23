@@ -16,7 +16,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { inviteSchema, type InviteInput } from "@/lib/validation/invites"
-import { inviteMemberAction, revokeInviteAction, resendInviteAction } from "@/lib/db/actions/team"
+import {
+  inviteMemberAction,
+  revokeInviteAction,
+  resendInviteAction,
+  updateMemberRoleAction,
+  removeMemberAction,
+} from "@/lib/db/actions/team"
 import type { Member, PendingInvite } from "@/lib/db/queries/team"
 
 type Props = {
@@ -24,6 +30,8 @@ type Props = {
   members: Member[]
   invites: PendingInvite[]
   canInviteAdmin: boolean
+  canManageMembers: boolean
+  currentUserId: string
 }
 
 const SELECT_CLASS =
@@ -70,7 +78,14 @@ function formatDate(dateStr: string): string {
 
 type SuccessData = { acceptUrl: string; emailSent: boolean; emailError?: string; email: string }
 
-export function TeamClient({ orgName, members, invites, canInviteAdmin }: Props) {
+export function TeamClient({
+  orgName,
+  members,
+  invites,
+  canInviteAdmin,
+  canManageMembers,
+  currentUserId,
+}: Props) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [successData, setSuccessData] = useState<SuccessData | null>(null)
@@ -78,6 +93,14 @@ export function TeamClient({ orgName, members, invites, canInviteAdmin }: Props)
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null)
   const [revoking, setRevoking] = useState(false)
   const [resending, setResending] = useState<string | null>(null)
+  const [savingRole, setSavingRole] = useState<{ id: string; role: string } | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
+  const [removing, setRemoving] = useState(false)
+  const [memberError, setMemberError] = useState<{ id: string; message: string } | null>(null)
+
+  // Owners manage everyone except themselves and other owners (owner changes are out of scope).
+  const canManage = (m: Member) =>
+    canManageMembers && m.role !== "owner" && m.userId !== currentUserId
 
   const {
     register,
@@ -151,6 +174,39 @@ export function TeamClient({ orgName, members, invites, canInviteAdmin }: Props)
     }
   }
 
+  async function handleRoleChange(member: Member, role: string) {
+    if (role === member.role) return
+    setMemberError(null)
+    setConfirmRemove(null)
+    setSavingRole({ id: member.id, role })
+    const result = await updateMemberRoleAction(member.id, role)
+    setSavingRole(null)
+    if (!result.ok) {
+      setMemberError({ id: member.id, message: result.error })
+      return
+    }
+    toast.success(`${member.name || member.email} is now ${ROLE_LABELS[role] ?? role}`)
+    router.refresh()
+  }
+
+  async function handleRemove(member: Member) {
+    if (confirmRemove !== member.id) {
+      setMemberError(null)
+      setConfirmRemove(member.id)
+      return
+    }
+    setRemoving(true)
+    const result = await removeMemberAction(member.id)
+    setRemoving(false)
+    setConfirmRemove(null)
+    if (!result.ok) {
+      setMemberError({ id: member.id, message: result.error })
+      return
+    }
+    toast.success(`${member.name || member.email} removed`)
+    router.refresh()
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -195,6 +251,7 @@ export function TeamClient({ orgName, members, invites, canInviteAdmin }: Props)
                   <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">
                     Joined
                   </th>
+                  {canManageMembers && <th className="px-5 py-3 w-72" />}
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
@@ -215,6 +272,59 @@ export function TeamClient({ orgName, members, invites, canInviteAdmin }: Props)
                       {m.branchName ?? <span className="text-neutral-400">All branches</span>}
                     </td>
                     <td className="px-5 py-3.5 text-neutral-500">{formatDate(m.createdAt)}</td>
+                    {canManageMembers && (
+                      <td className="px-5 py-3.5 text-right">
+                        {canManage(m) && (
+                          <div className="inline-flex flex-col items-end gap-1.5">
+                            {confirmRemove === m.id ? (
+                              <span className="inline-flex items-center gap-2">
+                                <span className="text-xs text-neutral-500">Remove?</span>
+                                <button
+                                  onClick={() => handleRemove(m)}
+                                  disabled={removing}
+                                  className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                                >
+                                  {removing ? "…" : "Yes"}
+                                </button>
+                                <button
+                                  onClick={() => setConfirmRemove(null)}
+                                  className="text-xs text-neutral-400 hover:text-neutral-600"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-3">
+                                <select
+                                  aria-label={`Role for ${m.name || m.email}`}
+                                  value={savingRole?.id === m.id ? savingRole.role : m.role}
+                                  onChange={(e) => handleRoleChange(m, e.target.value)}
+                                  disabled={savingRole !== null}
+                                  className="rounded-md border border-neutral-200 bg-white px-2 h-7 text-xs text-neutral-700 focus:outline-none focus:ring-2 focus:ring-violet-600/30 focus:border-violet-600 disabled:opacity-50"
+                                >
+                                  {ALL_ROLE_OPTIONS.map((o) => (
+                                    <option key={o.value} value={o.value}>
+                                      {o.label}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  onClick={() => handleRemove(m)}
+                                  className="text-xs font-medium text-neutral-400 hover:text-red-600 transition-colors"
+                                >
+                                  Remove
+                                </button>
+                              </span>
+                            )}
+                            {memberError?.id === m.id && (
+                              <p role="alert" className="text-xs text-red-600 max-w-[260px] text-right">
+                                {memberError.message}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

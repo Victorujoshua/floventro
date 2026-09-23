@@ -30,6 +30,8 @@ export default async function TeamPage() {
       members={members}
       invites={invites}
       canInviteAdmin={scope.role === "owner"}
+      canManageMembers={scope.role === "owner"}
+      currentUserId={scope.userId}
     />
   )
 }

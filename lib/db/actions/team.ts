@@ -153,3 +153,52 @@ export async function revokeInviteAction(inviteId: string): Promise<ActionResult
   if (error) return { ok: false, error: error.message }
   return { ok: true, data: null }
 }
+
+// ── Active members ────────────────────────────────────────────────────────────
+// Guards (owner-only, no self-edit, no owner rows, last owner, held stock,
+// role collision) are enforced in update_membership_role / remove_membership
+// (app_0071). Their messages are user-facing and passed through as-is.
+
+const EDITABLE_ROLES = ["inventory", "sales", "internal_use", "admin"] as const
+
+function membershipError(error: { code?: string; message?: string }, context: string): string {
+  if (error.code === "P0001" && error.message) {
+    return error.message.charAt(0).toUpperCase() + error.message.slice(1)
+  }
+  console.error(`[team] ${context}`, error)
+  return "Something went wrong — please try again."
+}
+
+export async function updateMemberRoleAction(
+  membershipId: string,
+  role: string,
+): Promise<ActionResult> {
+  await requireRole("owner")
+
+  if (!(EDITABLE_ROLES as readonly string[]).includes(role)) {
+    return { ok: false, error: "Role must be Inventory, Sales, Internal Use or Branch Admin." }
+  }
+
+  const supabase = await createAppServerClient()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any).rpc("update_membership_role", {
+    p_membership_id: membershipId,
+    p_role: role,
+  })
+
+  if (error) return { ok: false, error: membershipError(error, "update_membership_role") }
+  return { ok: true, data: null }
+}
+
+export async function removeMemberAction(membershipId: string): Promise<ActionResult> {
+  await requireRole("owner")
+  const supabase = await createAppServerClient()
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any).rpc("remove_membership", {
+    p_membership_id: membershipId,
+  })
+
+  if (error) return { ok: false, error: membershipError(error, "remove_membership") }
+  return { ok: true, data: null }
+}
