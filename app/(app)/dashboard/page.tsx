@@ -505,38 +505,6 @@ export default async function DashboardPage() {
             )
           })()}
 
-          {/* My recent sales */}
-          {canSeePersonalSalesMetrics && <div className="bg-white rounded-2xl border border-neutral-200/60 p-6 max-w-xl">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-neutral-950">My recent sales</h2>
-              <Link href="/sales" className="text-xs text-violet-700 hover:underline">
-                View all →
-              </Link>
-            </div>
-            {myRecentSales.length === 0 ? (
-              <p className="text-sm text-neutral-500">No sales recorded yet.</p>
-            ) : (
-              <ul className="divide-y divide-neutral-100">
-                {myRecentSales.map((sale) => (
-                  <li key={sale.id} className="py-2.5 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-neutral-950">
-                        {sale.customer_name || "Walk-in"}
-                      </p>
-                      <p className="text-xs text-neutral-500 font-mono">{sale.sold_on}</p>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-sm font-mono tabular-nums text-neutral-700">
-                        <span className="font-inter">₦</span>{formatNaira(sale.total_cents)}
-                      </span>
-                      <StatusBadge status={sale.payment_status} />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>}
-
           {/* Stock performance — per-product: in hand, sold 30d, sell-through */}
           {canSeePersonalSalesMetrics && <div className="bg-white rounded-2xl border border-neutral-200/60 p-6">
             <div className="mb-4">
@@ -585,6 +553,38 @@ export default async function DashboardPage() {
                   </tbody>
                 </table>
               </div>
+            )}
+          </div>}
+
+          {/* My recent sales */}
+          {canSeePersonalSalesMetrics && <div className="bg-white rounded-2xl border border-neutral-200/60 p-6 max-w-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-neutral-950">My recent sales</h2>
+              <Link href="/sales" className="text-xs text-violet-700 hover:underline">
+                View all →
+              </Link>
+            </div>
+            {myRecentSales.length === 0 ? (
+              <p className="text-sm text-neutral-500">No sales recorded yet.</p>
+            ) : (
+              <ul className="divide-y divide-neutral-100">
+                {myRecentSales.map((sale) => (
+                  <li key={sale.id} className="py-2.5 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-neutral-950">
+                        {sale.customer_name || "Walk-in"}
+                      </p>
+                      <p className="text-xs text-neutral-500 font-mono">{sale.sold_on}</p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-sm font-mono tabular-nums text-neutral-700">
+                        <span className="font-inter">₦</span>{formatNaira(sale.total_cents)}
+                      </span>
+                      <StatusBadge status={sale.payment_status} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>}
         </>
