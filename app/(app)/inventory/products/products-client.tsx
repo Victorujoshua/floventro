@@ -278,6 +278,9 @@ export function ProductsClient({ products, resolvedBranchId, branches }: Props) 
                 name: dialogState.product.name,
                 description: dialogState.product.description ?? "",
                 reorderPoint: dialogState.product.reorder_point,
+                costPriceNaira: dialogState.product.unit_cost_cents != null
+                  ? dialogState.product.unit_cost_cents / 100
+                  : undefined,
                 defaultPriceNaira: dialogState.product.default_price_cents != null
                   ? dialogState.product.default_price_cents / 100
                   : undefined,

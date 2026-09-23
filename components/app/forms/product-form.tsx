@@ -30,6 +30,7 @@ export function ProductForm({ mode, initialData, onSuccess }: Props) {
           name: initialData.name,
           description: initialData.description ?? "",
           reorderPoint: initialData.reorderPoint,
+          costPriceNaira: initialData.costPriceNaira,
           defaultPriceNaira: initialData.defaultPriceNaira,
         }
       : { reorderPoint: 0 },
@@ -101,10 +102,32 @@ export function ProductForm({ mode, initialData, onSuccess }: Props) {
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="defaultPriceNaira">
-          Default selling price (
+        <Label htmlFor="costPriceNaira">
+          Cost price (
           <span className="font-inter">₦</span>)
-          <span className="text-neutral-400 font-normal ml-1">(optional)</span>
+        </Label>
+        <Input
+          id="costPriceNaira"
+          type="number"
+          min={0}
+          step="0.01"
+          placeholder="e.g. 1800"
+          {...register("costPriceNaira", {
+            setValueAs: (v) => (v === "" || v === undefined ? undefined : parseFloat(v)),
+          })}
+        />
+        {errors.costPriceNaira && (
+          <p className="text-xs text-red-500">{errors.costPriceNaira.message}</p>
+        )}
+        <p className="text-xs text-neutral-400">
+          For reference only. Stock costing uses the costs on vendor invoices.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="defaultPriceNaira">
+          Selling price (
+          <span className="font-inter">₦</span>)
         </Label>
         <Input
           id="defaultPriceNaira"

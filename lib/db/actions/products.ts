@@ -27,6 +27,8 @@ export async function createProductAction(
       name: parsed.data.name,
       description: parsed.data.description || null,
       reorder_point: parsed.data.reorderPoint,
+      // Reference value only — costing uses invoice_lines / cost layers, never this column.
+      unit_cost_cents: parsed.data.costPriceNaira != null ? Math.round(parsed.data.costPriceNaira * 100) : null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       default_price_cents: parsed.data.defaultPriceNaira != null ? Math.round(parsed.data.defaultPriceNaira * 100) : null,
     } as any)
@@ -89,6 +91,8 @@ export async function updateProductAction(
       name: parsed.data.name,
       description: parsed.data.description || null,
       reorder_point: parsed.data.reorderPoint,
+      // Reference value only — costing uses invoice_lines / cost layers, never this column.
+      unit_cost_cents: parsed.data.costPriceNaira != null ? Math.round(parsed.data.costPriceNaira * 100) : null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       default_price_cents: parsed.data.defaultPriceNaira != null ? Math.round(parsed.data.defaultPriceNaira * 100) : null,
     } as any)
