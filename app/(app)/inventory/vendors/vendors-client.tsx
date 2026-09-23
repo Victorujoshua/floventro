@@ -28,8 +28,13 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { VendorForm } from "@/components/app/forms/vendor-form"
+import { ExportButton } from "@/components/app/export-button"
+import { ImportButton } from "@/components/app/import-button"
 import { deleteVendorAction } from "@/lib/db/actions/vendors"
+import { fetchVendorExportRowsAction } from "@/lib/db/actions/export"
+import { importVendorsAction } from "@/lib/db/actions/import"
 import { formatNaira } from "@/lib/format/money"
+import type { ExportColumn } from "@/lib/export/xlsx"
 
 type Branch = {
   id: string
@@ -55,6 +60,17 @@ type Props = {
   vendors: Vendor[]
   branches: Branch[]
 }
+
+const VENDOR_COLUMNS: ExportColumn[] = [
+  { header: "name",             key: "name" },
+  { header: "contact_person",   key: "contactPerson" },
+  { header: "phone",            key: "phone" },
+  { header: "email",            key: "email" },
+  { header: "tin",              key: "tin" },
+  { header: "cac_registration", key: "cacRegistration" },
+  { header: "notes",            key: "notes" },
+  { header: "branch",           key: "branch" },
+]
 
 export function VendorsClient({ vendors, branches }: Props) {
   const router = useRouter()
@@ -107,6 +123,18 @@ export function VendorsClient({ vendors, branches }: Props) {
           <p className="text-sm text-neutral-500 mt-1">Suppliers you buy from</p>
         </div>
         <div className="flex items-center gap-2">
+          <ExportButton
+            filename="vendors"
+            columns={VENDOR_COLUMNS}
+            fetchRows={async () => {
+              const rows = await fetchVendorExportRowsAction()
+              return rows as unknown as Record<string, unknown>[]
+            }}
+          />
+          <ImportButton
+            onImport={importVendorsAction}
+            onSuccess={() => router.refresh()}
+          />
           <Link
             href="/inventory/invoices"
             className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-4 h-10 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"

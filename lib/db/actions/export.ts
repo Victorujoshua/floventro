@@ -74,3 +74,45 @@ export async function fetchInvoiceExportRowsAction(): Promise<InvoiceExportRow[]
 
   return rows
 }
+
+export type VendorExportRow = {
+  name: string
+  contactPerson: string
+  phone: string
+  email: string
+  tin: string
+  cacRegistration: string
+  notes: string
+  branch: string
+}
+
+export async function fetchVendorExportRowsAction(): Promise<VendorExportRow[]> {
+  const scope = await requireRole("owner", "inventory", "admin")
+  const supabase = await createAppServerClient()
+
+  let query = supabase
+    .from("vendors")
+    .select("name, contact_person, phone, email, tin, cac_registration, notes, branches ( name )")
+    .eq("organisation_id", scope.organisationId)
+    .is("deleted_at", null)
+    .order("name", { ascending: true })
+
+  // Match the vendors list: branch-scoped users export only their branch.
+  if (scope.branchId) {
+    query = query.eq("branch_id", scope.branchId)
+  }
+
+  const { data, error } = await query
+  if (error || !data) return []
+
+  return data.map((v) => ({
+    name: v.name,
+    contactPerson: v.contact_person ?? "",
+    phone: v.phone ?? "",
+    email: v.email ?? "",
+    tin: v.tin ?? "",
+    cacRegistration: v.cac_registration ?? "",
+    notes: v.notes ?? "",
+    branch: (v.branches as unknown as { name: string } | null)?.name ?? "",
+  }))
+}

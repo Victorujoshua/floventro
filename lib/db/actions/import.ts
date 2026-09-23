@@ -407,6 +407,178 @@ export async function importProductsAction(
   return { imported, skipped, warnings }
 }
 
+// ── Vendors ───────────────────────────────────────────────────────────────────
+// Vendors are branch-scoped (unique per branch_id + name). Branch per row:
+//   - single-branch org        → always that branch; `branch` column ignored
+//   - `branch` column present  → case-insensitive match on org branch names
+//   - `branch` column blank    → current branch if one is selected, else skip
+// Writes ONLY to: vendors.
+
+// Mirrors lib/validation/vendors.ts
+const VENDOR_TEXT_LIMITS = {
+  contact_person:   120,
+  phone:            40,
+  tin:              40,
+  cac_registration: 60,
+  notes:            2000,
+} as const
+type VendorTextField = keyof typeof VENDOR_TEXT_LIMITS
+
+export async function importVendorsAction(
+  rows: Record<string, unknown>[],
+): Promise<ImportResult> {
+  const scope = await requireRole("owner", "inventory", "admin")
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = await createAppServerClient() as any
+
+  const { data: branches } = await supabase
+    .from("branches")
+    .select("id, name")
+    .eq("organisation_id", scope.organisationId)
+    .is("deleted_at", null)
+
+  const branchList = (branches ?? []) as { id: string; name: string }[]
+  const branchNameById = new Map<string, string>(branchList.map((b) => [b.id, b.name]))
+  const branchesByName = new Map<string, { id: string; name: string }[]>()
+  for (const b of branchList) {
+    const key = b.name.trim().toLowerCase()
+    if (!branchesByName.has(key)) branchesByName.set(key, [])
+    branchesByName.get(key)!.push(b)
+  }
+  const onlyBranchId = branchList.length === 1 ? branchList[0].id : null
+
+  // name (lowercase) → branch_ids that already have a vendor with that name.
+  // RLS limits this to branches the user can read.
+  const { data: existingVendors } = await supabase
+    .from("vendors")
+    .select("branch_id, name")
+    .eq("organisation_id", scope.organisationId)
+    .is("deleted_at", null)
+
+  const vendorBranchesByName = new Map<string, Set<string>>()
+  for (const v of (existingVendors ?? []) as { branch_id: string; name: string }[]) {
+    const key = v.name.trim().toLowerCase()
+    if (!vendorBranchesByName.has(key)) vendorBranchesByName.set(key, new Set())
+    vendorBranchesByName.get(key)!.add(v.branch_id)
+  }
+
+  let imported = 0
+  const skipped:  ImportResult["skipped"]  = []
+  const warnings: ImportResult["warnings"] = []
+
+  if (branchList.length === 0) {
+    return {
+      imported: 0,
+      skipped: rows.map((_, i) => ({ row: i + 2, reason: "your organisation has no branches — create one first" })),
+      warnings,
+    }
+  }
+
+  for (let i = 0; i < rows.length; i++) {
+    const rowNum = i + 2
+    const row    = rows[i]
+
+    const name = String(row.name ?? "").trim()
+    if (!name) {
+      skipped.push({ row: rowNum, reason: "name is required" })
+      continue
+    }
+    if (name.length > 200) {
+      skipped.push({ row: rowNum, reason: "name must be 200 characters or fewer" })
+      continue
+    }
+
+    const email = String(row.email ?? "").trim() || null
+    if (email && !EMAIL_RE.test(email)) {
+      skipped.push({ row: rowNum, reason: `invalid email "${email}"` })
+      continue
+    }
+
+    const fields = Object.keys(VENDOR_TEXT_LIMITS) as VendorTextField[]
+    const text = Object.fromEntries(
+      fields.map((key) => [key, String(row[key] ?? "").trim()]),
+    ) as Record<VendorTextField, string>
+    const tooLong = fields.find((key) => text[key].length > VENDOR_TEXT_LIMITS[key])
+    if (tooLong) {
+      skipped.push({ row: rowNum, reason: `${tooLong} must be ${VENDOR_TEXT_LIMITS[tooLong]} characters or fewer` })
+      continue
+    }
+
+    // ── Branch resolution ──
+    let branchId: string
+    const branchName = String(row.branch ?? "").trim()
+    if (onlyBranchId) {
+      branchId = onlyBranchId
+    } else if (branchName) {
+      const matches = branchesByName.get(branchName.toLowerCase()) ?? []
+      if (matches.length === 0) {
+        skipped.push({ row: rowNum, reason: `branch "${branchName}" not found` })
+        continue
+      }
+      if (matches.length > 1) {
+        skipped.push({ row: rowNum, reason: `branch name "${branchName}" matches more than one branch — ambiguous` })
+        continue
+      }
+      branchId = matches[0].id
+    } else if (scope.branchId) {
+      branchId = scope.branchId
+    } else {
+      skipped.push({
+        row: rowNum,
+        reason: "branch is required — your organisation has multiple branches and no branch is selected",
+      })
+      continue
+    }
+    const targetBranchName = branchNameById.get(branchId) ?? "selected branch"
+
+    const nameKey = name.toLowerCase()
+    const branchesWithName = vendorBranchesByName.get(nameKey) ?? new Set<string>()
+    if (branchesWithName.has(branchId)) {
+      skipped.push({ row: rowNum, reason: `vendor "${name}" already exists in ${targetBranchName}` })
+      continue
+    }
+
+    const { error } = await supabase
+      .from("vendors")
+      .insert({
+        organisation_id:  scope.organisationId,
+        branch_id:        branchId,
+        name,
+        contact_person:   text.contact_person   || null,
+        phone:            text.phone            || null,
+        email,
+        tin:              text.tin              || null,
+        cac_registration: text.cac_registration || null,
+        notes:            text.notes            || null,
+      })
+
+    if (error) {
+      if (error.code === "23505") {
+        skipped.push({ row: rowNum, reason: `vendor "${name}" already exists in ${targetBranchName}` })
+      } else if (error.code === "42501") {
+        skipped.push({ row: rowNum, reason: `you don't have permission to add vendors to ${targetBranchName}` })
+      } else {
+        skipped.push({ row: rowNum, reason: "database error — contact support" })
+        console.error("[importVendorsAction] row", rowNum, error)
+      }
+      continue
+    }
+
+    if (branchesWithName.size > 0) {
+      warnings.push({
+        row: rowNum,
+        note: `vendor "${name}" also exists in another branch — invoice imports that reference this name will be ambiguous and skipped`,
+      })
+    }
+
+    branchesWithName.add(branchId)
+    vendorBranchesByName.set(nameKey, branchesWithName)
+    imported++
+  }
+
+  return { imported, skipped, warnings }
+}
+
 // ── Invoices (records-only) ───────────────────────────────────────────────────
 // Uses record_vendor_invoice RPC (app_0029+) which does NOT write to:
 // product_stock, stock_ledger, cost_layers, product_cost_state,
