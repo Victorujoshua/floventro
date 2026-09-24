@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { motion } from "framer-motion"
 import { Download } from "lucide-react"
 import {
   BarChart, Bar, LineChart, Line,
@@ -153,11 +152,9 @@ function MetricCard({
   muted?: boolean
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay, ease: [0.23, 1, 0.32, 1] }}
-      className="rounded-2xl border border-neutral-200/60 bg-white p-5"
+    <div
+      className="fade-up rounded-2xl border border-neutral-200/60 bg-white p-5"
+      style={{ animationDelay: `${delay}s` }}
     >
       <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">{label}</p>
       <p className={cn("mt-1 text-2xl font-semibold tabular-nums", muted ? "text-neutral-400" : "text-neutral-950")}>
@@ -165,7 +162,7 @@ function MetricCard({
       </p>
       {sub && <p className="mt-0.5 text-xs text-neutral-400">{sub}</p>}
       {detail}
-    </motion.div>
+    </div>
   )
 }
 
@@ -179,15 +176,13 @@ function ChartCard({
   children: React.ReactNode
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: delay ?? 0.4, ease: [0.23, 1, 0.32, 1] }}
-      className="rounded-2xl border border-neutral-200/60 bg-white p-5"
+    <div
+      className="fade-up rounded-2xl border border-neutral-200/60 bg-white p-5"
+      style={{ animationDelay: `${delay ?? 0.4}s` }}
     >
       <p className="mb-4 text-sm font-medium text-neutral-500">{title}</p>
       {children}
-    </motion.div>
+    </div>
   )
 }
 
@@ -1451,11 +1446,9 @@ export function ReportView({ data }: { data: ReportData }) {
 
   return (
     <div className="pb-16">
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-        className="mb-8 flex items-start justify-between"
+      <div
+        className="fade-up mb-8 flex items-start justify-between"
+        style={{ "--fade-up-y": "8px", animationDuration: "300ms" } as React.CSSProperties}
       >
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Report</h1>
@@ -1465,7 +1458,7 @@ export function ReportView({ data }: { data: ReportData }) {
           {data.kind === "org" && <PeriodToggle period={period} onChange={setPeriod} />}
           <DownloadButton data={data} />
         </div>
-      </motion.div>
+      </div>
 
       {data.kind === "org" && <OrgReport data={data} period={period} />}
       {data.kind === "branch" && <BranchReport data={data} />}
