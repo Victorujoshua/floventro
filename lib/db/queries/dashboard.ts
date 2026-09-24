@@ -10,6 +10,7 @@ import {
   emptyRevenueSplit,
   type RevenueSplit,
 } from "./revenue-split"
+import { IN_TRANSIT_LINES_SELECT, sumInTransitUnits } from "./in-transit"
 
 export async function getStockSummary() {
   const scope = await getCurrentScope()
@@ -40,6 +41,26 @@ export async function getStockSummary() {
   }
 
   return { totalUnits, productsWithStock, lowStockCount }
+}
+
+// Units on their way TO the current branch: in-transit transfers whose
+// destination is this branch. Outbound transfers are deliberately excluded —
+// that stock already left this branch's on-hand and isn't arriving here.
+export async function getInboundTransitUnits(): Promise<number> {
+  const scope = await getCurrentScope()
+  if (!scope?.branchId) return 0
+
+  const supabase = await createAppServerClient()
+
+  const { data, error } = await supabase
+    .from("stock_transfers")
+    .select(IN_TRANSIT_LINES_SELECT)
+    .eq("organisation_id", scope.organisationId)
+    .eq("dest_branch_id", scope.branchId)
+    .eq("status", "in_transit")
+
+  if (error || !data) return 0
+  return sumInTransitUnits(data as unknown as Parameters<typeof sumInTransitUnits>[0])
 }
 
 export async function getPayablesSummary() {
@@ -412,6 +433,37 @@ export async function getMyPendingRequestCount() {
   const { count, error } = await query
   if (error) return 0
   return count ?? 0
+}
+
+// Units across the same requests getMyPendingRequestCount counts (identical
+// filters), so "N requests · M units" always describes one set of requests.
+// Only 'pending' counts: review_stock_request is final, so a
+// 'partially_approved' request has nothing left awaiting approval.
+export async function getMyPendingRequestUnits(): Promise<number> {
+  const scope = await getCurrentScope()
+  if (!scope) return 0
+
+  const supabase = await createAppServerClient()
+
+  let query = supabase
+    .from("stock_requests")
+    .select("stock_request_lines(quantity_requested)")
+    .eq("requested_by", scope.userId)
+    .eq("organisation_id", scope.organisationId)
+    .eq("status", "pending")
+
+  if (scope.branchId) {
+    query = query.eq("branch_id", scope.branchId)
+  }
+
+  const { data, error } = await query
+  if (error || !data) return 0
+
+  type RawRequest = { stock_request_lines: { quantity_requested: number }[] | null }
+  return (data as unknown as RawRequest[]).reduce(
+    (sum, r) => sum + (r.stock_request_lines ?? []).reduce((s, l) => s + l.quantity_requested, 0),
+    0,
+  )
 }
 
 // ── Personal sales metrics (sales / internal_use — THIS user's sales only) ──

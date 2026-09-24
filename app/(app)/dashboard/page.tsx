@@ -4,6 +4,7 @@ import { Check, TrendingUp, DollarSign, Percent, Layers, Package, Users } from "
 import { requireScope } from "@/lib/auth/guards"
 import {
   getStockSummary,
+  getInboundTransitUnits,
   getPayablesSummary,
   getRecentInvoices,
   getLowStockProducts,
@@ -12,6 +13,7 @@ import {
   getPersonalHoldingSummary,
   getMyRecentSales,
   getMyPendingRequestCount,
+  getMyPendingRequestUnits,
   getMySalesMetrics,
   getMyStockPerformance,
   getMyServiceMetrics,
@@ -70,6 +72,8 @@ export default async function DashboardPage() {
     mySalesMetrics,
     myStockPerformance,
     myServiceMetrics,
+    inboundTransitUnits,
+    myPendingUnits,
   ] = await Promise.all([
     canSeeBranchData ? getStockSummary()        : Promise.resolve(null),
     canSeeBranchData ? getPayablesSummary()      : Promise.resolve(null),
@@ -83,6 +87,8 @@ export default async function DashboardPage() {
     canSeePersonalSalesMetrics ? getMySalesMetrics() : Promise.resolve(null),
     canSeePersonalSalesMetrics ? getMyStockPerformance() : Promise.resolve([]),
     canSeeServiceMetrics ? getMyServiceMetrics() : Promise.resolve(null),
+    canSeeBranchData ? getInboundTransitUnits()  : Promise.resolve(0),
+    canSeeBranchData ? Promise.resolve(0)        : getMyPendingRequestUnits(),
   ])
 
   return (
@@ -171,7 +177,7 @@ export default async function DashboardPage() {
           })()}
 
           {/* ── Branch-level metric cards ────────────────────────────────────── */}
-          <div className="grid sm:grid-cols-3 gap-5">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {/* Stock on hand */}
             <CardLink href="/inventory/products" className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
               <div className="flex items-start justify-between">
@@ -182,6 +188,20 @@ export default async function DashboardPage() {
                 {stock!.totalUnits.toLocaleString()}
               </p>
               <p className="text-sm text-neutral-500 mt-1">{stock!.productsWithStock} products</p>
+            </CardLink>
+
+            {/* Stock in transit — inbound transfers to this branch only */}
+            <CardLink href="/inventory/transfers" className="bg-white rounded-2xl border border-neutral-200/60 p-6">
+              <div className="flex items-start justify-between">
+                <p className="text-xs uppercase tracking-wide text-neutral-500">Stock in transit</p>
+                <CardArrow />
+              </div>
+              <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
+                {inboundTransitUnits.toLocaleString()}
+              </p>
+              <p className="text-sm text-neutral-500 mt-1">
+                {inboundTransitUnits === 0 ? "Nothing on the way" : "units on the way to this branch"}
+              </p>
             </CardLink>
 
             {/* Outstanding payables */}
@@ -346,7 +366,9 @@ export default async function DashboardPage() {
                 {myPendingCount}
               </p>
               <p className={`text-sm mt-1 ${myPendingCount === 0 ? "text-green-700" : "text-neutral-500"}`}>
-                {myPendingCount === 0 ? "All clear" : "awaiting approval"}
+                {myPendingCount === 0
+                  ? "All clear"
+                  : `${myPendingCount} request${myPendingCount !== 1 ? "s" : ""} · ${myPendingUnits.toLocaleString()} unit${myPendingUnits !== 1 ? "s" : ""} awaiting approval`}
               </p>
             </CardLink>
           </div>
