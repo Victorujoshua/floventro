@@ -8,6 +8,7 @@ import {
   emptyRevenueSplit,
   type RevenueSplit,
 } from "./revenue-split"
+import { IN_TRANSIT_LINES_SELECT, sumInTransitUnits } from "./in-transit"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -183,7 +184,7 @@ export async function getOrgOverview(): Promise<OrgOverview> {
       // RLS: owner can read all transfers via user_vendor_read_branch_ids().
       supabase
         .from("stock_transfers")
-        .select("stock_transfer_lines(quantity_sent, quantity_received)")
+        .select(IN_TRANSIT_LINES_SELECT)
         .eq("organisation_id", scope.organisationId)
         .eq("status", "in_transit"),
 
@@ -332,15 +333,9 @@ export async function getOrgOverview(): Promise<OrgOverview> {
   )
 
   // ── In-transit sum ────────────────────────────────────────────────────────
-  // Each in-transit transfer line: in-transit = quantity_sent − coalesce(quantity_received, 0)
-  type RawTransferLine = { quantity_sent: number; quantity_received: number | null }
-  type RawTransfer = { stock_transfer_lines: RawTransferLine[] }
-  let inTransitUnits = 0
-  for (const t of (transferRes.data as unknown as RawTransfer[])) {
-    for (const line of t.stock_transfer_lines ?? []) {
-      inTransitUnits += line.quantity_sent - (line.quantity_received ?? 0)
-    }
-  }
+  const inTransitUnits = sumInTransitUnits(
+    transferRes.data as unknown as Parameters<typeof sumInTransitUnits>[0],
+  )
 
   const totalStockUnits = poolStockUnits + heldByStaffUnits + inTransitUnits
 

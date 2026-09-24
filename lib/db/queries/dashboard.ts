@@ -42,6 +42,38 @@ export async function getStockSummary() {
   return { totalUnits, productsWithStock, lowStockCount }
 }
 
+// Stock the team has requested from this branch and is still waiting on:
+// every member's 'pending' stock requests (same filters as the sidebar's
+// getPendingRequestCount). Only 'pending' counts — review is final, so a
+// 'partially_approved' request has nothing left awaiting approval.
+export async function getBranchPendingRequestSummary(): Promise<{ requestCount: number; units: number }> {
+  const empty = { requestCount: 0, units: 0 }
+  const scope = await getCurrentScope()
+  if (!scope?.branchId) return empty
+
+  const supabase = await createAppServerClient()
+
+  const { data, error } = await supabase
+    .from("stock_requests")
+    .select("stock_request_lines(quantity_requested)")
+    .eq("organisation_id", scope.organisationId)
+    .eq("branch_id", scope.branchId)
+    .eq("status", "pending")
+    .is("deleted_at", null)
+
+  if (error || !data) return empty
+
+  type RawRequest = { stock_request_lines: { quantity_requested: number }[] | null }
+  const requests = data as unknown as RawRequest[]
+  return {
+    requestCount: requests.length,
+    units: requests.reduce(
+      (sum, r) => sum + (r.stock_request_lines ?? []).reduce((s, l) => s + l.quantity_requested, 0),
+      0,
+    ),
+  }
+}
+
 export async function getPayablesSummary() {
   const scope = await getCurrentScope()
   if (!scope) return { outstandingCents: 0, unpaidCount: 0, pastDueCount: 0 }
@@ -412,6 +444,37 @@ export async function getMyPendingRequestCount() {
   const { count, error } = await query
   if (error) return 0
   return count ?? 0
+}
+
+// Units across the same requests getMyPendingRequestCount counts (identical
+// filters), so "N requests · M units" always describes one set of requests.
+// Only 'pending' counts: review_stock_request is final, so a
+// 'partially_approved' request has nothing left awaiting approval.
+export async function getMyPendingRequestUnits(): Promise<number> {
+  const scope = await getCurrentScope()
+  if (!scope) return 0
+
+  const supabase = await createAppServerClient()
+
+  let query = supabase
+    .from("stock_requests")
+    .select("stock_request_lines(quantity_requested)")
+    .eq("requested_by", scope.userId)
+    .eq("organisation_id", scope.organisationId)
+    .eq("status", "pending")
+
+  if (scope.branchId) {
+    query = query.eq("branch_id", scope.branchId)
+  }
+
+  const { data, error } = await query
+  if (error || !data) return 0
+
+  type RawRequest = { stock_request_lines: { quantity_requested: number }[] | null }
+  return (data as unknown as RawRequest[]).reduce(
+    (sum, r) => sum + (r.stock_request_lines ?? []).reduce((s, l) => s + l.quantity_requested, 0),
+    0,
+  )
 }
 
 // ── Personal sales metrics (sales / internal_use — THIS user's sales only) ──
