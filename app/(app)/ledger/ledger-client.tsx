@@ -51,7 +51,7 @@ export function LedgerClient() {
         toast.info("No ledger entries found for this period.")
         return
       }
-      exportToXlsx(
+      await exportToXlsx(
         `stock-ledger_${from}_${to}`,
         rows as unknown as Record<string, unknown>[],
         LEDGER_COLUMNS,

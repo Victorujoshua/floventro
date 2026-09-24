@@ -18,7 +18,7 @@ export function ExportButton({ filename, columns, rows, fetchRows }: Props) {
     setExporting(true)
     try {
       const data = rows ?? (fetchRows ? await fetchRows() : [])
-      exportToXlsx(filename, data, columns)
+      await exportToXlsx(filename, data, columns)
     } finally {
       setExporting(false)
     }
@@ -35,7 +35,7 @@ export function ExportButton({ filename, columns, rows, fetchRows }: Props) {
         {exporting ? "Exporting…" : "Export"}
       </button>
       <button
-        onClick={() => downloadTemplate(filename, columns)}
+        onClick={() => void downloadTemplate(filename, columns)}
         className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 h-8 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
       >
         <FileSpreadsheet className="h-3 w-3" />

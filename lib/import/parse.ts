@@ -1,13 +1,16 @@
-import * as XLSX from "xlsx"
+import type { WorkBook } from "xlsx"
 
 export async function parseFile(file: File): Promise<Record<string, unknown>[]> {
   if (file.size > 5 * 1024 * 1024) {
     throw new Error("File too large — maximum 5 MB.")
   }
 
+  // Loaded on demand — see lib/export/xlsx.ts.
+  const XLSX = await import("xlsx")
+
   const ext = file.name.toLowerCase().split(".").pop()
 
-  let wb: XLSX.WorkBook
+  let wb: WorkBook
   if (ext === "csv") {
     const text = await file.text()
     wb = XLSX.read(text, { type: "string" })

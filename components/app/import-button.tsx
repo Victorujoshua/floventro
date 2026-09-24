@@ -50,7 +50,7 @@ export function ImportButton({ onImport, onSuccess }: Props) {
 
   function downloadErrors() {
     if (!result || result.skipped.length === 0) return
-    exportToXlsx(
+    void exportToXlsx(
       "import_errors",
       result.skipped as unknown as Record<string, unknown>[],
       [

@@ -258,7 +258,7 @@ export function SalesClient({ sales }: Props) {
       balance: (s.totalCents - s.amountPaidCents) / 100,
       total: s.totalCents / 100,
     }))
-    exportToXlsx("sales-export", rows, [
+    void exportToXlsx("sales-export", rows, [
       { header: "Date",              key: "date" },
       { header: "Seller",            key: "seller" },
       { header: "Customer",          key: "customer" },
