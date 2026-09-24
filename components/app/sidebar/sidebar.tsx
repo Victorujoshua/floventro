@@ -59,6 +59,7 @@ const MAIN_MENU: Record<Role, NavItem[]> = {
     { label: "Branch Stock",       href: "/branch-stock",           icon: Store },
     { label: "Vendors",            href: "/inventory/vendors",      icon: Truck },
     { label: "Stock requests",     href: "/inventory/requests",     icon: ClipboardCheck },
+    { label: "Sales",              href: "/sales",                  icon: ShoppingCart },
     { label: "Fulfilment",         href: "/fulfilment",             icon: PackageCheck, feature: "fulfilment" },
   ],
   sales: [

@@ -43,3 +43,10 @@ export async function requireRole(...allowedRoles: Role[]): Promise<Scope> {
 export async function requireOwner(): Promise<Scope> {
   return requireRole("owner")
 }
+
+/**
+ * Roles that may record a payment against a sale. Mirrors record_sale_payment's
+ * user_vendor_write_branch_ids() check (app_0031): the seller records the
+ * sale, management confirms the money was collected.
+ */
+export const SALE_PAYMENT_ROLES: readonly Role[] = ["owner", "admin", "inventory"]

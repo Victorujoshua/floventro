@@ -1,7 +1,7 @@
 "use server"
 
 import { createAppServerClient } from "@/lib/supabase/app-server"
-import { requireScope, requireRole } from "@/lib/auth/guards"
+import { requireScope, SALE_PAYMENT_ROLES } from "@/lib/auth/guards"
 import { formatNaira } from "@/lib/format/money"
 import { saleSchema, type SaleInput } from "@/lib/validation/sales"
 import { getSaleById } from "@/lib/db/queries/sales"
@@ -154,7 +154,12 @@ export async function recordSalePaymentAction(
   method: string | null,
   note: string,
 ): Promise<{ ok: true; paymentStatus: string } | { ok: false; error: string; message?: string }> {
-  await requireRole("owner", "inventory", "admin")
+  // Checked here rather than with requireRole, which would redirect to
+  // /dashboard mid-dialog instead of showing an error.
+  const scope = await requireScope()
+  if (!SALE_PAYMENT_ROLES.includes(scope.role)) {
+    return { ok: false, error: "not_allowed", message: "Only owners, admins and inventory staff can record payments." }
+  }
   const supabase = await createAppServerClient()
 
   const amountCents = Math.round(amountNaira * 100)

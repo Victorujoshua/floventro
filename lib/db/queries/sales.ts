@@ -40,10 +40,22 @@ export type SaleServiceLine = {
   lineTotalCents: number
 }
 
+export type SalePayment = {
+  id: string
+  amountCents: number
+  paidOn: string
+  method: string | null
+  note: string | null
+  recordedByLabel: string
+  createdAt: string
+}
+
 export type SaleDetail = SaleRow & {
   note: string | null
   lines: SaleLine[]
   serviceLines: SaleServiceLine[]
+  // Oldest first — reads as a running history of money received.
+  payments: SalePayment[]
 }
 
 type RawSaleRow = {
@@ -82,6 +94,16 @@ type RawSaleServiceLineRow = {
   line_total_cents: number
 }
 
+type RawSalePaymentRow = {
+  id: string
+  amount_cents: number
+  paid_on: string
+  method: string | null
+  note: string | null
+  created_by: string | null
+  created_at: string
+}
+
 type RawSaleDetail = {
   id: string
   sold_on: string
@@ -100,6 +122,7 @@ type RawSaleDetail = {
   created_at: string
   sale_lines: RawSaleLineRow[]
   sale_service_lines: RawSaleServiceLineRow[]
+  sale_payments: RawSalePaymentRow[] | null
 }
 
 function resolveProduct(raw: RawSaleLineRow["products"]): { name: string; sku: string } | null {
@@ -177,7 +200,7 @@ export async function getSaleById(id: string): Promise<SaleDetail | null> {
 
   const { data, error } = await supabase
     .from("sales")
-    .select("id, sold_on, seller_user_id, customer_name, customer_phone, payment_method, payment_status, amount_paid_cents, subtotal_cents, service_revenue_cents, vat_rate, vat_cents, total_cents, note, created_at, sale_lines(id, product_id, quantity, unit_price_cents, line_total_cents, products(name, sku)), sale_service_lines(id, service_type_id, service_name, quantity, unit_price_cents, line_total_cents)")
+    .select("id, sold_on, seller_user_id, customer_name, customer_phone, payment_method, payment_status, amount_paid_cents, subtotal_cents, service_revenue_cents, vat_rate, vat_cents, total_cents, note, created_at, sale_lines(id, product_id, quantity, unit_price_cents, line_total_cents, products(name, sku)), sale_service_lines(id, service_type_id, service_name, quantity, unit_price_cents, line_total_cents), sale_payments(id, amount_cents, paid_on, method, note, created_by, created_at)")
     .eq("id", id)
     .eq("organisation_id", scope.organisationId)
     .maybeSingle()
@@ -185,7 +208,14 @@ export async function getSaleById(id: string): Promise<SaleDetail | null> {
   if (error || !data) return null
 
   const row = data as RawSaleDetail
-  const sellerMap = await fetchSellerMap([row.seller_user_id])
+  const payments = [...(row.sale_payments ?? [])].sort(
+    (a, b) => a.paid_on.localeCompare(b.paid_on) || a.created_at.localeCompare(b.created_at),
+  )
+  // One lookup covers the seller and everyone who recorded a payment.
+  const userIds = [
+    ...new Set([row.seller_user_id, ...payments.flatMap((p) => (p.created_by ? [p.created_by] : []))]),
+  ]
+  const sellerMap = await fetchSellerMap(userIds)
 
   return {
     id: row.id,
@@ -224,6 +254,15 @@ export async function getSaleById(id: string): Promise<SaleDetail | null> {
       quantity: l.quantity,
       unitPriceCents: l.unit_price_cents,
       lineTotalCents: l.line_total_cents,
+    })),
+    payments: payments.map((p) => ({
+      id: p.id,
+      amountCents: p.amount_cents,
+      paidOn: p.paid_on,
+      method: p.method,
+      note: p.note,
+      recordedByLabel: p.created_by ? (sellerMap.get(p.created_by) ?? "—") : "—",
+      createdAt: p.created_at,
     })),
   }
 }

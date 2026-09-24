@@ -61,6 +61,10 @@ function todayIso() {
   return new Date().toLocaleDateString("en-CA")
 }
 
+function isOutstanding(paymentStatus: string) {
+  return paymentStatus === "unpaid" || paymentStatus === "partial"
+}
+
 // ── Payment badge ─────────────────────────────────────────────────────────────
 
 function PaymentBadge({ status }: { status: string }) {
@@ -77,9 +81,9 @@ function PaymentBadge({ status }: { status: string }) {
   )
 }
 
-// ── Mark as paid modal ────────────────────────────────────────────────────────
+// ── Record payment modal ──────────────────────────────────────────────────────
 
-function MarkAsPaidModal({
+function RecordPaymentModal({
   sale,
   onClose,
   onSuccess,
@@ -135,7 +139,7 @@ function MarkAsPaidModal({
     <Dialog open={sale !== null} onOpenChange={(o) => { if (!o) handleClose() }}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Mark as paid</DialogTitle>
+          <DialogTitle>Record payment</DialogTitle>
         </DialogHeader>
 
         {sale && (
@@ -191,12 +195,20 @@ function MarkAsPaidModal({
             <Label htmlFor="mp-method">
               Method <span className="text-neutral-400 font-normal">(optional)</span>
             </Label>
-            <select id="mp-method" className={SELECT_CLASS} {...register("method")}>
+            <select
+              id="mp-method"
+              className={SELECT_CLASS}
+              // "Select…" submits "" — treat it as no method, since method is optional.
+              {...register("method", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+            >
               <option value="">Select…</option>
               {PAYMENT_METHODS.map((m) => (
                 <option key={m.value} value={m.value}>{m.label}</option>
               ))}
             </select>
+            {errors.method && (
+              <p className="text-xs text-red-500">{errors.method.message}</p>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="mp-note">
@@ -231,15 +243,19 @@ function MarkAsPaidModal({
 
 type Props = {
   sales: SaleRow[]
+  // Owner / admin / inventory — see SALE_PAYMENT_ROLES.
+  canRecordPayments: boolean
 }
 
-export function SalesClient({ sales }: Props) {
+export function SalesClient({ sales, canRecordPayments }: Props) {
   const router = useRouter()
   const [newSaleOpen, setNewSaleOpen] = useState(false)
   const [detailSale, setDetailSale] = useState<SaleDetail | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [loadingDetail, setLoadingDetail] = useState(false)
-  const [markPaidSale, setMarkPaidSale] = useState<SaleRow | null>(null)
+  const [paymentSale, setPaymentSale] = useState<SaleRow | null>(null)
+  // Set when the payment dialog was opened from the sale detail, to return there.
+  const [returnToDetailId, setReturnToDetailId] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<"desc" | "asc">("desc")
 
   const displayedSales = [...sales].sort((a, b) =>
@@ -356,7 +372,7 @@ export function SalesClient({ sales }: Props) {
             </TableHeader>
             <TableBody>
               {displayedSales.map((sale) => {
-                const canMarkPaid = sale.paymentStatus === "unpaid" || sale.paymentStatus === "partial"
+                const canRecordPayment = canRecordPayments && isOutstanding(sale.paymentStatus)
                 const balanceCents = sale.totalCents - sale.amountPaidCents
                 return (
                   <TableRow
@@ -413,10 +429,10 @@ export function SalesClient({ sales }: Props) {
                             <FileText className="h-3.5 w-3.5 mr-2" />
                             View invoice
                           </DropdownMenuItem>
-                          {canMarkPaid && (
-                            <DropdownMenuItem onClick={() => setMarkPaidSale(sale)}>
+                          {canRecordPayment && (
+                            <DropdownMenuItem onClick={() => setPaymentSale(sale)}>
                               <CreditCard className="h-3.5 w-3.5 mr-2" />
-                              Mark as paid
+                              Record payment
                             </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
@@ -568,6 +584,49 @@ export function SalesClient({ sales }: Props) {
                 </div>
               </div>
 
+              {/* Payment history */}
+              {detailSale.payments.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">Payments received</p>
+                  <div className="rounded-lg border border-neutral-100 overflow-hidden divide-y divide-neutral-50">
+                    {detailSale.payments.map((p) => (
+                      <div key={p.id} className="flex items-start justify-between gap-4 px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="text-sm text-neutral-950">
+                            {formatDate(p.paidOn)}
+                            {p.method && (
+                              <span className="text-neutral-500"> · {PAYMENT_METHOD_LABELS[p.method] ?? p.method}</span>
+                            )}
+                          </p>
+                          <p className="text-xs text-neutral-400">Recorded by {p.recordedByLabel}</p>
+                          {p.note && <p className="text-xs text-neutral-500 mt-0.5 break-words">{p.note}</p>}
+                        </div>
+                        <span className="text-sm font-mono tabular-nums font-medium text-emerald-700 shrink-0">
+                          <span className="font-inter">₦</span>{formatNaira(p.amountCents)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {canRecordPayments && isOutstanding(detailSale.paymentStatus) && (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    // Close the detail first (no stacked dialogs); it reopens
+                    // with fresh data when the payment dialog closes.
+                    setReturnToDetailId(detailSale.id)
+                    setDetailOpen(false)
+                    setPaymentSale(detailSale)
+                  }}
+                  className="w-full bg-emerald-700 hover:bg-emerald-800 text-white rounded-md h-9"
+                >
+                  <CreditCard className="h-3.5 w-3.5 mr-2" />
+                  Record payment
+                </Button>
+              )}
+
               {/* Invoice link */}
               <a
                 href={`/sales/${detailSale.id}/invoice`}
@@ -583,14 +642,17 @@ export function SalesClient({ sales }: Props) {
         </DialogContent>
       </Dialog>
 
-      {/* Mark as paid modal */}
-      <MarkAsPaidModal
-        sale={markPaidSale}
-        onClose={() => setMarkPaidSale(null)}
-        onSuccess={() => {
-          setMarkPaidSale(null)
-          router.refresh()
+      {/* Record payment modal */}
+      <RecordPaymentModal
+        sale={paymentSale}
+        onClose={() => {
+          setPaymentSale(null)
+          if (returnToDetailId) {
+            setReturnToDetailId(null)
+            void openDetail(returnToDetailId)
+          }
         }}
+        onSuccess={() => router.refresh()}
       />
 
       {/* New sale dialog */}
