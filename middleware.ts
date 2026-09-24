@@ -45,5 +45,8 @@ export const config = {
     "/login",
     "/signup",
     "/logout",
+    "/forgot-password",
+    "/reset-password",
+    "/auth/callback",
   ],
 }

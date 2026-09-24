@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { signInSchema, type SignInInput } from "@/lib/validation/auth"
 import { signInAction } from "@/lib/auth/actions"
 
-export function LoginForm({ next }: { next?: string }) {
+export function LoginForm({ next, passwordReset }: { next?: string; passwordReset?: boolean }) {
   const [invalidCredentials, setInvalidCredentials] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
@@ -39,6 +39,12 @@ export function LoginForm({ next }: { next?: string }) {
       <h1 className="text-2xl font-semibold text-neutral-950">Log in</h1>
       <p className="text-sm text-neutral-500 mt-1">Welcome back to Floventro.</p>
 
+      {passwordReset && !invalidCredentials && (
+        <div className="mt-4 rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
+          Your password has been updated. Log in with your new password.
+        </div>
+      )}
+
       {invalidCredentials && (
         <div className="mt-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
           Wrong email or password.
@@ -62,7 +68,15 @@ export function LoginForm({ next }: { next?: string }) {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="password">Password</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Password</Label>
+            <Link
+              href="/forgot-password"
+              className="text-xs text-neutral-500 hover:text-neutral-950 hover:underline underline-offset-2"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <div className="relative">
             <Input
               id="password"

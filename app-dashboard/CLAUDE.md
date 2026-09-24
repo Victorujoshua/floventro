@@ -296,13 +296,12 @@ APP_SUPABASE_SERVICE_ROLE_KEY=
 # Site
 NEXT_PUBLIC_APP_URL=https://app.floventro.com
 
-# ZeptoMail (transactional — team invites)
+# ZeptoMail (transactional — team invites + password reset)
 ZEPTOMAIL_TOKEN=
 ZEPTOMAIL_FROM=
 ZEPTOMAIL_FROM_NAME=                    # optional, defaults to "Floventro"
-# Password reset: not yet implemented. Pick a provider (ZeptoMail or otherwise)
-# when that feature is built — do not assume ZEPTOMAIL_TOKEN above covers it
-# without checking ZeptoMail's sending limits for the account in use.
+# Password reset emails are sent by the app via ZeptoMail (admin generateLink →
+# /auth/callback), not by Supabase. Supabase's own reset template/SMTP is unused.
 
 # Feature flags
 NEXT_PUBLIC_APP_ENV=development         # development | preview | production
