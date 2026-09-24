@@ -10,7 +10,6 @@ import {
   emptyRevenueSplit,
   type RevenueSplit,
 } from "./revenue-split"
-import { IN_TRANSIT_LINES_SELECT, sumInTransitUnits } from "./in-transit"
 
 export async function getStockSummary() {
   const scope = await getCurrentScope()
@@ -43,24 +42,36 @@ export async function getStockSummary() {
   return { totalUnits, productsWithStock, lowStockCount }
 }
 
-// Units on their way TO the current branch: in-transit transfers whose
-// destination is this branch. Outbound transfers are deliberately excluded —
-// that stock already left this branch's on-hand and isn't arriving here.
-export async function getInboundTransitUnits(): Promise<number> {
+// Stock the team has requested from this branch and is still waiting on:
+// every member's 'pending' stock requests (same filters as the sidebar's
+// getPendingRequestCount). Only 'pending' counts — review is final, so a
+// 'partially_approved' request has nothing left awaiting approval.
+export async function getBranchPendingRequestSummary(): Promise<{ requestCount: number; units: number }> {
+  const empty = { requestCount: 0, units: 0 }
   const scope = await getCurrentScope()
-  if (!scope?.branchId) return 0
+  if (!scope?.branchId) return empty
 
   const supabase = await createAppServerClient()
 
   const { data, error } = await supabase
-    .from("stock_transfers")
-    .select(IN_TRANSIT_LINES_SELECT)
+    .from("stock_requests")
+    .select("stock_request_lines(quantity_requested)")
     .eq("organisation_id", scope.organisationId)
-    .eq("dest_branch_id", scope.branchId)
-    .eq("status", "in_transit")
+    .eq("branch_id", scope.branchId)
+    .eq("status", "pending")
+    .is("deleted_at", null)
 
-  if (error || !data) return 0
-  return sumInTransitUnits(data as unknown as Parameters<typeof sumInTransitUnits>[0])
+  if (error || !data) return empty
+
+  type RawRequest = { stock_request_lines: { quantity_requested: number }[] | null }
+  const requests = data as unknown as RawRequest[]
+  return {
+    requestCount: requests.length,
+    units: requests.reduce(
+      (sum, r) => sum + (r.stock_request_lines ?? []).reduce((s, l) => s + l.quantity_requested, 0),
+      0,
+    ),
+  }
 }
 
 export async function getPayablesSummary() {

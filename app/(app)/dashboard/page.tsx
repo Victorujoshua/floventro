@@ -4,7 +4,7 @@ import { Check, TrendingUp, DollarSign, Percent, Layers, Package, Users } from "
 import { requireScope } from "@/lib/auth/guards"
 import {
   getStockSummary,
-  getInboundTransitUnits,
+  getBranchPendingRequestSummary,
   getPayablesSummary,
   getRecentInvoices,
   getLowStockProducts,
@@ -72,7 +72,7 @@ export default async function DashboardPage() {
     mySalesMetrics,
     myStockPerformance,
     myServiceMetrics,
-    inboundTransitUnits,
+    branchRequests,
     myPendingUnits,
   ] = await Promise.all([
     canSeeBranchData ? getStockSummary()        : Promise.resolve(null),
@@ -87,7 +87,7 @@ export default async function DashboardPage() {
     canSeePersonalSalesMetrics ? getMySalesMetrics() : Promise.resolve(null),
     canSeePersonalSalesMetrics ? getMyStockPerformance() : Promise.resolve([]),
     canSeeServiceMetrics ? getMyServiceMetrics() : Promise.resolve(null),
-    canSeeBranchData ? getInboundTransitUnits()  : Promise.resolve(0),
+    canSeeBranchData ? getBranchPendingRequestSummary() : Promise.resolve(null),
     canSeeBranchData ? Promise.resolve(0)        : getMyPendingRequestUnits(),
   ])
 
@@ -190,17 +190,19 @@ export default async function DashboardPage() {
               <p className="text-sm text-neutral-500 mt-1">{stock!.productsWithStock} products</p>
             </CardLink>
 
-            {/* Stock in transit — inbound transfers to this branch only */}
-            <CardLink href="/inventory/transfers" className="bg-white rounded-2xl border border-neutral-200/60 p-6">
+            {/* Stock requested — units in the team's pending stock requests */}
+            <CardLink href="/inventory/requests" className="bg-white rounded-2xl border border-neutral-200/60 p-6">
               <div className="flex items-start justify-between">
-                <p className="text-xs uppercase tracking-wide text-neutral-500">Stock in transit</p>
+                <p className="text-xs uppercase tracking-wide text-neutral-500">Stock requested</p>
                 <CardArrow />
               </div>
               <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
-                {inboundTransitUnits.toLocaleString()}
+                {branchRequests!.units.toLocaleString()}
               </p>
               <p className="text-sm text-neutral-500 mt-1">
-                {inboundTransitUnits === 0 ? "Nothing on the way" : "units on the way to this branch"}
+                {branchRequests!.requestCount === 0
+                  ? "No requests awaiting approval"
+                  : `${branchRequests!.requestCount} request${branchRequests!.requestCount !== 1 ? "s" : ""} awaiting approval`}
               </p>
             </CardLink>
 
