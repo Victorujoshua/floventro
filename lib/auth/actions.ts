@@ -76,7 +76,7 @@ export async function signInAction(input: SignInInput, next?: string): Promise<A
 
   const supabase = await createAppServerClient()
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data: signInData, error } = await supabase.auth.signInWithPassword({
     email: parsed.data.email,
     password: parsed.data.password,
   })
@@ -94,7 +94,7 @@ export async function signInAction(input: SignInInput, next?: string): Promise<A
   if (nextUrl) redirect(nextUrl)
 
   // Owner lands on /org; everyone else lands on /dashboard.
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = signInData.user
   if (user) {
     const { data: ownerMem } = await supabase
       .from("memberships")

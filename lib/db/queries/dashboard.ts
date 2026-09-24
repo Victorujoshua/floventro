@@ -346,14 +346,12 @@ export async function getPersonalHoldingSummary() {
   if (!scope) return { totalUnits: 0, productCount: 0 }
 
   const supabase = await createAppServerClient()
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData?.user) return { totalUnits: 0, productCount: 0 }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("staff_holdings")
     .select("quantity")
-    .eq("holder_user_id", authData.user.id)
+    .eq("holder_user_id", scope.userId)
     .eq("organisation_id", scope.organisationId)
     .gt("quantity", 0)
 
@@ -370,13 +368,11 @@ export async function getMyRecentSales(limit = 5) {
   if (!scope) return [] as { id: string; sold_on: string; customer_name: string | null; total_cents: number; payment_status: string }[]
 
   const supabase = await createAppServerClient()
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData?.user) return []
 
   let query = supabase
     .from("sales")
     .select("id, sold_on, customer_name, total_cents, payment_status")
-    .eq("seller_user_id", authData.user.id)
+    .eq("seller_user_id", scope.userId)
     .eq("organisation_id", scope.organisationId)
     .order("sold_on", { ascending: false })
     .limit(limit)
@@ -395,13 +391,11 @@ export async function getMyPendingRequestCount() {
   if (!scope) return 0
 
   const supabase = await createAppServerClient()
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData?.user) return 0
 
   let query = supabase
     .from("stock_requests")
     .select("id", { count: "exact", head: true })
-    .eq("requested_by", authData.user.id)
+    .eq("requested_by", scope.userId)
     .eq("organisation_id", scope.organisationId)
     .eq("status", "pending")
 
@@ -443,8 +437,6 @@ export async function getMySalesMetrics(): Promise<MySalesMetrics> {
   if (!scope) return empty
 
   const supabase = await createAppServerClient()
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData?.user) return empty
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = supabase as any
@@ -455,7 +447,7 @@ export async function getMySalesMetrics(): Promise<MySalesMetrics> {
   let salesQuery = client
     .from("sales")
     .select(`subtotal_cents, service_revenue_cents, ${SALE_CREDIT_COLUMNS}, sale_lines(id, product_id, line_total_cents)`)
-    .eq("seller_user_id", authData.user.id)
+    .eq("seller_user_id", scope.userId)
     .eq("organisation_id", scope.organisationId)
     .gte("created_at", cutoff)
 
@@ -551,8 +543,6 @@ export async function getMyStockPerformance(): Promise<MyStockPerformanceRow[]> 
   if (!scope) return []
 
   const supabase = await createAppServerClient()
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData?.user) return []
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = supabase as any
@@ -563,14 +553,14 @@ export async function getMyStockPerformance(): Promise<MyStockPerformanceRow[]> 
     client
       .from("staff_holdings")
       .select("product_id, quantity, products(name, sku)")
-      .eq("holder_user_id", authData.user.id)
+      .eq("holder_user_id", scope.userId)
       .eq("organisation_id", scope.organisationId),
 
     // Set B: this user's 30d sales with per-line quantities
     client
       .from("sales")
       .select("sale_lines(product_id, quantity, products(name, sku))")
-      .eq("seller_user_id", authData.user.id)
+      .eq("seller_user_id", scope.userId)
       .eq("organisation_id", scope.organisationId)
       .gte("created_at", cutoff),
   ])
@@ -687,8 +677,6 @@ export async function getMyServiceMetrics(): Promise<MyServiceMetrics> {
   if (!scope) return empty
 
   const supabase = await createAppServerClient()
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData?.user) return empty
 
   const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
 
@@ -697,7 +685,7 @@ export async function getMyServiceMetrics(): Promise<MyServiceMetrics> {
     .from("service_records")
     .select("id, customer_name, service_consumption(product_id, quantity, products(name))")
     .eq("organisation_id", scope.organisationId)
-    .eq("performed_by", authData.user.id)
+    .eq("performed_by", scope.userId)
     .gte("performed_on", cutoff)
 
   if (error || !data) {

@@ -20,8 +20,6 @@ export async function importClientsAction(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = await createAppServerClient() as any
 
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData.user) return { imported: 0, skipped: [], warnings: [] }
 
   // Pre-fetch existing member_ids for dedup
   const { data: existing } = await supabase
@@ -68,7 +66,7 @@ export async function importClientsAction(
         phone:      String(row.phone ?? "").trim()    || null,
         email,
         member_id:  memberId,
-        created_by: authData.user.id,
+        created_by: scope.userId,
       })
 
     if (error) {
@@ -96,8 +94,6 @@ export async function importServicesAction(
   const scope    = await requireRole("owner", "inventory", "admin", "sales")
   const supabase = await createAppServerClient()
 
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData.user) return { imported: 0, skipped: [], warnings: [] }
 
   // Pre-fetch existing service names for dedup
   const { data: existing } = await supabase
@@ -150,7 +146,7 @@ export async function importServicesAction(
         description:         null,
         default_price_cents: Math.round(priceNaira * 100),
         is_active:           isActive,
-        created_by:          authData.user.id,
+        created_by:          scope.userId,
       })
 
     if (error) {
@@ -181,8 +177,6 @@ export async function importServiceItemsAction(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = await createAppServerClient() as any
 
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData.user) return { imported: 0, skipped: [], warnings: [] }
 
   // Pre-fetch measurements (system + org-specific)
   const { data: measurements } = await supabase
@@ -283,7 +277,7 @@ export async function importServiceItemsAction(
         amount_cents:    Math.round(amountNaira * 100),
         product_id:      productId,
         is_active:       true,
-        created_by:      authData.user.id,
+        created_by:      scope.userId,
       })
 
     if (error) {

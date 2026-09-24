@@ -26,8 +26,6 @@ export async function createClientAction(input: ClientInput): Promise<ActionResu
   const scope = await requireRole("owner", "inventory", "admin", "sales")
   const supabase = await createAppServerClient()
 
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData.user) return { ok: false, error: "auth" }
 
   const { data, error } = await supabase
     .from("clients")
@@ -37,7 +35,7 @@ export async function createClientAction(input: ClientInput): Promise<ActionResu
       phone:     parsed.data.phone?.trim()    || null,
       email:     parsed.data.email?.trim()    || null,
       member_id: parsed.data.memberId?.trim() || null,
-      created_by: authData.user.id,
+      created_by: scope.userId,
     })
     .select("id")
     .single()

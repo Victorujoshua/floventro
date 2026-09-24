@@ -1,6 +1,6 @@
 import Link from "next/link"
+import { getAppUser } from "@/lib/auth/scope"
 import { getInviteByToken } from "@/lib/db/queries/invites"
-import { createAppServerClient } from "@/lib/supabase/app-server"
 import { AcceptForm } from "./accept-form"
 
 export default async function AcceptInvitePage({
@@ -23,8 +23,7 @@ export default async function AcceptInvitePage({
     return <ErrorCard title="Invitation expired" description="This invitation link has expired. Ask your team owner to send a new one." />
   }
 
-  const supabase = await createAppServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await getAppUser()
 
   const currentEmail = user?.email ?? null
 

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { getAppUser } from "@/lib/auth/scope"
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { CreateOrgForm } from "./create-org-form"
 
@@ -7,7 +8,7 @@ export default async function CreateOrgPage() {
 
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getAppUser()
 
   if (!user) redirect("/login")
 

@@ -2,6 +2,7 @@
 
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { requireRole } from "@/lib/auth/guards"
+import { getAppUser } from "@/lib/auth/scope"
 import { inviteSchema, type InviteInput } from "@/lib/validation/invites"
 import { sendInviteEmail } from "@/lib/email/zeptomail"
 
@@ -58,15 +59,12 @@ export async function inviteMemberAction(
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.floventro.com"
   const acceptUrl = `${appUrl}/accept-invite/${(invite as { token: string }).token}`
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const [{ data: { user } }, { data: org }] = await Promise.all([
+    getAppUser(),
+    supabase.from("organisations").select("name").eq("id", scope.organisationId).maybeSingle(),
+  ])
   const inviterName =
     (user?.user_metadata?.full_name as string) || user?.email || "Your team"
-
-  const { data: org } = await supabase
-    .from("organisations")
-    .select("name")
-    .eq("id", scope.organisationId)
-    .maybeSingle()
 
   console.log("[team] about to call sendInviteEmail", {
     email: parsed.data.email.toLowerCase(),
@@ -115,14 +113,11 @@ export async function resendInviteAction(inviteId: string): Promise<ActionResult
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.floventro.com"
   const acceptUrl = `${appUrl}/accept-invite/${row.token}`
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const [{ data: { user } }, { data: org }] = await Promise.all([
+    getAppUser(),
+    supabase.from("organisations").select("name").eq("id", scope.organisationId).maybeSingle(),
+  ])
   const inviterName = (user?.user_metadata?.full_name as string) || user?.email || "Your team"
-
-  const { data: org } = await supabase
-    .from("organisations")
-    .select("name")
-    .eq("id", scope.organisationId)
-    .maybeSingle()
 
   const emailResult = await sendInviteEmail({
     email: row.email,

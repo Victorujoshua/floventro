@@ -20,8 +20,6 @@ export async function createMeasurementAction(
   const scope = await requireRole("owner", "inventory", "admin", "sales")
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = await createAppServerClient() as any
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData.user) return { ok: false, error: "auth" }
 
   // Prevent duplicating a system measurement name.
   const { count: systemCount } = await supabase
@@ -48,7 +46,7 @@ export async function createMeasurementAction(
       name,
       symbol,
       is_system:  false,
-      created_by: authData.user.id,
+      created_by: scope.userId,
     })
     .select("id, name, symbol")
     .single()
@@ -73,8 +71,6 @@ export async function createServiceItemAction(
   const scope = await requireRole("owner", "inventory", "admin", "sales")
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = await createAppServerClient() as any
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData.user) return { ok: false, error: "auth" }
 
   const { data, error } = await supabase
     .from("service_items")
@@ -87,7 +83,7 @@ export async function createServiceItemAction(
       amount_cents:    Math.round(parsed.data.amountNaira * 100),
       product_id:      parsed.data.productId      || null,
       is_active:       parsed.data.isActive ?? true,
-      created_by:      authData.user.id,
+      created_by:      scope.userId,
     })
     .select("id")
     .single()

@@ -101,17 +101,13 @@ export async function getMyRequests(): Promise<MyRequest[]> {
   if (!scope) return []
 
   const supabase = await createAppServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return []
 
   let myReqQuery = supabase
     .from("stock_requests")
     .select(
       "id, purpose, status, created_at, requested_by, reviewed_by, reviewed_at, review_note, stock_request_lines(id, quantity_requested, quantity_approved, products(id, sku, name))",
     )
-    .eq("requested_by", user.id)
+    .eq("requested_by", scope.userId)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
 

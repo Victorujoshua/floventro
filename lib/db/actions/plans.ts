@@ -44,8 +44,6 @@ export async function createPlanAction(
   const scope = await requireRole("owner", "inventory", "admin", "sales")
   const supabase = await createAppServerClient()
 
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData.user) return { ok: false, error: "auth" }
 
   // Step 1: create plan header
   const { data: plan, error: planError } = await supabase
@@ -56,7 +54,7 @@ export async function createPlanAction(
       type:        parsed.data.type,
       price_cents: Math.round(parsed.data.priceNaira * 100),
       is_active:   true,
-      created_by:  authData.user.id,
+      created_by:  scope.userId,
     })
     .select("id")
     .single()
@@ -164,8 +162,6 @@ export async function createClientPlanAction(
   const scope = await requireRole("owner", "inventory", "admin", "sales")
   const supabase = await createAppServerClient()
 
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData.user) return { ok: false, error: "auth" }
 
   // Compute sessions_total server-side from the live plan_lines — never trust the form.
   const { data: linesData, error: linesError } = await supabase
@@ -197,7 +193,7 @@ export async function createClientPlanAction(
       sessions_used:    0,
       price_paid_cents: Math.round(parsed.data.pricePaidNaira * 100),
       purchased_on:     parsed.data.purchasedOn,
-      created_by:       authData.user.id,
+      created_by:       scope.userId,
     })
     .select("id")
     .single()

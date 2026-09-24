@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation"
+import { getAppUser } from "@/lib/auth/scope"
 import { requireRole } from "@/lib/auth/guards"
 import { getServiceRecordById } from "@/lib/db/queries/services"
 import { getServiceItems } from "@/lib/db/queries/service-items"
-import { createAppServerClient } from "@/lib/supabase/app-server"
 import { AddItemsClient, type ServiceItemEntry } from "./add-items-client"
 
 export default async function AddItemsPage({
@@ -13,10 +13,9 @@ export default async function AddItemsPage({
   await requireRole("internal_use")
   const { id } = await params
 
-  const supabase = await createAppServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getAppUser()
   if (!user) redirect("/services-performed")
 
   const [record, allServiceItems] = await Promise.all([

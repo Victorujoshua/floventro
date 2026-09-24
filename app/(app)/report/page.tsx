@@ -1,4 +1,5 @@
 import { requireScope } from "@/lib/auth/guards"
+import { getAppUser } from "@/lib/auth/scope"
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { getOrgOverview, getOrgSales, getOrgLedger, getBranchLedger } from "@/lib/db/queries/org"
 import {
@@ -27,7 +28,7 @@ export default async function ReportPage() {
   const supabase = await createAppServerClient()
 
   const [{ data: authData }, orgRes, branchRes] = await Promise.all([
-    supabase.auth.getUser(),
+    getAppUser(),
     supabase.from("organisations").select("name").eq("id", scope.organisationId).maybeSingle(),
     scope.branchId
       ? supabase.from("branches").select("name").eq("id", scope.branchId).maybeSingle()

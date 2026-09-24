@@ -369,8 +369,6 @@ export async function getMyJobCostingSessions(): Promise<JobCostingSessionRow[]>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createAppServerClient()) as any
 
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData.user) return []
 
   // 1. Plan-linked records for this user
   const { data: records, error } = await supabase
@@ -379,7 +377,7 @@ export async function getMyJobCostingSessions(): Promise<JobCostingSessionRow[]>
       "id, performed_on, created_at, session_revenue_cents, customer_name, service_types(name), service_consumption(id)",
     )
     .eq("organisation_id", scope.organisationId)
-    .eq("performed_by", authData.user.id)
+    .eq("performed_by", scope.userId)
     .not("session_revenue_cents", "is", null)
     .order("performed_on", { ascending: false })
     .limit(100)

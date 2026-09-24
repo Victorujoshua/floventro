@@ -82,20 +82,12 @@ export async function getMyHoldings(): Promise<MyHolding[]> {
   if (!scope) return []
 
   const supabase = await createAppServerClient()
-  console.log("[getMyHoldings] before getUser")
-  const { data: authData, error: userError } = await supabase.auth.getUser()
-  console.log("[getMyHoldings] after getUser, user=", !!authData?.user)
-  if (userError || !authData?.user) {
-    console.error("[getMyHoldings] auth.getUser failed or no user", userError)
-    return []
-  }
-  const user = authData.user
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("staff_holdings")
     .select("branch_id, product_id, quantity, branches(name), products(name, sku, default_price_cents)")
-    .eq("holder_user_id", user.id)
+    .eq("holder_user_id", scope.userId)
     .eq("organisation_id", scope.organisationId)
     .gt("quantity", 0)
     .order("quantity", { ascending: false })
@@ -182,8 +174,6 @@ export async function getMyHoldingHistory(): Promise<ProductHoldingHistory[]> {
   if (!scope) return []
 
   const supabase = await createAppServerClient()
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData?.user) return []
 
   // Explicit holder_user_id filter is REQUIRED — RLS only gates by branch_id,
   // so without this filter a branch member would read all branch ledger rows.
@@ -191,7 +181,7 @@ export async function getMyHoldingHistory(): Promise<ProductHoldingHistory[]> {
   const { data, error } = await (supabase as any)
     .from("stock_ledger")
     .select("id, product_id, quantity_delta, reason, note, created_at, products(name, sku)")
-    .eq("holder_user_id", authData.user.id)
+    .eq("holder_user_id", scope.userId)
     .eq("organisation_id", scope.organisationId)
     .order("product_id", { ascending: true })
     .order("created_at", { ascending: true })

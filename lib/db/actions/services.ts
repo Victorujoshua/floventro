@@ -34,8 +34,6 @@ export async function createServiceTypeAction(
   const scope = await requireRole("owner", "inventory", "admin", "sales")
   const supabase = await createAppServerClient()
 
-  const { data: authData } = await supabase.auth.getUser()
-  if (!authData.user) return { ok: false, error: "auth" }
 
   const { data, error } = await supabase
     .from("service_types")
@@ -45,7 +43,7 @@ export async function createServiceTypeAction(
       description: parsed.data.description?.trim() || null,
       default_price_cents: Math.round(parsed.data.defaultPriceNaira * 100),
       is_active: parsed.data.isActive,
-      created_by: authData.user.id,
+      created_by: scope.userId,
     })
     .select("id")
     .single()

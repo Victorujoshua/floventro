@@ -28,7 +28,10 @@ export async function updateAppSession(request: NextRequest) {
   )
 
   // Refresh the session — do not remove, this is load-bearing.
-  await supabase.auth.getUser()
+  // getClaims() refreshes an expired session like getUser() does, but verifies
+  // the JWT locally against the project's cached ES256 JWKS instead of calling
+  // Supabase Auth on every request. Pages still authorise via getAppUser().
+  await supabase.auth.getClaims()
 
   return response
 }
