@@ -26,6 +26,7 @@ export type ReportInvoice = {
   due_date: string | null
   total_cents: number
   amount_paid_cents: number
+  credited_cents: number
   status: string
   vendors: { name: string } | { name: string }[] | null
 }
@@ -356,6 +357,7 @@ async function exportXLS(data: ReportData) {
       "Due Date": inv.due_date ?? "",
       Vendor: resolveVendorName(inv.vendors),
       "Total (₦)": n(inv.total_cents),
+      "Credited (₦)": n(inv.credited_cents),
       "Paid (₦)": n(inv.amount_paid_cents),
       Status: inv.status,
     })))
@@ -418,6 +420,7 @@ async function exportXLS(data: ReportData) {
       "Due Date": inv.due_date ?? "",
       Vendor: resolveVendorName(inv.vendors),
       "Total (₦)": n(inv.total_cents),
+      "Credited (₦)": n(inv.credited_cents),
       "Paid (₦)": n(inv.amount_paid_cents),
       Status: inv.status,
     })))

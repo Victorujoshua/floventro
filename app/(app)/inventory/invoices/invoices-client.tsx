@@ -59,9 +59,17 @@ export type InvoiceRow = {
   vat_cents:        number | null
   total_cents:      number
   amount_paid_cents: number
+  // Vendor credits from closed-short lines — reduce what is owed
+  credited_subtotal_cents: number
+  credited_cents:   number
   status:           string
   receipt_status:   string
   vendors:          { name: string } | { name: string }[] | null
+}
+
+// What is still owed: total net of vendor credits, minus payments.
+function outstandingCents(inv: InvoiceRow): number {
+  return inv.total_cents - inv.credited_cents - inv.amount_paid_cents
 }
 
 function resolveVendorName(vendors: InvoiceRow["vendors"]): string {
@@ -102,6 +110,7 @@ function ReceiptBadge({ status }: { status: string }) {
     pending:            { label: "Awaiting delivery",  className: "bg-tint-amber text-amber-700" },
     partially_received: { label: "Partially received", className: "bg-tint-amber text-amber-700" },
     received:           { label: "Received",           className: "bg-tint-success text-green-700" },
+    closed_short:       { label: "Closed short",       className: "bg-neutral-100 text-neutral-600" },
   }
   const entry = map[status] ?? { label: status, className: "bg-neutral-100 text-neutral-500" }
 
@@ -117,8 +126,10 @@ function ReceiptBadge({ status }: { status: string }) {
 function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose: () => void }) {
   const router = useRouter()
   const today = new Date().toLocaleDateString("en-CA")
-  const outstanding    = invoice.total_cents - invoice.amount_paid_cents
+  const outstanding    = outstandingCents(invoice)
   const subtotalCents  = invoice.subtotal_cents ?? invoice.total_cents
+  // WHT base is the pre-VAT subtotal net of credits — mirrors record_vendor_payment
+  const whtBaseCents   = subtotalCents - invoice.credited_subtotal_cents
 
   const {
     register,
@@ -146,7 +157,7 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
     ? whtRateRaw : 0
 
   // WHT is always computed off pre-VAT subtotal, never off total or cash amount
-  const whtCents        = whtRate > 0 ? Math.round(subtotalCents * whtRate / 100) : 0
+  const whtCents        = whtRate > 0 ? Math.round(whtBaseCents * whtRate / 100) : 0
   const amountCents     = amountNaira ? Math.round(amountNaira * 100) : 0
   const settlementCents = amountCents + whtCents
   const isOverpayment   = amountCents > 0 && settlementCents > outstanding
@@ -209,6 +220,14 @@ function RecordPaymentModal({ invoice, onClose }: { invoice: InvoiceRow; onClose
             <span className="font-inter">₦</span>{formatNaira(invoice.total_cents)}
           </p>
         </div>
+        {invoice.credited_cents > 0 && (
+          <div className="flex items-center justify-between py-2">
+            <p className="text-xs text-neutral-500">Vendor credit (closed short)</p>
+            <p className="text-sm tabular-nums text-neutral-700">
+              −<span className="font-inter">₦</span>{formatNaira(invoice.credited_cents)}
+            </p>
+          </div>
+        )}
         <div className="flex items-center justify-between py-2">
           <p className="text-xs text-neutral-500">Paid</p>
           <p className="text-sm font-semibold tabular-nums text-neutral-950">
@@ -510,6 +529,9 @@ function ReceiveInvoiceForm({
   const [quantities, setQuantities] = useState<number[]>(
     invoice.lines.map((l) => l.remaining),
   )
+  // Per line: close whatever is still undelivered after this receipt
+  const [closeRest, setCloseRest]   = useState<boolean[]>(invoice.lines.map(() => false))
+  const [recordCredit, setRecordCredit] = useState(true)
   const [note, setNote]             = useState("")
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -518,26 +540,63 @@ function ReceiveInvoiceForm({
     setQuantities((prev) => prev.map((q, i) => (i === index ? value : q)))
   }
 
+  function setClose(index: number, value: boolean) {
+    setCloseRest((prev) => prev.map((c, i) => (i === index ? value : c)))
+  }
+
+  // Undelivered units a line would close with, given what is being received now.
+  const shortfall = (index: number) =>
+    invoice.lines[index].remaining - (quantities[index] ?? 0)
+
+  const closingIndexes = invoice.lines
+    .map((_, i) => i)
+    .filter((i) => closeRest[i] && shortfall(i) > 0)
+
+  // Credit preview — same arithmetic as close_invoice_lines_short: each line's
+  // own unit cost × shortfall, VAT at the invoice rate with cumulative rounding.
+  const creditSubtotalCents = closingIndexes.reduce(
+    (sum, i) => sum + shortfall(i) * invoice.lines[i].unitCostCents,
+    0,
+  )
+  const vatRate = invoice.vatRate ?? 0
+  const creditVatCents =
+    Math.round((invoice.creditedSubtotalCents + creditSubtotalCents) * vatRate / 100) -
+    Math.round(invoice.creditedSubtotalCents * vatRate / 100)
+  const creditCents = creditSubtotalCents + creditVatCents
+  const creditExceedsOutstanding =
+    recordCredit && closingIndexes.length > 0 && creditCents > invoice.outstandingCents
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const lines = invoice.lines
       .map((l, i) => ({ lineId: l.id, quantityReceived: quantities[i] ?? 0 }))
       .filter((l) => l.quantityReceived > 0)
+    const closeLineIds = closingIndexes.map((i) => invoice.lines[i].id)
 
-    if (lines.length === 0) {
-      setSubmitError("Enter at least one quantity greater than 0.")
+    if (lines.length === 0 && closeLineIds.length === 0) {
+      setSubmitError("Enter a quantity greater than 0, or close a line short.")
       return
     }
+    if (creditExceedsOutstanding) return
 
     setSubmitError(null)
     setIsSubmitting(true)
     try {
-      const result = await receiveInvoiceStockAction(invoice.id, lines, note)
+      const result = await receiveInvoiceStockAction(invoice.id, lines, note, {
+        lineIds: closeLineIds,
+        recordCredit,
+      })
       if (!result.ok) {
         setSubmitError(result.error)
         return
       }
-      toast.success("Stock received")
+      toast.success(
+        closeLineIds.length === 0
+          ? "Stock received"
+          : lines.length === 0
+          ? "Closed short"
+          : "Stock received and closed short",
+      )
       onClose()
       onSuccess()
     } finally {
@@ -557,39 +616,111 @@ function ReceiveInvoiceForm({
               <th className="px-3 py-2 text-right text-xs font-medium text-neutral-500 whitespace-nowrap">Received</th>
               <th className="px-3 py-2 text-right text-xs font-medium text-neutral-500 whitespace-nowrap">Remaining</th>
               <th className="px-3 py-2 text-right text-xs font-medium text-neutral-500 whitespace-nowrap">Receiving now</th>
+              <th className="px-3 py-2 text-center text-xs font-medium text-neutral-500 whitespace-nowrap">Close rest</th>
             </tr>
           </thead>
           <tbody>
-            {invoice.lines.map((line, index) => (
-              <tr key={line.id} className="border-b border-neutral-100 last:border-0">
-                <td className="px-3 py-2.5">
-                  <p className="font-medium text-neutral-950">{line.productName}</p>
-                  <p className="text-xs font-mono text-neutral-400">{line.productSku}</p>
-                </td>
-                <td className="px-3 py-2.5 text-right font-mono tabular-nums text-neutral-500">
-                  {line.quantity}
-                </td>
-                <td className="px-3 py-2.5 text-right font-mono tabular-nums text-neutral-500">
-                  {line.quantityReceived}
-                </td>
-                <td className="px-3 py-2.5 text-right font-mono tabular-nums text-neutral-500">
-                  {line.remaining}
-                </td>
-                <td className="px-3 py-2.5 text-right">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={line.remaining}
-                    value={quantities[index] ?? 0}
-                    onChange={(e) => setQty(index, Math.max(0, Math.min(line.remaining, parseInt(e.target.value, 10) || 0)))}
-                    className="h-8 w-20 text-sm tabular-nums text-right ml-auto"
-                  />
-                </td>
-              </tr>
-            ))}
+            {invoice.lines.map((line, index) => {
+              const isOpen = !line.closedShort && line.remaining > 0
+              const gap = shortfall(index)
+              return (
+                <tr key={line.id} className="border-b border-neutral-100 last:border-0">
+                  <td className="px-3 py-2.5">
+                    <p className="font-medium text-neutral-950">{line.productName}</p>
+                    <p className="text-xs font-mono text-neutral-400">{line.productSku}</p>
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums text-neutral-500">
+                    {line.quantity}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums text-neutral-500">
+                    {line.quantityReceived}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums text-neutral-500">
+                    {line.closedShort ? "—" : line.remaining}
+                  </td>
+                  {line.closedShort ? (
+                    <td colSpan={2} className="px-3 py-2.5 text-right text-xs text-neutral-500 whitespace-nowrap">
+                      Closed short · {line.closedShortQuantity} not delivered
+                    </td>
+                  ) : (
+                    <>
+                      <td className="px-3 py-2.5 text-right">
+                        {isOpen ? (
+                          <Input
+                            type="number"
+                            min={0}
+                            max={line.remaining}
+                            value={quantities[index] ?? 0}
+                            onChange={(e) => setQty(index, Math.max(0, Math.min(line.remaining, parseInt(e.target.value, 10) || 0)))}
+                            className="h-8 w-20 text-sm tabular-nums text-right ml-auto"
+                          />
+                        ) : (
+                          <span className="text-xs text-neutral-400">Received</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {isOpen && (
+                          <input
+                            type="checkbox"
+                            aria-label={`Close the rest of ${line.productName} short`}
+                            title={gap > 0 ? `Close ${gap} undelivered unit${gap !== 1 ? "s" : ""}` : "Nothing left to close"}
+                            className="rounded border-neutral-300 disabled:opacity-40"
+                            disabled={gap <= 0}
+                            checked={closeRest[index] && gap > 0}
+                            onChange={(e) => setClose(index, e.target.checked)}
+                          />
+                        )}
+                      </td>
+                    </>
+                  )}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
+
+      {/* Close short + vendor credit */}
+      {closingIndexes.length > 0 && (
+        <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 space-y-2">
+          <p className="text-xs text-neutral-600">
+            Closing{" "}
+            <span className="font-medium text-neutral-950 tabular-nums">
+              {closingIndexes.reduce((s, i) => s + shortfall(i), 0)}
+            </span>{" "}
+            undelivered unit{closingIndexes.reduce((s, i) => s + shortfall(i), 0) !== 1 ? "s" : ""} short. No stock is
+            added for them and nothing more can be received on {closingIndexes.length === 1 ? "that line" : "those lines"}.
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              id="record-credit"
+              type="checkbox"
+              className="rounded border-neutral-300"
+              checked={recordCredit}
+              onChange={(e) => setRecordCredit(e.target.checked)}
+            />
+            <Label htmlFor="record-credit" className="cursor-pointer text-sm font-normal">
+              Record vendor credit of{" "}
+              <span className="font-medium tabular-nums">
+                <span className="font-inter">₦</span>{formatNaira(creditCents)}
+              </span>
+              {creditVatCents > 0 && (
+                <span className="text-neutral-500"> (incl. <span className="font-inter">₦</span>{formatNaira(creditVatCents)} VAT)</span>
+              )}
+            </Label>
+          </div>
+          <p className="text-xs text-neutral-500">
+            Priced at each line&apos;s invoiced unit cost. Reduces what you owe this vendor.
+          </p>
+          {creditExceedsOutstanding && (
+            <p className="text-xs text-red-700">
+              That&apos;s more than the <span className="font-inter">₦</span>{formatNaira(invoice.outstandingCents)} still
+              owed — the vendor would owe you a refund, which isn&apos;t supported yet. Untick the credit to close short
+              without one.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Running summary */}
       {(() => {
@@ -635,10 +766,10 @@ function ReceiveInvoiceForm({
         </button>
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || creditExceedsOutstanding}
           className="rounded-md bg-neutral-800 text-white px-4 h-10 text-sm font-medium hover:bg-neutral-900 active:scale-[0.98] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          {isSubmitting ? "Receiving…" : "Confirm receipt"}
+          {isSubmitting ? "Saving…" : closingIndexes.length > 0 ? "Confirm" : "Confirm receipt"}
         </button>
       </div>
     </form>
@@ -747,9 +878,10 @@ export function InvoicesClient({ invoices }: { invoices: InvoiceRow[] }) {
           </TableHeader>
           <TableBody>
             {invoices.map((inv) => {
-              const outstanding     = inv.total_cents - inv.amount_paid_cents
+              const outstanding     = outstandingCents(inv)
               const isPaid          = inv.status === "paid"
-              const isFullyReceived = inv.receipt_status === "received"
+              // Nothing left to receive once every line is received or closed short
+              const isDeliveryDone  = inv.receipt_status === "received" || inv.receipt_status === "closed_short"
 
               return (
                 <TableRow key={inv.id} className="hover:bg-neutral-50/60 transition-colors">
@@ -792,7 +924,7 @@ export function InvoicesClient({ invoices }: { invoices: InvoiceRow[] }) {
                         <MoreHorizontal size={16} />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
-                        {!isFullyReceived && (
+                        {!isDeliveryDone && (
                           <DropdownMenuItem
                             className="gap-2"
                             onClick={() => setReceiveModal(inv)}

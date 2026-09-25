@@ -176,7 +176,7 @@ export async function getOrgOverview(): Promise<OrgOverview> {
 
       supabase
         .from("vendor_invoices")
-        .select("total_cents, amount_paid_cents")
+        .select("total_cents, amount_paid_cents, credited_cents")
         .eq("organisation_id", scope.organisationId)
         .is("deleted_at", null)
         .in("status", ["unpaid", "partial"]),
@@ -385,9 +385,10 @@ export async function getOrgOverview(): Promise<OrgOverview> {
   const totalStockUnits = poolStockUnits + heldByStaffUnits + inTransitUnits
 
   // ── Payables aggregation ──────────────────────────────────────────────────
-  type RawInvoice = { total_cents: number; amount_paid_cents: number }
+  // Vendor credits (closed-short lines) reduce what is owed.
+  type RawInvoice = { total_cents: number; amount_paid_cents: number; credited_cents: number }
   const invoices = invoiceRes.data as unknown as RawInvoice[]
-  const outstandingCents = invoices.reduce((s, i) => s + i.total_cents - i.amount_paid_cents, 0)
+  const outstandingCents = invoices.reduce((s, i) => s + i.total_cents - i.credited_cents - i.amount_paid_cents, 0)
 
   // ── Branch summaries ──────────────────────────────────────────────────────
   type RawBranch = { id: string; name: string }
