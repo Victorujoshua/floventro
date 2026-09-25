@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils"
 import { formatNaira } from "@/lib/format/money"
 import { enterBranchAction } from "@/lib/db/actions/org"
 import { RevenueSplitNote } from "@/components/app/revenue-split-note"
+import { CashInflowNote } from "@/components/app/cash-inflow-note"
+import { cashInflowTotal } from "@/lib/db/queries/cash-inflow"
 import { CARD_LINK_INTERACTION } from "@/components/app/card-link"
 import type { BranchSummary } from "@/lib/db/queries/org"
 
@@ -102,7 +104,7 @@ export function BranchCards({ branches }: { branches: BranchSummary[] }) {
               </span>
             </div>
 
-            <div className="flex gap-5 pt-1 border-t border-neutral-100">
+            <div className="grid grid-cols-2 gap-x-5 gap-y-3 pt-1 border-t border-neutral-100">
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-neutral-400">Revenue (30d)</p>
                 <p className="text-sm font-mono tabular-nums text-neutral-800 mt-0.5">
@@ -110,6 +112,21 @@ export function BranchCards({ branches }: { branches: BranchSummary[] }) {
                   {formatNaira(b.revenueLast30dCents)}
                 </p>
                 <RevenueSplitNote split={b.revenueLast30dSplit} className="text-[11px] text-neutral-400 mt-0.5" />
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-neutral-400">VAT (30d)</p>
+                <p className="text-sm font-mono tabular-nums text-neutral-800 mt-0.5">
+                  <span className="font-inter">₦</span>
+                  {formatNaira(b.vatLast30dCents)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-neutral-400">Cash inflow (30d)</p>
+                <p className="text-sm font-mono tabular-nums text-neutral-800 mt-0.5">
+                  <span className="font-inter">₦</span>
+                  {formatNaira(cashInflowTotal(b.cashInflowLast30d))}
+                </p>
+                <CashInflowNote cash={b.cashInflowLast30d} className="text-[11px] text-neutral-400 mt-0.5" />
               </div>
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-neutral-400">Stock</p>

@@ -1,10 +1,12 @@
 import Link from "next/link"
-import { Package, TrendingUp, ClipboardList, CreditCard, AlertCircle, Check, DollarSign, Percent } from "lucide-react"
+import { Package, TrendingUp, ClipboardList, CreditCard, AlertCircle, Check, DollarSign, Percent, Receipt, Wallet } from "lucide-react"
 import { requireOwner } from "@/lib/auth/guards"
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { getOrgOverview } from "@/lib/db/queries/org"
+import { cashInflowTotal } from "@/lib/db/queries/cash-inflow"
 import { formatNaira } from "@/lib/format/money"
 import { RevenueSplitNote } from "@/components/app/revenue-split-note"
+import { CashInflowNote } from "@/components/app/cash-inflow-note"
 import { CardLink } from "@/components/app/card-link"
 import { BranchStockChart } from "./branch-stock-chart"
 import { BranchCards } from "./branch-cards"
@@ -50,6 +52,32 @@ export default async function OrgOverviewPage() {
           </p>
         </CardLink>
 
+        <CardLink href="/org/sales" className="bg-white rounded-2xl border border-neutral-200/60 p-5">
+          <div className="flex items-start justify-between">
+            <p className="text-xs uppercase tracking-wide text-neutral-500">Total VAT (30d)</p>
+            <Receipt className="h-4 w-4 text-neutral-300" />
+          </div>
+          <p className="text-2xl font-semibold text-neutral-950 tabular-nums mt-3">
+            <span className="font-inter">₦</span>{formatNaira(overview.vatLast30dCents)}
+          </p>
+          <p className="text-xs text-neutral-500 mt-1">charged on top of revenue</p>
+        </CardLink>
+
+        <CardLink href="/org/sales" className="bg-tint-success rounded-2xl border border-neutral-200/60 p-5">
+          <div className="flex items-start justify-between">
+            <p className="text-xs uppercase tracking-wide text-neutral-500">Total cash inflow (30d)</p>
+            <Wallet className="h-4 w-4 text-green-400" />
+          </div>
+          <p className="text-2xl font-semibold text-neutral-950 tabular-nums mt-3">
+            <span className="font-inter">₦</span>{formatNaira(cashInflowTotal(overview.cashInflowLast30d))}
+          </p>
+          <CashInflowNote cash={overview.cashInflowLast30d} />
+          <p className="text-xs text-neutral-500 mt-1">received, incl. VAT</p>
+        </CardLink>
+      </div>
+
+      {/* Metric cards — row 2: profitability */}
+      <div className="grid sm:grid-cols-2 gap-4">
         {(() => {
           const hasPartialCost =
             overview.profitLast30dCents !== null &&
@@ -111,7 +139,7 @@ export default async function OrgOverviewPage() {
         })()}
       </div>
 
-      {/* Metric cards — row 2: operations */}
+      {/* Metric cards — row 3: operations */}
       <div className="grid sm:grid-cols-3 gap-4">
         <div className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-5">
           <div className="flex items-start justify-between">
