@@ -90,7 +90,7 @@ export async function getPayablesSummary() {
 
   let payablesQuery = supabase
     .from("vendor_invoices")
-    .select("total_cents, amount_paid_cents, status, due_date")
+    .select("total_cents, amount_paid_cents, credited_cents, status, due_date")
     .eq("organisation_id", scope.organisationId)
     .is("deleted_at", null)
     .in("status", ["unpaid", "partial"])
@@ -107,7 +107,8 @@ export async function getPayablesSummary() {
   let pastDueCount = 0
 
   for (const inv of data) {
-    outstandingCents += inv.total_cents - inv.amount_paid_cents
+    // Vendor credits (closed-short lines) reduce what is owed.
+    outstandingCents += inv.total_cents - inv.credited_cents - inv.amount_paid_cents
     if (inv.due_date && inv.due_date < today) pastDueCount++
   }
 

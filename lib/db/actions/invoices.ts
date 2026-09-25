@@ -80,10 +80,13 @@ export async function getInvoiceForReceivingAction(invoiceId: string) {
   return getInvoiceForReceiving(invoiceId)
 }
 
+// Receives any batches, then closes any lines short — one transaction
+// (receive_and_close_invoice_lines), so a failure in either rolls back both.
 export async function receiveInvoiceStockAction(
   invoiceId: string,
   lines: { lineId: string; quantityReceived: number }[],
   note: string,
+  closeShort: { lineIds: string[]; recordCredit: boolean } = { lineIds: [], recordCredit: false },
 ): Promise<{ ok: true; receiptStatus: string } | { ok: false; error: string; code?: string }> {
   await requireRole("owner", "inventory", "admin")
   const supabase = await createAppServerClient()
@@ -93,16 +96,28 @@ export async function receiveInvoiceStockAction(
     quantity_received: l.quantityReceived,
   }))
 
-  const { data, error } = await supabase.rpc("receive_invoice_stock", {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc("receive_and_close_invoice_lines", {
     p_invoice_id: invoiceId,
     p_lines: rpcLines,
+    p_close_line_ids: closeShort.lineIds,
+    p_record_credit: closeShort.recordCredit,
     p_note: note || null,
   })
 
   if (error) {
-    const msg = error.message.toLowerCase()
+    const msg = (error.message as string).toLowerCase()
     if (msg.includes("already fully received"))
       return { ok: false, error: "This invoice has already been fully received.", code: "already_received" }
+    if (msg.includes("closed short"))
+      return { ok: false, error: "This line or invoice has already been closed short.", code: "closed_short" }
+    if (msg.includes("exceeds the outstanding balance"))
+      return {
+        ok: false,
+        error:
+          "The credit is more than this invoice's outstanding balance — the vendor would owe you a refund, which isn't supported yet. Close short without a credit instead.",
+        code: "credit_exceeds_outstanding",
+      }
     if (msg.includes("cannot receive more than ordered"))
       return { ok: false, error: error.message, code: "over_receive" }
     if (msg.includes("not authorised"))
