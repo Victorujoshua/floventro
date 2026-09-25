@@ -18,6 +18,8 @@ export type SaleRow = {
   vatCents: number
   totalCents: number
   lineCount: number
+  // Distinct product names across the sale's product lines (services/plans excluded)
+  productNames: string[]
   createdAt: string
 }
 
@@ -61,7 +63,7 @@ type RawSaleRow = {
   vat_cents: number
   total_cents: number
   created_at: string
-  sale_lines: { count: number }[]
+  sale_lines: { products: RawSaleLineRow["products"] }[] | null
 }
 
 type RawSaleLineRow = {
@@ -108,6 +110,13 @@ function resolveProduct(raw: RawSaleLineRow["products"]): { name: string; sku: s
   return raw
 }
 
+function distinctProductNames(lines: { products: RawSaleLineRow["products"] }[]): string[] {
+  const names = lines
+    .map((l) => resolveProduct(l.products)?.name)
+    .filter((name): name is string => !!name)
+  return [...new Set(names)]
+}
+
 async function fetchSellerMap(ids: string[]): Promise<Map<string, string>> {
   const map = new Map<string, string>()
   if (ids.length === 0) return map
@@ -131,7 +140,7 @@ export async function getSales(): Promise<SaleRow[]> {
 
   let query = supabase
     .from("sales")
-    .select("id, sold_on, seller_user_id, customer_name, customer_phone, payment_method, payment_status, amount_paid_cents, subtotal_cents, service_revenue_cents, vat_rate, vat_cents, total_cents, created_at, sale_lines(count)")
+    .select("id, sold_on, seller_user_id, customer_name, customer_phone, payment_method, payment_status, amount_paid_cents, subtotal_cents, service_revenue_cents, vat_rate, vat_cents, total_cents, created_at, sale_lines(products(name))")
     .eq("organisation_id", scope.organisationId)
     .order("created_at", { ascending: false })
     .limit(100)
@@ -163,7 +172,8 @@ export async function getSales(): Promise<SaleRow[]> {
     vatRate: row.vat_rate,
     vatCents: row.vat_cents,
     totalCents: row.total_cents,
-    lineCount: (row.sale_lines as unknown as { count: number }[])?.[0]?.count ?? row.sale_lines?.length ?? 0,
+    lineCount: row.sale_lines?.length ?? 0,
+    productNames: distinctProductNames(row.sale_lines ?? []),
     createdAt: row.created_at,
   }))
 }
@@ -204,6 +214,7 @@ export async function getSaleById(id: string): Promise<SaleDetail | null> {
     totalCents: row.total_cents,
     note: row.note,
     lineCount: row.sale_lines.length,
+    productNames: distinctProductNames(row.sale_lines),
     createdAt: row.created_at,
     lines: row.sale_lines.map((l) => {
       const product = resolveProduct(l.products)

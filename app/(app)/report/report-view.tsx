@@ -221,6 +221,13 @@ function Td({ children, right, mono }: { children: React.ReactNode; right?: bool
   )
 }
 
+// "A, B +3 more" — keeps multi-item sales to one short line in the table.
+function fmtProductNames(names: string[], shown = 2): string {
+  if (names.length === 0) return "—"
+  const head = names.slice(0, shown).join(", ")
+  return names.length > shown ? `${head} +${names.length - shown} more` : head
+}
+
 function EmptyRow({ cols, msg = "No data" }: { cols: number; msg?: string }) {
   return (
     <tr>
@@ -325,6 +332,7 @@ async function exportXLS(data: ReportData) {
       Date: s.soldOn,
       Seller: s.sellerLabel,
       Customer: s.customerName ?? "",
+      Products: s.productNames.join(", "),
       "Subtotal (₦)": n(s.subtotalCents),
       "VAT (₦)": n(s.vatCents),
       "Total (₦)": n(s.totalCents),
@@ -770,19 +778,25 @@ function BranchReport({ data }: { data: Extract<ReportData, { kind: "branch" }> 
             <Th>Date</Th>
             <Th>Seller</Th>
             <Th>Customer</Th>
+            <Th>Products</Th>
             <Th right>Total</Th>
             <Th>Status</Th>
           </tr>
         </thead>
         <tbody className="divide-y divide-neutral-100">
           {data.sales.length === 0 ? (
-            <EmptyRow cols={5} />
+            <EmptyRow cols={6} />
           ) : (
             data.sales.slice(0, 50).map((s) => (
               <tr key={s.id} className="hover:bg-neutral-50/60">
                 <Td>{fmtDate(s.soldOn)}</Td>
                 <Td>{s.sellerLabel}</Td>
                 <Td>{s.customerName ?? "—"}</Td>
+                <td className="px-5 py-3 text-neutral-700">
+                  <div className="max-w-[220px] truncate" title={s.productNames.join(", ") || undefined}>
+                    {fmtProductNames(s.productNames)}
+                  </div>
+                </td>
                 <Td right mono>{fmtMoney(s.totalCents)}</Td>
                 <Td>{s.paymentStatus}</Td>
               </tr>
