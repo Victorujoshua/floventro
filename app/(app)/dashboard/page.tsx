@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { Check, TrendingUp, DollarSign, Percent, Layers, Package, Users } from "lucide-react"
+import { Check, TrendingUp, DollarSign, Percent, Layers, Package, Users, Receipt, Wallet } from "lucide-react"
 import { requireScope } from "@/lib/auth/guards"
 import {
   getStockSummary,
@@ -19,7 +19,9 @@ import {
   getMyServiceMetrics,
 } from "@/lib/db/queries/dashboard"
 import { formatNaira } from "@/lib/format/money"
+import { cashInflowTotal } from "@/lib/db/queries/cash-inflow"
 import { RevenueSplitNote } from "@/components/app/revenue-split-note"
+import { CashInflowNote } from "@/components/app/cash-inflow-note"
 import { CardLink, CardArrow } from "@/components/app/card-link"
 import { StockChart } from "./stock-chart"
 
@@ -110,6 +112,7 @@ export default async function DashboardPage() {
               !financials.costDataComplete &&
               financials.missingCostProductCount > 0
             return (
+              <>
               <div className="grid sm:grid-cols-3 gap-5">
                 <CardLink href="/report" className="bg-tint-violet rounded-2xl border border-neutral-200/60 p-6">
                   <div className="flex items-start justify-between">
@@ -123,6 +126,32 @@ export default async function DashboardPage() {
                   <RevenueSplitNote split={financials.revenueLast30dSplit} />
                 </CardLink>
 
+                <CardLink href="/sales" className="bg-white rounded-2xl border border-neutral-200/60 p-6">
+                  <div className="flex items-start justify-between">
+                    <p className="text-xs uppercase tracking-wide text-neutral-500">Total VAT (30d)</p>
+                    <Receipt className="h-4 w-4 text-neutral-300" />
+                  </div>
+                  <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
+                    <span className="font-inter">₦</span>{formatNaira(financials.vatLast30dCents)}
+                  </p>
+                  <p className="text-sm text-neutral-500 mt-1">last 30 days</p>
+                  <p className="text-xs text-neutral-500 mt-1">charged on top of revenue</p>
+                </CardLink>
+
+                <CardLink href="/sales" className="bg-tint-success rounded-2xl border border-neutral-200/60 p-6">
+                  <div className="flex items-start justify-between">
+                    <p className="text-xs uppercase tracking-wide text-neutral-500">Total cash inflow (30d)</p>
+                    <Wallet className="h-4 w-4 text-green-400" />
+                  </div>
+                  <p className="text-3xl font-semibold text-neutral-950 tabular-nums mt-3">
+                    <span className="font-inter">₦</span>{formatNaira(cashInflowTotal(financials.cashInflowLast30d))}
+                  </p>
+                  <p className="text-sm text-neutral-500 mt-1">received, incl. VAT</p>
+                  <CashInflowNote cash={financials.cashInflowLast30d} />
+                </CardLink>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-5">
                 <div className="bg-tint-success rounded-2xl border border-neutral-200/60 p-6">
                   <div className="flex items-start justify-between">
                     <p className="text-xs uppercase tracking-wide text-neutral-500">Gross profit (30d)</p>
@@ -173,6 +202,7 @@ export default async function DashboardPage() {
                   )}
                 </div>
               </div>
+              </>
             )
           })()}
 

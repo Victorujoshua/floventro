@@ -9,6 +9,12 @@ import {
   type RevenueSplit,
 } from "./revenue-split"
 import { IN_TRANSIT_LINES_SELECT, sumInTransitUnits } from "./in-transit"
+import {
+  addTillCash,
+  emptyCashInflow,
+  paidOnWindow,
+  type CashInflow,
+} from "./cash-inflow"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,12 +24,16 @@ export type BranchSummary = {
   // address removed — column does not exist in branches table (Option B)
   revenueLast30dCents: number
   revenueLast30dSplit: RevenueSplit
+  vatLast30dCents: number
+  cashInflowLast30d: CashInflow
   stockUnits: number
 }
 
 export type OrgOverview = {
   revenueLast30dCents: number
   revenueLast30dSplit: RevenueSplit
+  vatLast30dCents: number
+  cashInflowLast30d: CashInflow
   serviceRevenueLast30dCents: number
   revenueAllTimeCents: number
   revenueAllTimeSplit: RevenueSplit
@@ -133,9 +143,10 @@ export async function getOrgOverview(): Promise<OrgOverview> {
 
   const supabase = await createAppServerClient()
   const cutoff = since30dCutoff()
+  const paidOn = paidOnWindow(cutoff)
 
   // Run all queries in parallel. Errors are checked below before any processing.
-  const [branchRes, salesRes, productRes, requestRes, invoiceRes, staffRes, transferRes, cogsRes] =
+  const [branchRes, salesRes, productRes, requestRes, invoiceRes, staffRes, transferRes, cogsRes, paymentsRes] =
     await Promise.all([
       // Bug 1 fix: select only columns that actually exist (no `address`)
       supabase
@@ -147,7 +158,7 @@ export async function getOrgOverview(): Promise<OrgOverview> {
 
       supabase
         .from("sales")
-        .select(`branch_id, subtotal_cents, service_revenue_cents, created_at, ${SALE_CREDIT_COLUMNS}, sale_lines(id, product_id, line_total_cents)`)
+        .select(`branch_id, subtotal_cents, vat_cents, total_cents, service_revenue_cents, created_at, ${SALE_CREDIT_COLUMNS}, sale_lines(id, product_id, line_total_cents)`)
         .eq("organisation_id", scope.organisationId),
 
       supabase
@@ -195,6 +206,15 @@ export async function getOrgOverview(): Promise<OrgOverview> {
         .select("reference_id, cogs_cents, cost_known")
         .eq("organisation_id", scope.organisationId)
         .eq("reference_type", "sale_line"),
+
+      // Later payments for cash inflow — windowed by paid_on, not by the sale's
+      // created_at, so a payment on an older sale is still counted.
+      supabase
+        .from("sale_payments")
+        .select("branch_id, amount_cents")
+        .eq("organisation_id", scope.organisationId)
+        .gte("paid_on", paidOn.from)
+        .lte("paid_on", paidOn.to),
     ])
 
   // Bug 3 fix: check errors explicitly — never let a failed query masquerade
@@ -231,6 +251,10 @@ export async function getOrgOverview(): Promise<OrgOverview> {
     console.error("[getOrgOverview] cogs_allocations query failed", cogsRes.error)
     throw cogsRes.error
   }
+  if (paymentsRes.error) {
+    console.error("[getOrgOverview] sale_payments query failed", paymentsRes.error)
+    throw paymentsRes.error
+  }
 
   // ── COGS map ──────────────────────────────────────────────────────────────
   type RawCogs = { reference_id: string; cogs_cents: number | null; cost_known: boolean }
@@ -244,6 +268,8 @@ export async function getOrgOverview(): Promise<OrgOverview> {
   type RawSale = {
     branch_id: string
     subtotal_cents: number
+    vat_cents: number
+    total_cents: number
     service_revenue_cents: number
     created_at: string
     payment_status: string
@@ -256,6 +282,8 @@ export async function getOrgOverview(): Promise<OrgOverview> {
   const revenueAllTimeSplit = emptyRevenueSplit()
   let revenueLast30dCents = 0
   const revenueLast30dSplit = emptyRevenueSplit()
+  let vatLast30dCents = 0
+  const cashInflowLast30d = emptyCashInflow()
   let serviceRevenueLast30dCents = 0
   let revenueLast30dKnownCostCents = 0
   let costLast30dKnownCents = 0
@@ -263,6 +291,12 @@ export async function getOrgOverview(): Promise<OrgOverview> {
   const missingCostProductIds = new Set<string>()
   const branchRevMap = new Map<string, number>()
   const branchSplitMap = new Map<string, RevenueSplit>()
+  const branchVatMap = new Map<string, number>()
+  const branchCashMap = new Map<string, CashInflow>()
+  const branchCash = (branchId: string): CashInflow => {
+    if (!branchCashMap.has(branchId)) branchCashMap.set(branchId, emptyCashInflow())
+    return branchCashMap.get(branchId)!
+  }
 
   for (const s of sales) {
     revenueAllTimeCents += s.subtotal_cents
@@ -270,10 +304,14 @@ export async function getOrgOverview(): Promise<OrgOverview> {
     if (s.created_at >= cutoff) {
       revenueLast30dCents += s.subtotal_cents
       addToRevenueSplit(revenueLast30dSplit, s)
+      vatLast30dCents += s.vat_cents
+      addTillCash(cashInflowLast30d, s)
       serviceRevenueLast30dCents += s.service_revenue_cents ?? 0
       branchRevMap.set(s.branch_id, (branchRevMap.get(s.branch_id) ?? 0) + s.subtotal_cents)
       if (!branchSplitMap.has(s.branch_id)) branchSplitMap.set(s.branch_id, emptyRevenueSplit())
       addToRevenueSplit(branchSplitMap.get(s.branch_id)!, s)
+      branchVatMap.set(s.branch_id, (branchVatMap.get(s.branch_id) ?? 0) + s.vat_cents)
+      addTillCash(branchCash(s.branch_id), s)
 
       for (const line of s.sale_lines ?? []) {
         const alloc = cogsMap.get(line.id)
@@ -299,6 +337,13 @@ export async function getOrgOverview(): Promise<OrgOverview> {
       : null
   const costDataComplete = hasAny30dCostData && missingCostProductIds.size === 0
   const missingCostProductCount = missingCostProductIds.size
+
+  // ── Later payments (cash inflow) ──────────────────────────────────────────
+  type RawSalePayment = { branch_id: string; amount_cents: number }
+  for (const p of paymentsRes.data as unknown as RawSalePayment[]) {
+    cashInflowLast30d.laterPaymentsCents += p.amount_cents
+    branchCash(p.branch_id).laterPaymentsCents += p.amount_cents
+  }
 
   checkRevenueSplit(revenueAllTimeSplit, revenueAllTimeCents, "getOrgOverview all-time")
   checkRevenueSplit(revenueLast30dSplit, revenueLast30dCents, "getOrgOverview 30d")
@@ -351,12 +396,16 @@ export async function getOrgOverview(): Promise<OrgOverview> {
     name: b.name,
     revenueLast30dCents: branchRevMap.get(b.id) ?? 0,
     revenueLast30dSplit: branchSplitMap.get(b.id) ?? emptyRevenueSplit(),
+    vatLast30dCents: branchVatMap.get(b.id) ?? 0,
+    cashInflowLast30d: branchCashMap.get(b.id) ?? emptyCashInflow(),
     stockUnits: branchStockMap.get(b.id) ?? 0,
   }))
 
   return {
     revenueLast30dCents,
     revenueLast30dSplit,
+    vatLast30dCents,
+    cashInflowLast30d,
     serviceRevenueLast30dCents,
     revenueAllTimeCents,
     revenueAllTimeSplit,

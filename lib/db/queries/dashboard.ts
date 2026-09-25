@@ -10,6 +10,12 @@ import {
   emptyRevenueSplit,
   type RevenueSplit,
 } from "./revenue-split"
+import {
+  addTillCash,
+  emptyCashInflow,
+  paidOnWindow,
+  type CashInflow,
+} from "./cash-inflow"
 
 export async function getStockSummary() {
   const scope = await getCurrentScope()
@@ -263,6 +269,8 @@ export async function getNotifications(): Promise<NotificationItem[]> {
 export type BranchFinancials = {
   revenueLast30dCents: number
   revenueLast30dSplit: RevenueSplit
+  vatLast30dCents: number
+  cashInflowLast30d: CashInflow
   serviceRevenueLast30dCents: number
   profitLast30dCents: number | null
   avgMarginPct: number | null
@@ -274,6 +282,8 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
   const empty: BranchFinancials = {
     revenueLast30dCents: 0,
     revenueLast30dSplit: emptyRevenueSplit(),
+    vatLast30dCents: 0,
+    cashInflowLast30d: emptyCashInflow(),
     serviceRevenueLast30dCents: 0,
     profitLast30dCents: null,
     avgMarginPct: null,
@@ -287,15 +297,18 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createAppServerClient()) as any
   const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString()
+  const paidOn = paidOnWindow(cutoff)
 
-  // Sales and COGS fetched in parallel.
+  // Sales, COGS and later payments fetched in parallel.
   // Sales: branch-scoped + 30d window at the DB level so the set is identical.
   // cogs_allocations: org-scoped (no date field); only lines from the 30d branch
   // sales are looked up in the map, so extra rows are harmless.
-  const [salesRes, cogsRes] = await Promise.all([
+  // sale_payments: windowed by paid_on, not by the sale's created_at — a payment
+  // in the window can settle a sale made before it.
+  const [salesRes, cogsRes, paymentsRes] = await Promise.all([
     supabase
       .from("sales")
-      .select(`subtotal_cents, service_revenue_cents, ${SALE_CREDIT_COLUMNS}, sale_lines(id, product_id, line_total_cents)`)
+      .select(`subtotal_cents, vat_cents, total_cents, service_revenue_cents, ${SALE_CREDIT_COLUMNS}, sale_lines(id, product_id, line_total_cents)`)
       .eq("organisation_id", scope.organisationId)
       .eq("branch_id", scope.branchId)
       .gte("created_at", cutoff),
@@ -305,9 +318,17 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
       .select("reference_id, cogs_cents, cost_known")
       .eq("organisation_id", scope.organisationId)
       .eq("reference_type", "sale_line"),
+
+    supabase
+      .from("sale_payments")
+      .select("amount_cents")
+      .eq("organisation_id", scope.organisationId)
+      .eq("branch_id", scope.branchId)
+      .gte("paid_on", paidOn.from)
+      .lte("paid_on", paidOn.to),
   ])
 
-  if (salesRes.error || cogsRes.error) return empty
+  if (salesRes.error || cogsRes.error || paymentsRes.error) return empty
 
   type RawCogs = { reference_id: string; cogs_cents: number | null; cost_known: boolean }
   const cogsMap = new Map<string, { cogsCents: number | null; costKnown: boolean }>()
@@ -318,6 +339,8 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
   type RawLine = { id: string; product_id: string; line_total_cents: number }
   type RawSale = {
     subtotal_cents: number
+    vat_cents: number
+    total_cents: number
     service_revenue_cents: number
     payment_status: string
     sale_payments: { id: string }[] | null
@@ -326,6 +349,8 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
 
   let revenueLast30dCents = 0
   const revenueLast30dSplit = emptyRevenueSplit()
+  let vatLast30dCents = 0
+  const cashInflowLast30d = emptyCashInflow()
   let serviceRevenueLast30dCents = 0
   let revenueLast30dKnownCostCents = 0
   let costLast30dKnownCents = 0
@@ -335,6 +360,8 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
   for (const sale of (salesRes.data as RawSale[]) ?? []) {
     revenueLast30dCents += sale.subtotal_cents
     addToRevenueSplit(revenueLast30dSplit, sale)
+    vatLast30dCents += sale.vat_cents
+    addTillCash(cashInflowLast30d, sale)
     serviceRevenueLast30dCents += sale.service_revenue_cents ?? 0
     for (const line of sale.sale_lines ?? []) {
       const alloc = cogsMap.get(line.id)
@@ -358,11 +385,17 @@ export async function getBranchFinancials(): Promise<BranchFinancials> {
       ? Math.round((profitLast30dCents! / revenueLast30dKnownCostCents) * 1000) / 10
       : null
 
+  for (const p of (paymentsRes.data as { amount_cents: number }[]) ?? []) {
+    cashInflowLast30d.laterPaymentsCents += p.amount_cents
+  }
+
   checkRevenueSplit(revenueLast30dSplit, revenueLast30dCents, "getBranchFinancials 30d")
 
   return {
     revenueLast30dCents,
     revenueLast30dSplit,
+    vatLast30dCents,
+    cashInflowLast30d,
     serviceRevenueLast30dCents,
     profitLast30dCents,
     avgMarginPct,
