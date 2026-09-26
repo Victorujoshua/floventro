@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -10,8 +9,8 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { payoutAccountSchema, type PayoutAccountInput } from "@/lib/validation/settings"
-import { updateOrgPayoutAccountAction, updateCostingMethodAction } from "@/lib/db/actions/settings"
-import type { PayoutAccount, CostingMethod } from "@/lib/db/queries/settings"
+import { updateOrgPayoutAccountAction } from "@/lib/db/actions/settings"
+import type { PayoutAccount } from "@/lib/db/queries/settings"
 
 // ── Org payout form ───────────────────────────────────────────────────────────
 
@@ -94,92 +93,13 @@ function OrgPayoutForm({ current }: { current: PayoutAccount | null }) {
   )
 }
 
-// ── Inventory costing section ─────────────────────────────────────────────────
-
-const COSTING_OPTIONS: { value: CostingMethod; label: string; description: string }[] = [
-  {
-    value: "weighted",
-    label: "Weighted average",
-    description:
-      "All units of a product share one average cost, updated each time you buy more. Simpler, and smooths out price swings.",
-  },
-  {
-    value: "fifo",
-    label: "FIFO (first in, first out)",
-    description:
-      "Your oldest stock is treated as sold first, at what you actually paid for it. More precise when prices change a lot.",
-  },
-]
-
-function InventoryCostingSection({ current }: { current: CostingMethod }) {
-  const router = useRouter()
-  const [selected, setSelected] = useState<CostingMethod>(current)
-  const [saving, setSaving] = useState(false)
-
-  async function handleSave() {
-    setSaving(true)
-    const result = await updateCostingMethodAction(selected)
-    setSaving(false)
-    if (!result.ok) {
-      toast.error(result.error)
-      return
-    }
-    toast.success("Costing method saved")
-    router.refresh()
-  }
-
-  return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-4">
-      <div className="space-y-3">
-        {COSTING_OPTIONS.map((opt) => (
-          <label
-            key={opt.value}
-            className={`flex gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-              selected === opt.value
-                ? "border-neutral-800 bg-neutral-50"
-                : "border-neutral-200 hover:bg-neutral-50/60"
-            }`}
-          >
-            <input
-              type="radio"
-              name="costing-method"
-              value={opt.value}
-              checked={selected === opt.value}
-              onChange={() => setSelected(opt.value)}
-              className="mt-0.5 accent-neutral-800 shrink-0"
-            />
-            <div>
-              <p className="text-sm font-medium text-neutral-950">{opt.label}</p>
-              <p className="text-sm text-neutral-500 mt-0.5">{opt.description}</p>
-            </div>
-          </label>
-        ))}
-      </div>
-      <p className="text-xs text-neutral-400">
-        This affects future sales only — past sales keep the costing they were recorded with.
-      </p>
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          disabled={saving || selected === current}
-          onClick={handleSave}
-          className="bg-violet-700 hover:bg-violet-800 text-white rounded-md h-9 text-sm"
-        >
-          {saving ? "Saving…" : "Save"}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
 // ── Main client ───────────────────────────────────────────────────────────────
 
 type Props = {
-  orgPayout:     PayoutAccount | null
-  costingMethod: CostingMethod
+  orgPayout: PayoutAccount | null
 }
 
-export function OrgSettingsClient({ orgPayout, costingMethod }: Props) {
+export function OrgSettingsClient({ orgPayout }: Props) {
   return (
     <div className="max-w-2xl space-y-10">
       <div>
@@ -202,14 +122,6 @@ export function OrgSettingsClient({ orgPayout, costingMethod }: Props) {
         </div>
       </section>
 
-      {/* Inventory costing */}
-      <section className="space-y-4">
-        <h2 className="text-base font-semibold text-neutral-950">Inventory costing</h2>
-        <p className="text-sm text-neutral-500">
-          Choose how the cost of goods is calculated when items are sold. Applies to the whole organisation.
-        </p>
-        <InventoryCostingSection current={costingMethod} />
-      </section>
     </div>
   )
 }

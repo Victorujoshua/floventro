@@ -2,8 +2,6 @@ import "server-only"
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { getCurrentScope } from "@/lib/auth/scope"
 
-export type CostingMethod = "weighted" | "fifo"
-
 export type PayoutAccount = {
   accountName:   string | null
   accountNumber: string | null
@@ -61,19 +59,6 @@ export async function getOrgPayoutAccount(): Promise<PayoutAccount | null> {
   return toPayout(data as unknown as RawPayout)
 }
 
-
-export async function getCostingMethod(): Promise<CostingMethod> {
-  const scope = await getCurrentScope()
-  if (!scope) return "weighted"
-  const supabase = await createAppServerClient()
-  const { data } = await supabase
-    .from("organisations")
-    .select("costing_method")
-    .eq("id", scope.organisationId)
-    .single()
-  const method = (data as unknown as { costing_method?: string } | null)?.costing_method
-  return method === "fifo" ? "fifo" : "weighted"
-}
 
 // Returns the resolved payout for a branch: branch override if any field set, else org default.
 // Used by the invoice renderer to know where to direct payment.
