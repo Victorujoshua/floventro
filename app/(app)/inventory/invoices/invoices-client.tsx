@@ -23,7 +23,7 @@ import {
 } from "@/lib/db/actions/invoices"
 import type { InvoicePayment } from "@/lib/db/queries/payments"
 import type { InvoiceForReceiving } from "@/lib/db/queries/invoices"
-import { planReceipt, toggleCloseRest } from "./receive-plan"
+import { clampQuantity, planReceipt, toggleCloseRest } from "./receive-plan"
 import {
   Table,
   TableBody,
@@ -527,9 +527,12 @@ function ReceiveInvoiceForm({
   onClose: () => void
   onSuccess: () => void
 }) {
-  const [quantities, setQuantities] = useState<number[]>(
-    invoice.lines.map((l) => l.remaining),
+  // Raw text per line so typing can pass through empty / over-max states;
+  // `quantities` is the clamped value everything else uses.
+  const [qtyInputs, setQtyInputs] = useState<string[]>(
+    invoice.lines.map((l) => String(l.remaining)),
   )
+  const quantities = invoice.lines.map((l, i) => clampQuantity(qtyInputs[i] ?? "", l.remaining))
   // Per line: close whatever is still undelivered after this receipt
   const [closeRest, setCloseRest]   = useState<boolean[]>(invoice.lines.map(() => false))
   const [recordCredit, setRecordCredit] = useState(true)
@@ -537,8 +540,12 @@ function ReceiveInvoiceForm({
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  function setQtyInput(index: number, raw: string) {
+    setQtyInputs((prev) => prev.map((q, i) => (i === index ? raw : q)))
+  }
+
   function setQty(index: number, value: number) {
-    setQuantities((prev) => prev.map((q, i) => (i === index ? value : q)))
+    setQtyInput(index, String(value))
   }
 
   function setClose(index: number, value: boolean) {
@@ -560,6 +567,8 @@ function ReceiveInvoiceForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    // Show exactly what is being submitted (clamped), in case a field is mid-edit.
+    setQtyInputs(quantities.map(String))
     const lines = invoice.lines
       .map((l, i) => ({ lineId: l.id, quantityReceived: quantities[i] ?? 0 }))
       .filter((l) => l.quantityReceived > 0)
@@ -596,7 +605,9 @@ function ReceiveInvoiceForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-4 space-y-5">
+    // noValidate: quantities are clamped in handleSubmit — the browser's max check
+    // would otherwise block Enter while a field still holds an over-max value.
+    <form onSubmit={handleSubmit} noValidate className="mt-4 space-y-5">
       {/* Lines table */}
       <div className="rounded-lg border border-neutral-200 overflow-hidden">
         <table className="w-full text-sm">
@@ -641,8 +652,13 @@ function ReceiveInvoiceForm({
                             type="number"
                             min={0}
                             max={line.remaining}
-                            value={quantities[index] ?? 0}
-                            onChange={(e) => setQty(index, Math.max(0, Math.min(line.remaining, parseInt(e.target.value, 10) || 0)))}
+                            value={qtyInputs[index] ?? ""}
+                            aria-invalid={parseInt(qtyInputs[index] ?? "", 10) > line.remaining || undefined}
+                            title={`Up to ${line.remaining}`}
+                            // Select on focus so clicking in and typing replaces the value
+                            onFocus={(e) => e.currentTarget.select()}
+                            onChange={(e) => setQtyInput(index, e.target.value)}
+                            onBlur={() => setQty(index, quantities[index])}
                             className="h-8 w-20 text-sm tabular-nums text-right ml-auto"
                           />
                         ) : (

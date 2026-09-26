@@ -54,6 +54,14 @@ export function planReceipt(
   }
 }
 
+// "Receiving now" is typed freely (empty, over the max, mid-edit) and only
+// clamped here — for the plan, on blur and on submit.
+export function clampQuantity(raw: string, remaining: number): number {
+  const n = parseInt(raw, 10)
+  if (isNaN(n)) return 0
+  return Math.max(0, Math.min(remaining, n))
+}
+
 // Ticking "Close rest" on a line that is set to receive everything would close
 // nothing, so the line's "Receiving now" drops to 0 — the whole remainder is
 // closed until the user enters what actually arrived.
