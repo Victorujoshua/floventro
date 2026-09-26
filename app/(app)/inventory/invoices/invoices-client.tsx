@@ -23,6 +23,7 @@ import {
 } from "@/lib/db/actions/invoices"
 import type { InvoicePayment } from "@/lib/db/queries/payments"
 import type { InvoiceForReceiving } from "@/lib/db/queries/invoices"
+import { planReceipt, toggleCloseRest } from "./receive-plan"
 import {
   Table,
   TableBody,
@@ -541,30 +542,21 @@ function ReceiveInvoiceForm({
   }
 
   function setClose(index: number, value: boolean) {
-    setCloseRest((prev) => prev.map((c, i) => (i === index ? value : c)))
+    const next = toggleCloseRest(invoice.lines[index].remaining, quantities[index] ?? 0, value)
+    setQty(index, next.quantity)
+    setCloseRest((prev) => prev.map((c, i) => (i === index ? next.closeRest : c)))
   }
 
-  // Undelivered units a line would close with, given what is being received now.
-  const shortfall = (index: number) =>
-    invoice.lines[index].remaining - (quantities[index] ?? 0)
-
-  const closingIndexes = invoice.lines
-    .map((_, i) => i)
-    .filter((i) => closeRest[i] && shortfall(i) > 0)
-
-  // Credit preview — same arithmetic as close_invoice_lines_short: each line's
-  // own unit cost × shortfall, VAT at the invoice rate with cumulative rounding.
-  const creditSubtotalCents = closingIndexes.reduce(
-    (sum, i) => sum + shortfall(i) * invoice.lines[i].unitCostCents,
-    0,
-  )
-  const vatRate = invoice.vatRate ?? 0
-  const creditVatCents =
-    Math.round((invoice.creditedSubtotalCents + creditSubtotalCents) * vatRate / 100) -
-    Math.round(invoice.creditedSubtotalCents * vatRate / 100)
-  const creditCents = creditSubtotalCents + creditVatCents
-  const creditExceedsOutstanding =
-    recordCredit && closingIndexes.length > 0 && creditCents > invoice.outstandingCents
+  const {
+    shortfalls,
+    closingIndexes,
+    creditVatCents,
+    creditCents,
+    creditBlocked,
+    fullyPaid,
+    recordCredit: effectiveRecordCredit,
+  } = planReceipt(invoice, quantities, closeRest, recordCredit)
+  const shortfall = (index: number) => shortfalls[index]
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -577,14 +569,13 @@ function ReceiveInvoiceForm({
       setSubmitError("Enter a quantity greater than 0, or close a line short.")
       return
     }
-    if (creditExceedsOutstanding) return
 
     setSubmitError(null)
     setIsSubmitting(true)
     try {
       const result = await receiveInvoiceStockAction(invoice.id, lines, note, {
         lineIds: closeLineIds,
-        recordCredit,
+        recordCredit: effectiveRecordCredit,
       })
       if (!result.ok) {
         setSubmitError(result.error)
@@ -663,9 +654,12 @@ function ReceiveInvoiceForm({
                           <input
                             type="checkbox"
                             aria-label={`Close the rest of ${line.productName} short`}
-                            title={gap > 0 ? `Close ${gap} undelivered unit${gap !== 1 ? "s" : ""}` : "Nothing left to close"}
-                            className="rounded border-neutral-300 disabled:opacity-40"
-                            disabled={gap <= 0}
+                            title={
+                              gap > 0
+                                ? `Close ${gap} undelivered unit${gap !== 1 ? "s" : ""}`
+                                : "Close whatever doesn't arrive in this batch"
+                            }
+                            className="rounded border-neutral-300"
                             checked={closeRest[index] && gap > 0}
                             onChange={(e) => setClose(index, e.target.checked)}
                           />
@@ -695,11 +689,15 @@ function ReceiveInvoiceForm({
             <input
               id="record-credit"
               type="checkbox"
-              className="rounded border-neutral-300"
-              checked={recordCredit}
+              className="rounded border-neutral-300 disabled:opacity-40"
+              checked={effectiveRecordCredit}
+              disabled={creditBlocked}
               onChange={(e) => setRecordCredit(e.target.checked)}
             />
-            <Label htmlFor="record-credit" className="cursor-pointer text-sm font-normal">
+            <Label
+              htmlFor="record-credit"
+              className={`text-sm font-normal ${creditBlocked ? "text-neutral-400" : "cursor-pointer"}`}
+            >
               Record vendor credit of{" "}
               <span className="font-medium tabular-nums">
                 <span className="font-inter">₦</span>{formatNaira(creditCents)}
@@ -709,14 +707,22 @@ function ReceiveInvoiceForm({
               )}
             </Label>
           </div>
-          <p className="text-xs text-neutral-500">
-            Priced at each line&apos;s invoiced unit cost. Reduces what you owe this vendor.
-          </p>
-          {creditExceedsOutstanding && (
-            <p className="text-xs text-red-700">
-              That&apos;s more than the <span className="font-inter">₦</span>{formatNaira(invoice.outstandingCents)} still
-              owed — the vendor would owe you a refund, which isn&apos;t supported yet. Untick the credit to close short
-              without one.
+          {creditBlocked ? (
+            <p className="text-xs text-neutral-600">
+              {fullyPaid ? (
+                <>This invoice is fully paid</>
+              ) : (
+                <>
+                  That credit is more than the <span className="font-inter">₦</span>
+                  {formatNaira(invoice.outstandingCents)} still owed
+                </>
+              )}{" "}
+              — closing short here won&apos;t record a credit since a refund isn&apos;t supported yet. You can still
+              close the remaining quantity as undelivered.
+            </p>
+          ) : (
+            <p className="text-xs text-neutral-500">
+              Priced at each line&apos;s invoiced unit cost. Reduces what you owe this vendor.
             </p>
           )}
         </div>
@@ -766,7 +772,7 @@ function ReceiveInvoiceForm({
         </button>
         <button
           type="submit"
-          disabled={isSubmitting || creditExceedsOutstanding}
+          disabled={isSubmitting}
           className="rounded-md bg-neutral-800 text-white px-4 h-10 text-sm font-medium hover:bg-neutral-900 active:scale-[0.98] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {isSubmitting ? "Saving…" : closingIndexes.length > 0 ? "Confirm" : "Confirm receipt"}
