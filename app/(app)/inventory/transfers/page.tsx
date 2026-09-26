@@ -31,8 +31,6 @@ export default async function TransfersPage() {
       currentBranchId={scope.branchId ?? ""}
       currentBranchName={branchData.data?.name ?? ""}
       currentUserId={scope.userId}
-      // Direct send is owner/admin only (app_0075); inventory requests instead.
-      canDirectSend={scope.role === "owner" || scope.role === "admin"}
       branches={branches}
       products={products}
     />

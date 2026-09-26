@@ -2,90 +2,12 @@
 
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { requireRole } from "@/lib/auth/guards"
-import { initiateTransferSchema, receiveTransferSchema } from "@/lib/validation/transfers"
-import type { InitiateTransferInput, ReceiveTransferInput } from "@/lib/validation/transfers"
+import { receiveTransferSchema } from "@/lib/validation/transfers"
+import type { ReceiveTransferInput } from "@/lib/validation/transfers"
 
 type ActionResult<T = null> =
   | { ok: true; data: T }
   | { ok: false; error: string; message?: string }
-
-export async function initiateTransferAction(
-  input: InitiateTransferInput,
-): Promise<ActionResult<{ transferId: string }>> {
-  const parsed = initiateTransferSchema.safeParse(input)
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }
-  }
-
-  const scope = await requireRole("owner", "inventory", "admin")
-
-  // Direct send is owner/admin only; inventory requests stock instead (app_0075).
-  if (scope.role !== "owner" && scope.role !== "admin") {
-    return { ok: false, error: "not_allowed", message: "Only owners and admins can send stock directly. Request a transfer instead." }
-  }
-
-  // Source is always the branch the caller is currently inside.
-  if (!scope.branchId) {
-    return { ok: false, error: "no_branch", message: "Enter a branch before initiating a transfer." }
-  }
-  const sourceBranchId = scope.branchId
-
-  const supabase = await createAppServerClient()
-
-  const { destBranchId, note, lines } = parsed.data
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any).rpc("initiate_transfer", {
-    p_source_branch_id: sourceBranchId,
-    p_dest_branch_id: destBranchId,
-    p_note: note || null,
-    p_lines: lines.map((l) => ({ product_id: l.productId, quantity: l.quantity })),
-  })
-
-  if (error) {
-    const msg: string = error.message ?? ""
-    const lower = msg.toLowerCase()
-
-    if (lower.includes("insufficient stock")) {
-      const productMatch = msg.match(/for product ([0-9a-f-]{36})/i)
-      const numbersMatch = msg.match(/\(on hand: (\d+), sending: (\d+)\)/i)
-      if (productMatch) {
-        const { data: product } = await supabase
-          .from("products")
-          .select("name, sku")
-          .eq("id", productMatch[1])
-          .single()
-        if (product) {
-          const onHand = numbersMatch ? parseInt(numbersMatch[1], 10) : 0
-          const sending = numbersMatch ? parseInt(numbersMatch[2], 10) : 0
-          return {
-            ok: false,
-            error: "insufficient_stock",
-            message: `Not enough ${product.name} (${product.sku}) — ${onHand} on hand, trying to send ${sending}.`,
-          }
-        }
-      }
-      return { ok: false, error: "insufficient_stock", message: "Insufficient stock at the source branch." }
-    }
-
-    if (lower.includes("source and destination must differ"))
-      return { ok: false, error: "same_branch", message: "Source and destination must be different branches." }
-    if (lower.includes("source branch not found"))
-      return { ok: false, error: "invalid_branch", message: "Source branch not found." }
-    if (lower.includes("destination branch not found"))
-      return { ok: false, error: "invalid_branch", message: "Destination branch not found." }
-    if (lower.includes("cannot transfer between different organisations"))
-      return { ok: false, error: "invalid_branch", message: "Cannot transfer between different organisations." }
-    if (lower.includes("not authorised to send"))
-      return { ok: false, error: "not_allowed", message: "You are not authorised to send stock from this branch." }
-    if (lower.includes("product") && lower.includes("not found"))
-      return { ok: false, error: "invalid_product", message: "One or more products not found in this organisation." }
-
-    return { ok: false, error: "server", message: "Something went wrong. Please try again." }
-  }
-
-  return { ok: true, data: { transferId: data as string } }
-}
 
 export async function receiveTransferAction(
   input: ReceiveTransferInput,

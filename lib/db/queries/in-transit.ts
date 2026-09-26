@@ -1,6 +1,7 @@
 // ── Stock in transit ──────────────────────────────────────────────────────────
 //
-// initiate_transfer removes stock from the source branch immediately; it is on
+// Approving a transfer request (approve_transfer_request) removes stock from the
+// source branch immediately; it is on
 // hand nowhere until receive_transfer credits the destination. For each line of
 // a transfer still 'in_transit', the units in transit are
 // quantity_sent − coalesce(quantity_received, 0).

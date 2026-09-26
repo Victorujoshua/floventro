@@ -2,10 +2,10 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { useForm, useFieldArray } from "react-hook-form"
+import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
-import { ArrowLeftRight, Plus, Trash2 } from "lucide-react"
+import { ArrowLeftRight, Plus } from "lucide-react"
 import {
   Table,
   TableBody,
@@ -24,10 +24,9 @@ import {
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { initiateTransferSchema, receiveTransferSchema } from "@/lib/validation/transfers"
-import type { InitiateTransferInput, ReceiveTransferInput } from "@/lib/validation/transfers"
+import { receiveTransferSchema } from "@/lib/validation/transfers"
+import type { ReceiveTransferInput } from "@/lib/validation/transfers"
 import {
-  initiateTransferAction,
   receiveTransferAction,
   cancelTransferAction,
 } from "@/lib/db/actions/transfers"
@@ -62,201 +61,6 @@ function StatusBadge({ status }: { status: string }) {
     <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${entry.className}`}>
       {entry.label}
     </span>
-  )
-}
-
-// ── Initiate Transfer Dialog ──────────────────────────────────────────────────
-
-function InitiateTransferDialog({
-  open,
-  onOpenChange,
-  currentBranchId,
-  currentBranchName,
-  branches,
-  products,
-  onSuccess,
-}: {
-  open: boolean
-  onOpenChange: (v: boolean) => void
-  currentBranchId: string
-  currentBranchName: string
-  branches: OrgBranch[]
-  products: OrgProduct[]
-  onSuccess: () => void
-}) {
-  const [submitError, setSubmitError] = useState<string | null>(null)
-
-  // Destination options are all branches except the current (source) branch.
-  const destOptions = branches.filter((b) => b.id !== currentBranchId)
-
-  const defaultValues: InitiateTransferInput = {
-    destBranchId: destOptions[0]?.id ?? "",
-    note: "",
-    lines: [{ productId: "", quantity: 1 }],
-  }
-
-  const {
-    register,
-    handleSubmit,
-    control,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<InitiateTransferInput>({
-    resolver: zodResolver(initiateTransferSchema),
-    defaultValues,
-  })
-
-  const { fields, append, remove } = useFieldArray({ control, name: "lines" })
-
-  function handleClose() {
-    reset(defaultValues)
-    setSubmitError(null)
-    onOpenChange(false)
-  }
-
-  async function onSubmit(values: InitiateTransferInput) {
-    setSubmitError(null)
-    const result = await initiateTransferAction(values)
-    if (!result.ok) {
-      setSubmitError(result.message ?? result.error)
-      return
-    }
-    toast.success("Transfer initiated")
-    handleClose()
-    onSuccess()
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>New transfer</DialogTitle>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 pt-1">
-          {/* Route — source is fixed to the entered branch */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>From (source)</Label>
-              <div className="flex items-center h-9 rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-700 font-medium">
-                {currentBranchName}
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>To (destination)</Label>
-              <select
-                className="w-full rounded-md border border-neutral-300 bg-white px-3 h-9 text-sm text-neutral-950 focus:outline-none focus:ring-2 focus:ring-violet-700 focus:border-violet-700"
-                {...register("destBranchId")}
-              >
-                <option value="">Select branch…</option>
-                {destOptions.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-              {errors.destBranchId && (
-                <p className="text-xs text-red-500">{errors.destBranchId.message}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Lines */}
-          <div className="space-y-2">
-            <Label>Products</Label>
-            {fields.map((field, index) => (
-              <div key={field.id} className="flex gap-2 items-start">
-                <div className="flex-1">
-                  <select
-                    className="w-full rounded-md border border-neutral-300 bg-white px-3 h-9 text-sm text-neutral-950 focus:outline-none focus:ring-2 focus:ring-violet-700 focus:border-violet-700"
-                    {...register(`lines.${index}.productId`)}
-                  >
-                    <option value="">Select product…</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.sku})
-                      </option>
-                    ))}
-                  </select>
-                  {errors.lines?.[index]?.productId && (
-                    <p className="text-xs text-red-500 mt-0.5">
-                      {errors.lines[index]!.productId?.message}
-                    </p>
-                  )}
-                </div>
-                <div className="w-24 shrink-0">
-                  <Input
-                    type="number"
-                    min={1}
-                    placeholder="Qty"
-                    className="h-9 text-sm tabular-nums"
-                    {...register(`lines.${index}.quantity`, { valueAsNumber: true })}
-                  />
-                  {errors.lines?.[index]?.quantity && (
-                    <p className="text-xs text-red-500 mt-0.5">
-                      {errors.lines[index]!.quantity?.message}
-                    </p>
-                  )}
-                </div>
-                {fields.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => remove(index)}
-                    className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-neutral-200 text-neutral-400 hover:bg-neutral-50 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            ))}
-            {(errors.lines?.message || errors.lines?.root?.message) && (
-              <p className="text-xs text-red-500">
-                {errors.lines?.message ?? errors.lines?.root?.message}
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={() => append({ productId: "", quantity: 1 })}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-violet-700 hover:text-violet-800 transition-colors"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add product
-            </button>
-          </div>
-
-          {/* Note */}
-          <div className="space-y-1.5">
-            <Label>
-              Note{" "}
-              <span className="text-neutral-400 font-normal">(optional)</span>
-            </Label>
-            <textarea
-              rows={2}
-              placeholder="e.g. weekly replenishment, urgent restock"
-              className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-violet-700 focus:border-violet-700 resize-none"
-              {...register("note")}
-            />
-          </div>
-
-          {submitError && (
-            <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">
-              {submitError}
-            </p>
-          )}
-        </form>
-
-        <DialogFooter showCloseButton>
-          <Button
-            type="submit"
-            form=""
-            disabled={isSubmitting}
-            onClick={handleSubmit(onSubmit)}
-            className="bg-violet-700 hover:bg-violet-800 text-white rounded-md"
-          >
-            {isSubmitting ? "Initiating…" : "Initiate transfer"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 }
 
@@ -532,25 +336,23 @@ type Props = {
   currentBranchId: string
   currentBranchName: string
   currentUserId: string
-  // Owner/admin may send directly; inventory must request (app_0075)
-  canDirectSend: boolean
   branches: OrgBranch[]
   products: OrgProduct[]
 }
 
+// Stock moves between branches only by request → approval (app_0075/0076);
+// there is no direct send.
 export function TransfersClient({
   transfers,
   requests,
   currentBranchId,
   currentBranchName,
   currentUserId,
-  canDirectSend,
   branches,
   products,
 }: Props) {
   const router = useRouter()
 
-  const [initiateOpen, setInitiateOpen] = useState(false)
   const [requestOpen, setRequestOpen] = useState(false)
   const [receiveTarget, setReceiveTarget] = useState<Transfer | null>(null)
   const [cancelTarget, setCancelTarget] = useState<Transfer | null>(null)
@@ -566,32 +368,15 @@ export function TransfersClient({
           <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Transfers</h1>
           <p className="text-sm text-neutral-500 mt-1">Move stock between branches in your organisation</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            disabled={!isMultiBranch}
-            onClick={() => setRequestOpen(true)}
-            title={isMultiBranch ? undefined : "Add another branch to enable transfers"}
-            className={`inline-flex items-center gap-2 rounded-md px-4 h-10 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-              canDirectSend
-                ? "border border-neutral-200 text-neutral-700 hover:bg-neutral-50"
-                : "bg-violet-700 text-white hover:bg-violet-800"
-            }`}
-          >
-            <Plus className="h-4 w-4" />
-            Request stock
-          </button>
-          {canDirectSend && (
-            <button
-              disabled={!isMultiBranch}
-              onClick={() => setInitiateOpen(true)}
-              title={isMultiBranch ? undefined : "Add another branch to enable transfers"}
-              className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Plus className="h-4 w-4" />
-              New transfer
-            </button>
-          )}
-        </div>
+        <button
+          disabled={!isMultiBranch}
+          onClick={() => setRequestOpen(true)}
+          title={isMultiBranch ? undefined : "Add another branch to enable transfers"}
+          className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <Plus className="h-4 w-4" />
+          Request stock
+        </button>
       </div>
 
       {!isMultiBranch && (
@@ -612,17 +397,15 @@ export function TransfersClient({
           <ArrowLeftRight className="h-10 w-10 text-neutral-300 mb-4" />
           <p className="text-sm font-medium text-neutral-950">No transfers yet</p>
           <p className="text-sm text-neutral-500 mt-1 max-w-sm">
-            {canDirectSend
-              ? "Request stock from another branch, or send stock directly."
-              : "Request stock from another branch. Approved requests appear here while in transit."}
+            Request stock from another branch. Approved requests appear here while in transit.
           </p>
-          {isMultiBranch && canDirectSend && (
+          {isMultiBranch && (
             <button
-              onClick={() => setInitiateOpen(true)}
+              onClick={() => setRequestOpen(true)}
               className="mt-4 inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
             >
               <Plus className="h-4 w-4" />
-              New transfer
+              Request stock
             </button>
           )}
         </div>
@@ -691,16 +474,6 @@ export function TransfersClient({
           </Table>
         </div>
       )}
-
-      <InitiateTransferDialog
-        open={initiateOpen}
-        onOpenChange={setInitiateOpen}
-        currentBranchId={currentBranchId}
-        currentBranchName={currentBranchName}
-        branches={branches}
-        products={products}
-        onSuccess={() => router.refresh()}
-      />
 
       <RequestStockDialog
         open={requestOpen}
