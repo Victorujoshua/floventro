@@ -37,6 +37,8 @@ export const adjustmentSchema = z.object({
   delta: z.number().int().optional(),
   adjustmentReason: z.enum(ADJUSTMENT_REASONS, { error: "Select a reason" }),
   note: z.string().max(500).optional().or(z.literal("")),
+  // Increases only. Omitted → the RPC falls back to the product's catalogue cost.
+  unitCostNaira: z.number().min(0, "Cost must be 0 or more").optional(),
 })
 
 export type AdjustmentInput = z.infer<typeof adjustmentSchema>

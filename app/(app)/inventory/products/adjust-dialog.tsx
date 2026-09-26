@@ -23,6 +23,7 @@ type ProductInfo = {
   name: string
   stock: number
   hasHistory: boolean
+  unit_cost_cents: number | null
 }
 
 type Branch = { id: string; name: string }
@@ -45,6 +46,8 @@ export function AdjustDialog({ product, resolvedBranchId, branches, open, onClos
   const [delta, setDelta] = useState<string>("")
   const [adjustmentReason, setAdjustmentReason] = useState<string>("")
   const [note, setNote] = useState("")
+  // null = untouched → show the catalogue cost as the pre-filled value.
+  const [unitCost, setUnitCost] = useState<string | null>(null)
   const [branchId, setBranchId] = useState<string>(resolvedBranchId ?? "")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -72,6 +75,12 @@ export function AdjustDialog({ product, resolvedBranchId, branches, open, onClos
   const noteRequired =
     previewDelta !== null && (previewDelta < 0 || previewDelta >= 100)
 
+  // Cost only applies to units being added.
+  const isIncrease = previewDelta !== null && previewDelta > 0
+  const catalogueCost =
+    product.unit_cost_cents != null ? String(product.unit_cost_cents / 100) : ""
+  const unitCostValue = unitCost ?? catalogueCost
+
   const selectedHint =
     adjustmentReason && ADJUSTMENT_REASON_HINTS[adjustmentReason as AdjustmentReason]
 
@@ -81,6 +90,7 @@ export function AdjustDialog({ product, resolvedBranchId, branches, open, onClos
     setDelta("")
     setAdjustmentReason("")
     setNote("")
+    setUnitCost(null)
     setError(null)
     onClose()
   }
@@ -111,6 +121,15 @@ export function AdjustDialog({ product, resolvedBranchId, branches, open, onClos
       return
     }
 
+    let unitCostNaira: number | undefined
+    if (isIncrease && unitCostValue.trim() !== "") {
+      unitCostNaira = parseFloat(unitCostValue)
+      if (isNaN(unitCostNaira) || unitCostNaira < 0) {
+        setError("Enter a valid unit cost, or leave it blank.")
+        return
+      }
+    }
+
     setSubmitting(true)
     const result = await adjustStockAction({
       productId: product.id,
@@ -120,6 +139,7 @@ export function AdjustDialog({ product, resolvedBranchId, branches, open, onClos
       delta: dlt,
       adjustmentReason: adjustmentReason as AdjustmentReason,
       note,
+      unitCostNaira,
     })
     setSubmitting(false)
 
@@ -245,6 +265,31 @@ export function AdjustDialog({ product, resolvedBranchId, branches, open, onClos
               </p>
             )}
           </div>
+
+          {/* Unit cost — increases only */}
+          {isIncrease && (
+            <div className="space-y-1.5">
+              <Label htmlFor="unitCost">
+                Unit cost (₦)
+                <span className="text-neutral-400 font-normal ml-1">(optional)</span>
+              </Label>
+              <input
+                id="unitCost"
+                type="number"
+                min={0}
+                step="0.01"
+                value={unitCostValue}
+                onChange={(e) => setUnitCost(e.target.value)}
+                placeholder="e.g. 400"
+                className="flex h-9 w-full rounded-md border border-neutral-300 bg-white px-3 py-1 text-sm tabular-nums text-neutral-950 placeholder:text-neutral-400 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-700 focus:border-violet-700"
+              />
+              <p className="text-xs text-neutral-500">
+                {catalogueCost !== ""
+                  ? "Pre-filled from the product's cost price. Used to work out profit when these units sell."
+                  : "What each unit cost you. Leave blank if unknown — profit won't show for these units."}
+              </p>
+            </div>
+          )}
 
           {/* Reason */}
           <div className="space-y-1.5">

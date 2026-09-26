@@ -48,6 +48,7 @@ export async function adjustStockAction(
     p_delta:             parsed.data.mode === "adjust" ? (parsed.data.delta ?? null) : null,
     p_adjustment_reason: parsed.data.adjustmentReason,
     p_note:              parsed.data.note ?? "",
+    p_unit_cost_cents:   parsed.data.unitCostNaira != null ? Math.round(parsed.data.unitCostNaira * 100) : null,
   })
 
   if (error) {
@@ -65,6 +66,9 @@ export async function adjustStockAction(
     }
     if (lower.includes("not authorised")) {
       return { ok: false, error: "not_allowed", message: "You are not authorised to adjust stock in this branch." }
+    }
+    if (lower.includes("unit cost cannot be negative")) {
+      return { ok: false, error: "invalid_cost", message: "Unit cost cannot be negative." }
     }
     if (lower.includes("no change")) {
       return { ok: false, error: "no_change", message: msg }
