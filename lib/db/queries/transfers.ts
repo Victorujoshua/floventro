@@ -68,7 +68,7 @@ export type OrgProduct = { id: string; sku: string; name: string }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function fetchUserLabels(userIds: string[]): Promise<Map<string, string>> {
+export async function fetchUserLabels(userIds: string[]): Promise<Map<string, string>> {
   if (userIds.length === 0) return new Map()
   const admin = createAppServiceRoleClient()
   const map = new Map<string, string>()

@@ -19,6 +19,11 @@ export async function initiateTransferAction(
 
   const scope = await requireRole("owner", "inventory", "admin")
 
+  // Direct send is owner/admin only; inventory requests stock instead (app_0075).
+  if (scope.role !== "owner" && scope.role !== "admin") {
+    return { ok: false, error: "not_allowed", message: "Only owners and admins can send stock directly. Request a transfer instead." }
+  }
+
   // Source is always the branch the caller is currently inside.
   if (!scope.branchId) {
     return { ok: false, error: "no_branch", message: "Enter a branch before initiating a transfer." }

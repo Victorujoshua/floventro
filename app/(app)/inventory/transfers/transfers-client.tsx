@@ -32,6 +32,8 @@ import {
   cancelTransferAction,
 } from "@/lib/db/actions/transfers"
 import type { Transfer, OrgBranch, OrgProduct } from "@/lib/db/queries/transfers"
+import type { BranchTransferRequests } from "@/lib/db/queries/transfer-requests"
+import { RequestStockDialog, TransferRequestsSection } from "./transfer-requests"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -526,16 +528,30 @@ function CancelTransferDialog({
 
 type Props = {
   transfers: Transfer[]
+  requests: BranchTransferRequests
   currentBranchId: string
   currentBranchName: string
+  currentUserId: string
+  // Owner/admin may send directly; inventory must request (app_0075)
+  canDirectSend: boolean
   branches: OrgBranch[]
   products: OrgProduct[]
 }
 
-export function TransfersClient({ transfers, currentBranchId, currentBranchName, branches, products }: Props) {
+export function TransfersClient({
+  transfers,
+  requests,
+  currentBranchId,
+  currentBranchName,
+  currentUserId,
+  canDirectSend,
+  branches,
+  products,
+}: Props) {
   const router = useRouter()
 
   const [initiateOpen, setInitiateOpen] = useState(false)
+  const [requestOpen, setRequestOpen] = useState(false)
   const [receiveTarget, setReceiveTarget] = useState<Transfer | null>(null)
   const [cancelTarget, setCancelTarget] = useState<Transfer | null>(null)
 
@@ -550,15 +566,32 @@ export function TransfersClient({ transfers, currentBranchId, currentBranchName,
           <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Transfers</h1>
           <p className="text-sm text-neutral-500 mt-1">Move stock between branches in your organisation</p>
         </div>
-        <button
-          disabled={!isMultiBranch}
-          onClick={() => setInitiateOpen(true)}
-          title={isMultiBranch ? undefined : "Add another branch to enable transfers"}
-          className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <Plus className="h-4 w-4" />
-          New transfer
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            disabled={!isMultiBranch}
+            onClick={() => setRequestOpen(true)}
+            title={isMultiBranch ? undefined : "Add another branch to enable transfers"}
+            className={`inline-flex items-center gap-2 rounded-md px-4 h-10 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+              canDirectSend
+                ? "border border-neutral-200 text-neutral-700 hover:bg-neutral-50"
+                : "bg-violet-700 text-white hover:bg-violet-800"
+            }`}
+          >
+            <Plus className="h-4 w-4" />
+            Request stock
+          </button>
+          {canDirectSend && (
+            <button
+              disabled={!isMultiBranch}
+              onClick={() => setInitiateOpen(true)}
+              title={isMultiBranch ? undefined : "Add another branch to enable transfers"}
+              className="inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Plus className="h-4 w-4" />
+              New transfer
+            </button>
+          )}
+        </div>
       </div>
 
       {!isMultiBranch && (
@@ -568,14 +601,22 @@ export function TransfersClient({ transfers, currentBranchId, currentBranchName,
         </div>
       )}
 
+      {isMultiBranch && (
+        <TransferRequestsSection requests={requests} currentUserId={currentUserId} />
+      )}
+
+      <h2 className="text-base font-semibold text-neutral-950 mb-4">Shipments</h2>
+
       {transfers.length === 0 ? (
         <div className="bg-white rounded-2xl border border-neutral-200/60 flex flex-col items-center justify-center py-16 text-center px-6">
           <ArrowLeftRight className="h-10 w-10 text-neutral-300 mb-4" />
           <p className="text-sm font-medium text-neutral-950">No transfers yet</p>
           <p className="text-sm text-neutral-500 mt-1 max-w-sm">
-            Initiate a transfer to move stock from one branch to another.
+            {canDirectSend
+              ? "Request stock from another branch, or send stock directly."
+              : "Request stock from another branch. Approved requests appear here while in transit."}
           </p>
-          {isMultiBranch && (
+          {isMultiBranch && canDirectSend && (
             <button
               onClick={() => setInitiateOpen(true)}
               className="mt-4 inline-flex items-center gap-2 rounded-md bg-violet-700 px-4 h-10 text-sm font-medium text-white hover:bg-violet-800 transition-colors"
@@ -621,20 +662,26 @@ export function TransfersClient({ transfers, currentBranchId, currentBranchName,
                     {fmtDate(t.initiatedAt)}
                   </TableCell>
                   <TableCell className="py-3.5 text-right">
+                    {/* Receive belongs to the destination, Cancel to the source —
+                        same sides receive_transfer / cancel_transfer enforce. */}
                     {t.status === "in_transit" && (
                       <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => setReceiveTarget(t)}
-                          className="inline-flex items-center gap-1.5 rounded-md bg-neutral-800 px-3 h-7 text-xs font-medium text-white hover:bg-neutral-900 transition-colors"
-                        >
-                          Receive
-                        </button>
-                        <button
-                          onClick={() => setCancelTarget(t)}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 h-7 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
-                        >
-                          Cancel
-                        </button>
+                        {t.destBranchId === currentBranchId && (
+                          <button
+                            onClick={() => setReceiveTarget(t)}
+                            className="inline-flex items-center gap-1.5 rounded-md bg-neutral-800 px-3 h-7 text-xs font-medium text-white hover:bg-neutral-900 transition-colors"
+                          >
+                            Receive
+                          </button>
+                        )}
+                        {t.sourceBranchId === currentBranchId && (
+                          <button
+                            onClick={() => setCancelTarget(t)}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 h-7 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        )}
                       </div>
                     )}
                   </TableCell>
@@ -648,6 +695,16 @@ export function TransfersClient({ transfers, currentBranchId, currentBranchName,
       <InitiateTransferDialog
         open={initiateOpen}
         onOpenChange={setInitiateOpen}
+        currentBranchId={currentBranchId}
+        currentBranchName={currentBranchName}
+        branches={branches}
+        products={products}
+        onSuccess={() => router.refresh()}
+      />
+
+      <RequestStockDialog
+        open={requestOpen}
+        onOpenChange={setRequestOpen}
         currentBranchId={currentBranchId}
         currentBranchName={currentBranchName}
         branches={branches}

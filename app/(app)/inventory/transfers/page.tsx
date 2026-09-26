@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { requireRole } from "@/lib/auth/guards"
 import { getTransfers, getOrgBranches, getOrgProducts } from "@/lib/db/queries/transfers"
+import { getBranchTransferRequests } from "@/lib/db/queries/transfer-requests"
 import { createAppServerClient } from "@/lib/supabase/app-server"
 import { TransfersClient } from "./transfers-client"
 
@@ -13,8 +14,9 @@ export default async function TransfersPage() {
   }
 
   const supabase = await createAppServerClient()
-  const [transfers, branches, products, branchData] = await Promise.all([
+  const [transfers, requests, branches, products, branchData] = await Promise.all([
     getTransfers(),
+    getBranchTransferRequests(),
     getOrgBranches(),
     getOrgProducts(),
     scope.branchId
@@ -25,8 +27,12 @@ export default async function TransfersPage() {
   return (
     <TransfersClient
       transfers={transfers}
+      requests={requests}
       currentBranchId={scope.branchId ?? ""}
       currentBranchName={branchData.data?.name ?? ""}
+      currentUserId={scope.userId}
+      // Direct send is owner/admin only (app_0075); inventory requests instead.
+      canDirectSend={scope.role === "owner" || scope.role === "admin"}
       branches={branches}
       products={products}
     />
