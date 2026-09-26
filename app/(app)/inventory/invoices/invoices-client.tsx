@@ -609,7 +609,8 @@ function ReceiveInvoiceForm({
     // would otherwise block Enter while a field still holds an over-max value.
     <form onSubmit={handleSubmit} noValidate className="mt-4 space-y-5">
       {/* Lines table */}
-      <div className="rounded-lg border border-neutral-200 overflow-hidden">
+      {/* overflow-x-auto: on a narrow screen scroll to the input columns rather than clip them */}
+      <div className="rounded-lg border border-neutral-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-neutral-50 border-b border-neutral-200">
@@ -825,7 +826,8 @@ function ReceiveInvoiceModal({
       open={invoice !== null}
       onOpenChange={(open: boolean) => { if (!open) onClose() }}
     >
-      <DialogContent>
+      {/* Six-column lines table doesn't fit the default 25vw panel */}
+      <DialogContent className="w-[min(640px,100vw)]">
         <DialogHeader>
           <DialogTitle>Receive stock</DialogTitle>
           {invoice && (

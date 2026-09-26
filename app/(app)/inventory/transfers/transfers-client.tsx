@@ -322,7 +322,8 @@ function ReceiveTransferForm({
           <p className="text-xs text-neutral-500">
             Default is full quantity. Lower any value if units were damaged or lost in transit.
           </p>
-          <div className="rounded-lg border border-neutral-200 overflow-hidden">
+          {/* overflow-x-auto: on a narrow screen scroll to the input column rather than clip it */}
+          <div className="rounded-lg border border-neutral-200 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-neutral-50 border-b border-neutral-200">
@@ -410,7 +411,8 @@ function ReceiveTransferDialog({
 }) {
   return (
     <Dialog open={transfer !== null} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      {/* Lines table with an input column doesn't fit the default 25vw panel */}
+      <DialogContent className="w-[min(480px,100vw)] max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Receive transfer</DialogTitle>
         </DialogHeader>
